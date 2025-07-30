@@ -54,7 +54,12 @@ export const MCPManager: React.FC<MCPManagerProps> = ({
       setServers(serverList);
     } catch (err) {
       console.error("MCPManager: Failed to load MCP servers:", err);
-      setError("Failed to load MCP servers. Make sure Claude Code is installed.");
+      // Check if the error is due to no servers configured
+      if (err && typeof err === 'string' && err.includes('No MCP servers configured')) {
+        setError("No MCP servers configured. Add a server to get started.");
+      } else {
+        setError("Failed to load MCP servers. Make sure Claude Code is installed.");
+      }
     } finally {
       setLoading(false);
     }

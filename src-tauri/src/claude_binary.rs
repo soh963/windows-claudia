@@ -164,11 +164,16 @@ fn discover_system_installations() -> Vec<ClaudeInstallation> {
     installations
 }
 
-/// Try using the 'which' command to find Claude
+/// Try using the 'which' or 'where' command to find Claude
 fn try_which_command() -> Option<ClaudeInstallation> {
-    debug!("Trying 'which claude' to find binary...");
+    #[cfg(target_os = "windows")]
+    let command_name = "where";
+    #[cfg(not(target_os = "windows"))]
+    let command_name = "which";
+    
+    debug!("Trying '{}' claude to find binary...", command_name);
 
-    match Command::new("which").arg("claude").output() {
+    match Command::new(command_name).arg("claude").output() {
         Ok(output) if output.status.success() => {
             let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
@@ -263,6 +268,55 @@ fn find_standard_installations() -> Vec<ClaudeInstallation> {
         ("/usr/bin/claude".to_string(), "system".to_string()),
         ("/bin/claude".to_string(), "system".to_string()),
     ];
+
+    // Windows-specific paths
+    #[cfg(target_os = "windows")]
+    {
+        // Common Windows installation paths
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            paths_to_check.push((
+                format!("{}\\Claude\\claude.exe", program_files),
+                "program-files".to_string(),
+            ));
+        }
+        
+        if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+            paths_to_check.push((
+                format!("{}\\Programs\\claude\\claude.exe", local_appdata),
+                "local-appdata".to_string(),
+            ));
+            paths_to_check.push((
+                format!("{}\\claude\\claude.exe", local_appdata),
+                "local-appdata".to_string(),
+            ));
+        }
+        
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            paths_to_check.push((
+                format!("{}\\npm\\claude.cmd", appdata),
+                "npm-global-windows".to_string(),
+            ));
+            paths_to_check.push((
+                format!("{}\\npm\\claude.exe", appdata),
+                "npm-global-windows".to_string(),
+            ));
+        }
+        
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            paths_to_check.push((
+                format!("{}\\AppData\\Roaming\\npm\\claude.cmd", userprofile),
+                "npm-global-windows".to_string(),
+            ));
+            paths_to_check.push((
+                format!("{}\\AppData\\Local\\Programs\\claude\\claude.exe", userprofile),
+                "local-programs".to_string(),
+            ));
+            paths_to_check.push((
+                format!("{}\\.claude\\claude.exe", userprofile),
+                "claude-home-windows".to_string(),
+            ));
+        }
+    }
 
     // Also check user-specific paths
     if let Ok(home) = std::env::var("HOME") {
@@ -469,6 +523,16 @@ pub fn create_command_with_env(program: &str) -> Command {
             || key == "NVM_BIN"
             || key == "HOMEBREW_PREFIX"
             || key == "HOMEBREW_CELLAR"
+            // Windows environment variables
+            || key == "USERPROFILE"
+            || key == "APPDATA"
+            || key == "LOCALAPPDATA"
+            || key == "ProgramFiles"
+            || key == "ProgramFiles(x86)"
+            || key == "TEMP"
+            || key == "TMP"
+            || key == "SystemRoot"
+            || key == "COMSPEC"
             // Add proxy environment variables (only uppercase)
             || key == "HTTP_PROXY"
             || key == "HTTPS_PROXY"
