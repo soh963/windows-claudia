@@ -24,10 +24,58 @@ https://github.com/user-attachments/assets/bf0bdf9d-ba91-45af-9ac4-7274f57075cf
 
 > [!TIP]
 > **⭐ Star the repo and follow [@getAsterisk](https://x.com/getAsterisk) on X for early access to `asteria-swe-v0`**.
+>
+> **🔧 This is a Windows-optimized fork with pre-built CC agents and enhanced Windows compatibility.**
+
+## 🆕 What's New in This Fork
+
+### Windows Optimizations
+- ✅ Fixed Windows build errors (icon format issues)
+- ✅ Pre-configured for Windows development environment
+- ✅ Optimized build process using Bun
+
+### Pre-built CC Agents (29 Total)
+This fork includes a comprehensive collection of ready-to-use agents:
+
+**Development & Code Quality**
+- 🎯 Git Commit Bot - Automated Git workflow with intelligent commits
+- 🛡️ Security Scanner - Advanced security auditing (OWASP, CWE)
+- 🧪 Unit Tests Bot - Comprehensive test generation
+- 🔍 Code Analyzer - Code quality and structure analysis
+- 📋 Code Review Agent - Automated code reviews
+- 🐛 Bug Finder-Fixer - Bug detection and fixing
+
+**Architecture & Design**
+- 🏛️ Architect Agent - System design specialist
+- 🎨 Frontend Development Suite - Modern UI development
+- 💻 IDE Agent - Integrated development environment
+- 🌐 API Gateway Agent - API management and security
+
+**Infrastructure & Operations**
+- 📊 Data Pipeline Coordinator - ETL and streaming data
+- 🗄️ Database Agent - Data persistence optimization
+- 📡 Monitor Agent - System observability
+- ⚡ Performance Agent - Performance optimization
+- 🔧 Resource Manager - Infrastructure management
+
+**Specialized Agents**
+- 🤖 AI/ML Coordinator - Machine learning pipelines
+- 💼 Business Logic Agent - Core application logic
+- 🔐 State Management Agent - Application state orchestration
+- 🎨 UI Component Agent - Modern component development
+- 🌐 Web App Coordinator - Frontend/backend integration
+
+**And many more!** Check the `cc_agents` directory for the complete list.
 
 ## 🌟 Overview
 
 **Claudia** is a powerful desktop application that transforms how you interact with Claude Code. Built with Tauri 2, it provides a beautiful GUI for managing your Claude Code sessions, creating custom agents, tracking usage, and much more.
+
+This Windows-optimized fork includes:
+- **29 Pre-built CC Agents** ready to use out of the box
+- **Windows-specific optimizations** for better performance
+- **Enhanced Windows build process** with proper icon handling
+- **Complete agent library** for various development tasks
 
 Think of Claudia as your command center for Claude Code - bridging the gap between the command-line tool and a visual experience that makes AI-assisted development more intuitive and productive.
 
@@ -66,7 +114,11 @@ Think of Claudia as your command center for Claude Code - bridging the gap betwe
 
 ### 🤖 **CC Agents**
 - **Custom AI Agents**: Create specialized agents with custom system prompts and behaviors
-- **Agent Library**: Build a collection of purpose-built agents for different tasks
+- **Pre-built Agent Library**: 29 ready-to-use agents including:
+  - Git Commit Bot, Security Scanner, Unit Tests Bot
+  - AI/ML Coordinator, Architect Agent, API Gateway Agent
+  - Frontend/Backend specialists, Performance optimizers
+  - And many more specialized development agents
 - **Background Execution**: Run agents in separate processes for non-blocking operations
 - **Execution History**: Track all agent runs with detailed logs and performance metrics
 
@@ -231,8 +283,8 @@ brew install pkg-config
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/getAsterisk/claudia.git
-   cd claudia
+   git clone https://github.com/soh963/windows-claudia.git
+   cd windows-claudia
    ```
 
 2. **Install Frontend Dependencies**
@@ -406,13 +458,13 @@ This project is licensed under the AGPL License - see the [LICENSE](LICENSE) fil
     <strong>Made with ❤️ by the <a href="https://asterisk.so/">Asterisk</a></strong>
   </p>
   <p>
-    <a href="https://github.com/getAsterisk/claudia/issues">Report Bug</a>
+    <a href="https://github.com/soh963/windows-claudia/issues">Report Bug</a>
     ·
-    <a href="https://github.com/getAsterisk/claudia/issues">Request Feature</a>
+    <a href="https://github.com/soh963/windows-claudia/issues">Request Feature</a>
   </p>
 </div>
 
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=getAsterisk/claudia&type=Date)](https://www.star-history.com/#getAsterisk/claudia&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=soh963/windows-claudia&type=Date)](https://www.star-history.com/#soh963/windows-claudia&Date)
