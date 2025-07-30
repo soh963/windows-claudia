@@ -100,7 +100,17 @@ fn execute_claude_mcp_command(app_handle: &AppHandle, args: Vec<&str>) -> Result
     info!("Executing claude mcp command with args: {:?}", args);
 
     let claude_path = find_claude_binary(app_handle)?;
-    let mut cmd = create_command_with_env(&claude_path);
+    
+    let mut cmd = if claude_path.ends_with(".cmd") {
+        // For Windows .cmd files, use cmd /c
+        let mut cmd = create_command_with_env("cmd");
+        cmd.arg("/c");
+        cmd.arg(&claude_path);
+        cmd
+    } else {
+        create_command_with_env(&claude_path)
+    };
+    
     cmd.arg("mcp");
     for arg in args {
         cmd.arg(arg);

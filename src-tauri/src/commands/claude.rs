@@ -270,7 +270,15 @@ fn create_system_command(
     args: Vec<String>,
     project_path: &str,
 ) -> Command {
-    let mut cmd = create_command_with_env(claude_path);
+    let mut cmd = if claude_path.ends_with(".cmd") {
+        // For Windows .cmd files, use cmd /c
+        let mut cmd = create_command_with_env("cmd");
+        cmd.arg("/c");
+        cmd.arg(claude_path);
+        cmd
+    } else {
+        create_command_with_env(claude_path)
+    };
     
     // Add all arguments
     for arg in args {

@@ -316,6 +316,13 @@ fn find_standard_installations() -> Vec<ClaudeInstallation> {
                 "claude-home-windows".to_string(),
             ));
         }
+        
+        // Check for nvm4w (NVM for Windows)
+        paths_to_check.extend(vec![
+            ("C:\\nvm4w\\nodejs\\claude.cmd".to_string(), "nvm4w".to_string()),
+            ("C:\\nvm4w\\nodejs\\claude".to_string(), "nvm4w".to_string()),
+            ("C:\\nvm4w\\nodejs\\claude.exe".to_string(), "nvm4w".to_string()),
+        ]);
     }
 
     // Also check user-specific paths
@@ -386,7 +393,18 @@ fn find_standard_installations() -> Vec<ClaudeInstallation> {
 
 /// Get Claude version by running --version command
 fn get_claude_version(path: &str) -> Result<Option<String>, String> {
-    match Command::new(path).arg("--version").output() {
+    let mut cmd = if path.ends_with(".cmd") {
+        // For Windows .cmd files, use cmd /c
+        let mut cmd = Command::new("cmd");
+        cmd.args(&["/c", path, "--version"]);
+        cmd
+    } else {
+        let mut cmd = Command::new(path);
+        cmd.arg("--version");
+        cmd
+    };
+    
+    match cmd.output() {
         Ok(output) => {
             if output.status.success() {
                 Ok(extract_version_from_output(&output.stdout))
