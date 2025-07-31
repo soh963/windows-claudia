@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use dirs;
 use log::{debug, error, info};
+use tauri::Emitter;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};

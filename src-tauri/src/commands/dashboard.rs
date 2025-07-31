@@ -150,23 +150,153 @@ pub struct DashboardSummary {
 pub fn apply_dashboard_migration(conn: &Connection) -> SqliteResult<()> {
     info!("Applying dashboard database migration...");
 
-    // Read and execute the migration file content
+    // Read and execute the migration file content as a batch
     let migration_sql = include_str!("../../migrations/002_dashboard.sql");
     
-    // Split the migration into individual statements and execute them
-    for statement in migration_sql.split(';') {
-        let statement = statement.trim();
-        if !statement.is_empty() && !statement.starts_with("--") {
-            if let Err(e) = conn.execute(statement, []) {
-                error!("Failed to execute migration statement: {}", e);
-                error!("Statement: {}", statement);
-                // Continue with other statements even if one fails
-            }
+    // Execute the entire migration as a batch to preserve transaction boundaries
+    match conn.execute_batch(migration_sql) {
+        Ok(_) => {
+            info!("Dashboard migration completed successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to execute dashboard migration: {}", e);
+            Err(e)
         }
     }
+}
 
-    info!("Dashboard database migration completed");
-    Ok(())
+/// Start background dashboard analysis for a project
+#[tauri::command]
+pub async fn dashboard_analyze_project(
+    db: State<'_, AgentDb>,
+    project_id: String,
+    project_path: String,
+) -> Result<String, String> {
+    use crate::analysis::ProjectAnalyzer;
+    
+    info!("Starting comprehensive project analysis for project: {}", project_id);
+    
+    // Create analyzer instance
+    let analyzer = ProjectAnalyzer::new(project_path.clone(), project_id.clone());
+    
+    // Perform health analysis
+    match analyzer.analyze_health().await {
+        Ok(health_metrics) => {
+            for metric in health_metrics {
+                let conn = db.0.lock().map_err(|e| e.to_string())?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO project_health 
+                     (project_id, metric_type, value, timestamp, details, trend) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        metric.project_id,
+                        metric.metric_type,
+                        metric.value,
+                        metric.timestamp,
+                        metric.details,
+                        metric.trend
+                    ],
+                ).map_err(|e| e.to_string())?;
+            }
+        }
+        Err(e) => {
+            error!("Health analysis failed: {}", e);
+        }
+    }
+    
+    // Perform feature analysis
+    match analyzer.scan_features().await {
+        Ok(features) => {
+            for feature in features {
+                let conn = db.0.lock().map_err(|e| e.to_string())?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO feature_registry 
+                     (project_id, name, description, status, independence_score, 
+                      dependencies, file_paths, complexity_score, created_at, updated_at) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    params![
+                        feature.project_id,
+                        feature.name,
+                        feature.description,
+                        feature.status,
+                        feature.independence_score,
+                        feature.dependencies,
+                        feature.file_paths,
+                        feature.complexity_score,
+                        feature.created_at,
+                        feature.updated_at
+                    ],
+                ).map_err(|e| e.to_string())?;
+            }
+        }
+        Err(e) => {
+            error!("Feature analysis failed: {}", e);
+        }
+    }
+    
+    // Perform risk analysis
+    match analyzer.detect_risks().await {
+        Ok(risks) => {
+            for risk in risks {
+                let conn = db.0.lock().map_err(|e| e.to_string())?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO risk_items 
+                     (project_id, category, severity, title, description, mitigation, 
+                      status, impact_score, probability, detected_at, file_paths) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    params![
+                        risk.project_id,
+                        risk.category,
+                        risk.severity,
+                        risk.title,
+                        risk.description,
+                        risk.mitigation,
+                        risk.status,
+                        risk.impact_score,
+                        risk.probability,
+                        risk.detected_at,
+                        risk.file_paths
+                    ],
+                ).map_err(|e| e.to_string())?;
+            }
+        }
+        Err(e) => {
+            error!("Risk analysis failed: {}", e);
+        }
+    }
+    
+    // Perform documentation analysis
+    match analyzer.analyze_documentation().await {
+        Ok(docs) => {
+            for doc in docs {
+                let conn = db.0.lock().map_err(|e| e.to_string())?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO documentation_status 
+                     (project_id, doc_type, completion_percentage, total_sections, 
+                      completed_sections, missing_sections, file_paths, last_updated, quality_score) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![
+                        doc.project_id,
+                        doc.doc_type,
+                        doc.completion_percentage,
+                        doc.total_sections,
+                        doc.completed_sections,
+                        doc.missing_sections,
+                        doc.file_paths,
+                        doc.last_updated,
+                        doc.quality_score
+                    ],
+                ).map_err(|e| e.to_string())?;
+            }
+        }
+        Err(e) => {
+            error!("Documentation analysis failed: {}", e);
+        }
+    }
+    
+    info!("Project analysis completed successfully for: {}", project_id);
+    Ok(format!("Project analysis completed for {}", project_id))
 }
 
 /// Get dashboard summary for a project

@@ -4,6 +4,7 @@
 mod checkpoint;
 mod claude_binary;
 mod commands;
+mod analysis;
 mod process;
 mod sidecar_wrapper;
 mod windows_command;
@@ -279,6 +280,7 @@ fn main() {
             commands::dashboard::dashboard_get_summary,
             commands::dashboard::dashboard_update_health_metric,
             commands::dashboard::dashboard_update_feature,
+            commands::dashboard::dashboard_analyze_project,
             commands::dashboard_seed::dashboard_seed_data,
         ])
         .run(tauri::generate_context!())

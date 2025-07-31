@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
@@ -135,20 +135,34 @@ interface DashboardSummary {
   config?: DashboardConfig;
 }
 
-const DashboardMain = () => {
+interface DashboardMainProps {
+  onBack?: () => void;
+}
+
+const DashboardMain = ({ onBack }: DashboardMainProps) => {
+  // onBack is available for future use (e.g., navigation)
+  console.log('Dashboard loaded, onBack available:', !!onBack);
   const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // 새로고침 상태 추가
+  const [analyzing, setAnalyzing] = useState(false); // 분석 상태 추가
+  const [seeding, setSeeding] = useState(false); // 시드 데이터 상태 추가
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('overview'); // 탭 상태 관리 추가
 
   const projectId = 'claudia-main'; // Default project ID
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [loadDashboardData]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       const data = await invoke<DashboardSummary>('dashboard_get_summary', {
         projectId
@@ -159,10 +173,11 @@ const DashboardMain = () => {
       console.error('Failed to load dashboard data:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [projectId]);
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityColor = useCallback((severity: string) => {
     switch (severity) {
       case 'critical': return 'bg-red-500';
       case 'high': return 'bg-orange-500';
@@ -170,9 +185,9 @@ const DashboardMain = () => {
       case 'low': return 'bg-blue-500';
       default: return 'bg-gray-500';
     }
-  };
+  }, []);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'completed': return 'bg-green-500';
       case 'in_progress': return 'bg-blue-500';
@@ -182,16 +197,32 @@ const DashboardMain = () => {
       case 'failed': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
-  };
+  }, []);
 
-  const getTrendIcon = (trend?: string) => {
+  const getTrendIcon = useCallback((trend?: string) => {
     switch (trend) {
       case 'improving': return <TrendingUp className="h-4 w-4 text-green-500" />;
       case 'declining': return <TrendingUp className="h-4 w-4 text-red-500 transform rotate-180" />;
       case 'stable': return <Activity className="h-4 w-4 text-blue-500" />;
       default: return null;
     }
-  };
+  }, []);
+
+  // 성능 최적화를 위한 계산된 값들
+  const summaryStats = useMemo(() => {
+    if (!dashboardData) return null;
+    
+    return {
+      avgHealthScore: dashboardData.health_metrics.length > 0 
+        ? Math.round(dashboardData.health_metrics.reduce((acc, m) => acc + m.value, 0) / dashboardData.health_metrics.length)
+        : 'N/A',
+      activeRisks: dashboardData.risk_items.filter(r => r.status === 'open').length,
+      criticalRisks: dashboardData.risk_items.filter(r => r.severity === 'critical').length,
+      completedFeatures: dashboardData.feature_status.filter(f => f.status === 'completed').length,
+      totalFeatures: dashboardData.feature_status.length,
+      completionPercentage: Math.round((dashboardData.feature_status.filter(f => f.status === 'completed').length / Math.max(dashboardData.feature_status.length, 1)) * 100)
+    };
+  }, [dashboardData]);
 
   if (loading) {
     return (
@@ -238,24 +269,67 @@ const DashboardMain = () => {
         </div>
         <div className="flex items-center space-x-2">
           <button 
-            onClick={loadDashboardData}
-            className="flex items-center px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={() => loadDashboardData(true)}
+            disabled={refreshing}
+            className="flex items-center px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Activity className="h-4 w-4 mr-2" />
-            Refresh
+            <Activity className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button 
             onClick={async () => {
               try {
-                await invoke('dashboard_seed_data');
-                await loadDashboardData();
+                setAnalyzing(true);
+                await invoke('dashboard_analyze_project', {
+                  projectId: projectId,
+                  projectPath: 'D:\\claudia' // TODO: Get actual project path
+                });
+                await loadDashboardData(true);
               } catch (err) {
-                console.error('Failed to seed data:', err);
+                console.error('Failed to analyze project:', err);
+                setError('Failed to analyze project: ' + err);
+              } finally {
+                setAnalyzing(false);
               }
             }}
-            className="flex items-center px-3 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+            disabled={analyzing || refreshing}
+            className="flex items-center px-3 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Seed Data
+            {analyzing ? (
+              <>
+                <Activity className="h-4 w-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                🔍 Analyze Project
+              </>
+            )}
+          </button>
+          <button 
+            onClick={async () => {
+              try {
+                setSeeding(true);
+                await invoke('dashboard_seed_data');
+                await loadDashboardData(true);
+              } catch (err) {
+                console.error('Failed to seed data:', err);
+                setError('Failed to seed data: ' + err);
+              } finally {
+                setSeeding(false);
+              }
+            }}
+            disabled={seeding || refreshing}
+            className="flex items-center px-3 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {seeding ? (
+              <>
+                <Activity className="h-4 w-4 mr-2 animate-spin" />
+                Seeding...
+              </>
+            ) : (
+              'Seed Data'
+            )}
           </button>
         </div>
       </div>
@@ -312,7 +386,7 @@ const DashboardMain = () => {
         </Card>
       )}
 
-      <Tabs value="overview" onValueChange={() => {}} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="health">Health</TabsTrigger>
@@ -331,10 +405,7 @@ const DashboardMain = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {dashboardData.health_metrics.length > 0 
-                    ? Math.round(dashboardData.health_metrics.reduce((acc, m) => acc + m.value, 0) / dashboardData.health_metrics.length)
-                    : 'N/A'
-                  }
+                  {summaryStats?.avgHealthScore}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Average across {dashboardData.health_metrics.length} metrics
@@ -349,10 +420,10 @@ const DashboardMain = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-500">
-                  {dashboardData.risk_items.filter(r => r.status === 'open').length}
+                  {summaryStats?.activeRisks}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {dashboardData.risk_items.filter(r => r.severity === 'critical').length} critical
+                  {summaryStats?.criticalRisks} critical
                 </p>
               </CardContent>
             </Card>
@@ -364,11 +435,10 @@ const DashboardMain = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {dashboardData.feature_status.filter(f => f.status === 'completed').length}/
-                  {dashboardData.feature_status.length}
+                  {summaryStats?.completedFeatures}/{summaryStats?.totalFeatures}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {Math.round((dashboardData.feature_status.filter(f => f.status === 'completed').length / Math.max(dashboardData.feature_status.length, 1)) * 100)}% complete
+                  {summaryStats?.completionPercentage}% complete
                 </p>
               </CardContent>
             </Card>
