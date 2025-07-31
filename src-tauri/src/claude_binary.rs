@@ -195,6 +195,40 @@ fn try_which_command() -> Option<ClaudeInstallation> {
                 return None;
             }
 
+            // On Windows, where command may return multiple paths
+            #[cfg(target_os = "windows")]
+            {
+                // Split by newlines and find the .cmd file
+                for line in output_str.lines() {
+                    let path = line.trim();
+                    if path.ends_with(".cmd") && PathBuf::from(path).exists() {
+                        debug!("'where' found claude.cmd at: {}", path);
+                        let version = get_claude_version(path).ok().flatten();
+                        return Some(ClaudeInstallation {
+                            path: path.to_string(),
+                            version,
+                            source: "which".to_string(),
+                            installation_type: InstallationType::System,
+                        });
+                    }
+                }
+                // If no .cmd file found, use the first valid path
+                if let Some(first_line) = output_str.lines().next() {
+                    let path = first_line.trim();
+                    if PathBuf::from(path).exists() {
+                        debug!("'where' found claude at: {}", path);
+                        let version = get_claude_version(path).ok().flatten();
+                        return Some(ClaudeInstallation {
+                            path: path.to_string(),
+                            version,
+                            source: "which".to_string(),
+                            installation_type: InstallationType::System,
+                        });
+                    }
+                }
+                return None;
+            }
+
             // Parse aliased output: "claude: aliased to /path/to/claude"
             let path = if output_str.starts_with("claude:") && output_str.contains("aliased to") {
                 output_str
@@ -416,10 +450,53 @@ fn find_standard_installations() -> Vec<ClaudeInstallation> {
 /// Get Claude version by running --version command
 fn get_claude_version(path: &str) -> Result<Option<String>, String> {
     let mut cmd = if path.ends_with(".cmd") {
-        // For Windows .cmd files, use cmd /c
-        let mut cmd = Command::new("cmd");
-        cmd.args(&["/c", path, "--version"]);
-        cmd
+        // For Windows .cmd files, use cmd /c with proper command string
+        #[cfg(target_os = "windows")]
+        {
+            // Force use of actual Windows cmd.exe, not MSYS2's bash
+            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
+            let mut cmd = Command::new(cmd_exe);
+            
+            // Clear MSYS2 environment variables that cause path translation issues
+            cmd.env_remove("MSYSTEM");
+            cmd.env_remove("MSYS");
+            cmd.env_remove("MINGW_PREFIX");
+            cmd.env_remove("MSYSTEM_PREFIX");
+            cmd.env_remove("MSYSTEM_CARCH");
+            cmd.env_remove("MSYSTEM_CHOST");
+            cmd.env_remove("MINGW_CHOST");
+            cmd.env_remove("MINGW_PACKAGE_PREFIX");
+            
+            // Ensure Windows COMSPEC is set correctly
+            cmd.env("COMSPEC", cmd_exe);
+            
+            // Build the complete command string with proper quoting
+            let full_command = if path.contains(' ') {
+                format!("\"{}\" --version", path)
+            } else {
+                format!("{} --version", path)
+            };
+            
+            cmd.arg("/c");
+            cmd.arg(&full_command);
+            cmd
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+            let mut cmd = Command::new(comspec);
+            
+            // Build the complete command string with proper quoting
+            let full_command = if path.contains(' ') {
+                format!("\"{}\" --version", path)
+            } else {
+                format!("{} --version", path)
+            };
+            
+            cmd.arg("/c");
+            cmd.arg(&full_command);
+            cmd
+        }
     } else {
         let mut cmd = Command::new(path);
         cmd.arg("--version");
@@ -477,6 +554,20 @@ fn extract_version_from_output(stdout: &[u8]) -> Option<String> {
 
 /// Select the best installation based on version
 fn select_best_installation(installations: Vec<ClaudeInstallation>) -> Option<ClaudeInstallation> {
+    // On Windows, prefer .cmd files over shell scripts
+    #[cfg(target_os = "windows")]
+    {
+        // First, try to find a .cmd file
+        let cmd_installation = installations.iter()
+            .find(|i| i.path.ends_with(".cmd"))
+            .cloned();
+        
+        if let Some(cmd) = cmd_installation {
+            info!("Selected .cmd file for Windows: {}", cmd.path);
+            return Some(cmd);
+        }
+    }
+    
     // In production builds, version information may not be retrievable because
     // spawning external processes can be restricted. We therefore no longer
     // discard installations that lack a detected version – the mere presence

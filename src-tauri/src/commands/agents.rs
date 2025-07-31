@@ -350,6 +350,12 @@ pub fn init_database(app: &AppHandle) -> SqliteResult<Connection> {
         [],
     )?;
 
+    // Apply dashboard database migration
+    if let Err(e) = super::dashboard::apply_dashboard_migration(&conn) {
+        error!("Failed to apply dashboard migration: {}", e);
+        // Continue anyway - dashboard migration is not critical for basic app functionality
+    }
+
     Ok(conn)
 }
 
@@ -823,12 +829,62 @@ fn create_agent_system_command(
     args: Vec<String>,
     project_path: &str,
 ) -> Command {
-    let mut cmd = create_command_with_env(claude_path);
-    
-    // Add all arguments
-    for arg in args {
-        cmd.arg(arg);
-    }
+    // Handle .cmd files properly on Windows
+    let mut cmd = if claude_path.ends_with(".cmd") {
+        #[cfg(target_os = "windows")]
+        {
+            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+            let mut cmd = Command::new(comspec);
+            
+            // Build the complete command string with proper quoting
+            let mut command_parts = Vec::new();
+            
+            // Quote the path if it contains spaces
+            if claude_path.contains(' ') {
+                command_parts.push(format!("\"{}\"", claude_path));
+            } else {
+                command_parts.push(claude_path.to_string());
+            }
+            
+            // Add arguments with proper quoting
+            for arg in &args {
+                if arg.contains(' ') || arg.contains('"') {
+                    command_parts.push(format!("\"{}\"", arg.replace('"', "\\\"")));
+                } else {
+                    command_parts.push(arg.clone());
+                }
+            }
+            
+            let full_command = command_parts.join(" ");
+            
+            cmd.arg("/c");
+            cmd.arg(&full_command);
+            
+            // Apply CREATE_NO_WINDOW flag
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c");
+            let mut command_str = format!("\"{}\"", claude_path);
+            for arg in &args {
+                command_str.push_str(&format!(" \"{}\"", arg.replace('"', "\\\"")));
+            }
+            cmd.arg(command_str);
+            cmd
+        }
+    } else {
+        let mut cmd = create_command_with_env(claude_path);
+        // Add all arguments normally for non-.cmd files
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd
+    };
     
     cmd.current_dir(project_path)
         .stdin(Stdio::null())

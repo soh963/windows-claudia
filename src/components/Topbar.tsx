@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Circle, FileText, Settings, ExternalLink, BarChart3, Network, Info, Bot } from "lucide-react";
+import { Circle, FileText, Settings, ExternalLink, BarChart3, Network, Info, Bot, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
 import { api, type ClaudeVersionStatus } from "@/lib/api";
@@ -19,6 +19,10 @@ interface TopbarProps {
    * Callback when Usage Dashboard is clicked
    */
   onUsageClick: () => void;
+  /**
+   * Callback when Dashboard is clicked
+   */
+  onDashboardClick: () => void;
   /**
    * Callback when MCP is clicked
    */
@@ -52,6 +56,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onClaudeClick,
   onSettingsClick,
   onUsageClick,
+  onDashboardClick,
   onMCPClick,
   onInfoClick,
   onAgentsClick,
@@ -198,6 +203,16 @@ export const Topbar: React.FC<TopbarProps> = ({
         >
           <BarChart3 className="mr-2 h-3 w-3" />
           Usage Dashboard
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDashboardClick}
+          className="text-xs"
+        >
+          <Activity className="mr-2 h-3 w-3" />
+          Dashboard
         </Button>
         
         <Button

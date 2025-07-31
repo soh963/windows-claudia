@@ -72,66 +72,84 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
    * Handles JSON file import
    */
   const handleJsonFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
     try {
       setImportingJson(true);
-      const content = await file.text();
-      
-      // Parse the JSON to validate it
-      let jsonData;
-      try {
-        jsonData = JSON.parse(content);
-      } catch (e) {
-        onError("Invalid JSON file. Please check the format.");
-        return;
+      let totalImported = 0;
+      let totalFailed = 0;
+
+      // Process each selected file
+      for (const file of Array.from(files)) {
+        try {
+          const content = await file.text();
+          
+          // Parse the JSON to validate it
+          let jsonData;
+          try {
+            jsonData = JSON.parse(content);
+          } catch (e) {
+            console.error(`Invalid JSON in file ${file.name}:`, e);
+            totalFailed++;
+            continue;
+          }
+
+          // Check if it's a single server or multiple servers
+          if (jsonData.mcpServers) {
+            // Multiple servers format
+            for (const [name, config] of Object.entries(jsonData.mcpServers)) {
+              try {
+                const serverConfig = {
+                  type: "stdio",
+                  command: (config as any).command,
+                  args: (config as any).args || [],
+                  env: (config as any).env || {}
+                };
+            
+                const result = await api.mcpAddJson(name, JSON.stringify(serverConfig), importScope);
+                if (result.success) {
+                  totalImported++;
+                } else {
+                  totalFailed++;
+                }
+              } catch (e) {
+                totalFailed++;
+              }
+            }
+          } else if (jsonData.type && jsonData.command) {
+            // Single server format
+            const name = prompt(`Enter a name for the server from ${file.name}:`);
+            if (!name) {
+              totalFailed++;
+              continue;
+            }
+
+            const result = await api.mcpAddJson(name, content, importScope);
+            if (result.success) {
+              totalImported++;
+            } else {
+              totalFailed++;
+            }
+          } else {
+            console.error(`Unrecognized JSON format in ${file.name}`);
+            totalFailed++;
+          }
+        } catch (error) {
+          console.error(`Failed to process file ${file.name}:`, error);
+          totalFailed++;
+        }
       }
 
-      // Check if it's a single server or multiple servers
-      if (jsonData.mcpServers) {
-        // Multiple servers format
-        let imported = 0;
-        let failed = 0;
-
-        for (const [name, config] of Object.entries(jsonData.mcpServers)) {
-          try {
-            const serverConfig = {
-              type: "stdio",
-              command: (config as any).command,
-              args: (config as any).args || [],
-              env: (config as any).env || {}
-            };
-            
-            const result = await api.mcpAddJson(name, JSON.stringify(serverConfig), importScope);
-            if (result.success) {
-              imported++;
-            } else {
-              failed++;
-            }
-          } catch (e) {
-            failed++;
-          }
-        }
-        
-        onImportCompleted(imported, failed);
-      } else if (jsonData.type && jsonData.command) {
-        // Single server format
-        const name = prompt("Enter a name for this server:");
-        if (!name) return;
-
-        const result = await api.mcpAddJson(name, content, importScope);
-        if (result.success) {
-          onImportCompleted(1, 0);
-        } else {
-          onError(result.message);
-        }
+      // Report results for all files
+      if (totalImported > 0 || totalFailed > 0) {
+        onImportCompleted(totalImported, totalFailed);
       } else {
-        onError("Unrecognized JSON format. Expected MCP server configuration.");
+        onError("No servers were imported. Please check the file format.");
       }
     } catch (error) {
-      console.error("Failed to import JSON:", error);
-      onError("Failed to import JSON file");
+      console.error("Failed to import JSON files:", error);
+      onError("Failed to import JSON files");
     } finally {
       setImportingJson(false);
       // Reset the input
@@ -244,6 +262,7 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
               <input
                 type="file"
                 accept=".json"
+                multiple
                 onChange={handleJsonFileSelect}
                 disabled={importingJson}
                 className="hidden"

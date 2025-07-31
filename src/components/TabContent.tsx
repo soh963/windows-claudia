@@ -18,6 +18,7 @@ const UsageDashboard = lazy(() => import('@/components/UsageDashboard').then(m =
 const MCPManager = lazy(() => import('@/components/MCPManager').then(m => ({ default: m.MCPManager })));
 const Settings = lazy(() => import('@/components/Settings').then(m => ({ default: m.Settings })));
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor').then(m => ({ default: m.MarkdownEditor })));
+const DashboardMain = lazy(() => import('@/components/dashboard/DashboardMain').then(m => ({ default: m.default })));
 // const ClaudeFileEditor = lazy(() => import('@/components/ClaudeFileEditor').then(m => ({ default: m.ClaudeFileEditor })));
 
 // Import non-lazy components for projects view
@@ -239,6 +240,9 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
       
       case 'settings':
         return <Settings onBack={() => {}} />;
+      
+      case 'dashboard':
+        return <DashboardMain />;
       
       case 'claude-md':
         return <MarkdownEditor onBack={() => {}} />;

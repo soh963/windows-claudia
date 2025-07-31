@@ -102,41 +102,85 @@ fn execute_claude_mcp_command(app_handle: &AppHandle, args: Vec<&str>) -> Result
     info!("Executing claude mcp command with args: {:?}", args);
 
     let claude_path = find_claude_binary(app_handle)?;
+    info!("Found claude binary at: {}", claude_path);
     
+    // Handle .cmd files properly on Windows, bypassing MSYS2 path translation
     let mut cmd = if claude_path.ends_with(".cmd") {
-        // For Windows .cmd files, use cmd /c with proper flags
         #[cfg(target_os = "windows")]
         {
-            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-            let mut cmd = Command::new(comspec);
-            cmd.arg("/c");
-            cmd.arg(&claude_path);
+            // Force use of actual Windows cmd.exe, not MSYS2's bash
+            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
+            let mut cmd = Command::new(cmd_exe);
             
-            // Apply CREATE_NO_WINDOW with additional flags
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                cmd.creation_flags(CREATE_NO_WINDOW | 0x00000200); // CREATE_NEW_PROCESS_GROUP
+            // Clear MSYS2 environment variables that cause path translation issues
+            cmd.env_remove("MSYSTEM");
+            cmd.env_remove("MSYS");
+            cmd.env_remove("MINGW_PREFIX");
+            cmd.env_remove("MSYSTEM_PREFIX");
+            cmd.env_remove("MSYSTEM_CARCH");
+            cmd.env_remove("MSYSTEM_CHOST");
+            cmd.env_remove("MINGW_CHOST");
+            cmd.env_remove("MINGW_PACKAGE_PREFIX");
+            
+            // Ensure Windows COMSPEC is set correctly
+            cmd.env("COMSPEC", cmd_exe);
+            
+            // Build the complete command string with proper quoting
+            let mut command_parts = Vec::new();
+            
+            // Quote the path if it contains spaces
+            if claude_path.contains(' ') {
+                command_parts.push(format!("\"{}\"", claude_path));
+            } else {
+                command_parts.push(claude_path.to_string());
             }
+            
+            // Add MCP command
+            command_parts.push("mcp".to_string());
+            
+            // Add arguments with proper quoting
+            for arg in &args {
+                if arg.contains(' ') || arg.contains('"') {
+                    command_parts.push(format!("\"{}\"", arg.replace('"', "\\\"")));
+                } else {
+                    command_parts.push(arg.to_string());
+                }
+            }
+            
+            let full_command = command_parts.join(" ");
+            
+            cmd.arg("/c");
+            cmd.arg(&full_command);
+            
+            // Apply CREATE_NO_WINDOW flag
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
             cmd
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let mut cmd = create_command_with_env("cmd");
-            cmd.arg("/c");
-            cmd.arg(&claude_path);
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c");
+            let mut command_str = format!("\"{}\"", claude_path);
+            command_str.push_str(" mcp");
+            for arg in &args {
+                command_str.push_str(&format!(" \"{}\"", arg.replace('"', "\\\"")));
+            }
+            cmd.arg(command_str);
             cmd
         }
     } else {
-        create_command_with_env(&claude_path)
+        let mut cmd = create_command_with_env(&claude_path);
+        // Add MCP command and arguments normally for non-.cmd files
+        cmd.arg("mcp");
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd
     };
     
-    cmd.arg("mcp");
-    for arg in args {
-        cmd.arg(arg);
-    }
-
+    info!("Executing command: {:?}", cmd);
     let output = cmd.output().context("Failed to execute claude command")?;
 
     if output.status.success() {
@@ -655,8 +699,55 @@ pub async fn mcp_serve(app: AppHandle) -> Result<String, String> {
         }
     };
 
-    let mut cmd = create_command_with_env(&claude_path);
-    cmd.arg("mcp").arg("serve");
+    // Handle .cmd files properly on Windows, bypassing MSYS2 path translation
+    let mut cmd = if claude_path.ends_with(".cmd") {
+        #[cfg(target_os = "windows")]
+        {
+            // Force use of actual Windows cmd.exe, not MSYS2's bash
+            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
+            let mut cmd = Command::new(cmd_exe);
+            
+            // Clear MSYS2 environment variables that cause path translation issues
+            cmd.env_remove("MSYSTEM");
+            cmd.env_remove("MSYS");
+            cmd.env_remove("MINGW_PREFIX");
+            cmd.env_remove("MSYSTEM_PREFIX");
+            cmd.env_remove("MSYSTEM_CARCH");
+            cmd.env_remove("MSYSTEM_CHOST");
+            cmd.env_remove("MINGW_CHOST");
+            cmd.env_remove("MINGW_PACKAGE_PREFIX");
+            
+            // Ensure Windows COMSPEC is set correctly
+            cmd.env("COMSPEC", cmd_exe);
+            
+            // Build the complete command string with proper quoting
+            let full_command = if claude_path.contains(' ') {
+                format!("\"{}\" mcp serve", claude_path)
+            } else {
+                format!("{} mcp serve", claude_path)
+            };
+            
+            cmd.arg("/c");
+            cmd.arg(&full_command);
+            
+            // Apply CREATE_NO_WINDOW flag
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c");
+            cmd.arg(&format!("\"{}\" mcp serve", claude_path));
+            cmd
+        }
+    } else {
+        let mut cmd = create_command_with_env(&claude_path);
+        cmd.arg("mcp").arg("serve");
+        cmd
+    };
 
     match cmd.spawn() {
         Ok(_) => {

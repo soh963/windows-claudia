@@ -8,7 +8,9 @@ import {
   Sparkles,
   Zap,
   Square,
-  Brain
+  Brain,
+  Paperclip,
+  Image as ImageIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,7 @@ interface FloatingPromptInputProps {
 
 export interface FloatingPromptInputRef {
   addImage: (imagePath: string) => void;
+  getInput: () => string;
 }
 
 /**
@@ -185,26 +188,28 @@ const FloatingPromptInputInner = (
   const [slashCommandQuery, setSlashCommandQuery] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
   const [embeddedImages, setEmbeddedImages] = useState<string[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<{path: string, type: 'image' | 'file'}[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const expandedTextareaRef = useRef<HTMLTextAreaElement>(null);
   const unlistenDragDropRef = useRef<(() => void) | null>(null);
 
-  // Expose a method to add images programmatically
+  // Expose methods for external access
   React.useImperativeHandle(
     ref,
     () => ({
       addImage: (imagePath: string) => {
         setPrompt(currentPrompt => {
-          const existingPaths = extractImagePaths(currentPrompt);
+          const existingPaths = attachedFiles.map(f => f.path);
           if (existingPaths.includes(imagePath)) {
             return currentPrompt; // Image already added
           }
 
-          // Wrap path in quotes if it contains spaces
-          const mention = imagePath.includes(' ') ? `@"${imagePath}"` : `@${imagePath}`;
-          const newPrompt = currentPrompt + (currentPrompt.endsWith(' ') || currentPrompt === '' ? '' : ' ') + mention + ' ';
+          // Add to attached files instead of prompt text
+          setAttachedFiles(prev => [...prev, { path: imagePath, type: 'image' }]);
+          const newPrompt = currentPrompt;
 
           // Focus the textarea
           setTimeout(() => {
@@ -215,9 +220,10 @@ const FloatingPromptInputInner = (
 
           return newPrompt;
         });
-      }
+      },
+      getInput: () => prompt
     }),
-    [isExpanded]
+    [isExpanded, prompt]
   );
 
   // Helper function to check if a file is an image
@@ -232,69 +238,30 @@ const FloatingPromptInputInner = (
   };
 
   // Extract image paths from prompt text
-  const extractImagePaths = (text: string): string[] => {
-    console.log('[extractImagePaths] Input text length:', text.length);
+  // Extract attached files into prompt format when sending
+  const buildFinalPrompt = (text: string): string => {
+    if (attachedFiles.length === 0) return text;
     
-    // Updated regex to handle both quoted and unquoted paths
-    // Pattern 1: @"path with spaces or data URLs" - quoted paths
-    // Pattern 2: @path - unquoted paths (continues until @ or end)
-    const quotedRegex = /@"([^"]+)"/g;
-    const unquotedRegex = /@([^@\n\s]+)/g;
+    let finalPrompt = text;
     
-    const pathsSet = new Set<string>(); // Use Set to ensure uniqueness
+    // Add attached files as mentions at the beginning
+    const mentions = attachedFiles.map(file => {
+      const path = file.path;
+      // Wrap path in quotes if it contains spaces or is a data URL
+      return path.includes(' ') || path.startsWith('data:') ? `@"${path}"` : `@${path}`;
+    }).join(' ');
     
-    // First, extract quoted paths (including data URLs)
-    let matches = Array.from(text.matchAll(quotedRegex));
-    console.log('[extractImagePaths] Quoted matches:', matches.length);
+    // Add mentions at the beginning with proper spacing
+    finalPrompt = mentions + (text.trim() ? ' ' + text.trim() : '');
     
-    for (const match of matches) {
-      const path = match[1]; // No need to trim, quotes preserve exact path
-      console.log('[extractImagePaths] Processing quoted path:', path.startsWith('data:') ? 'data URL' : path);
-      
-      // For data URLs, use as-is; for file paths, convert to absolute
-      const fullPath = path.startsWith('data:') 
-        ? path 
-        : (path.startsWith('/') ? path : (projectPath ? `${projectPath}/${path}` : path));
-      
-      if (isImageFile(fullPath)) {
-        pathsSet.add(fullPath);
-      }
-    }
-    
-    // Remove quoted mentions from text to avoid double-matching
-    let textWithoutQuoted = text.replace(quotedRegex, '');
-    
-    // Then extract unquoted paths (typically file paths)
-    matches = Array.from(textWithoutQuoted.matchAll(unquotedRegex));
-    console.log('[extractImagePaths] Unquoted matches:', matches.length);
-    
-    for (const match of matches) {
-      const path = match[1].trim();
-      // Skip if it looks like a data URL fragment (shouldn't happen with proper quoting)
-      if (path.includes('data:')) continue;
-      
-      console.log('[extractImagePaths] Processing unquoted path:', path);
-      
-      // Convert relative path to absolute if needed
-      const fullPath = path.startsWith('/') ? path : (projectPath ? `${projectPath}/${path}` : path);
-      
-      if (isImageFile(fullPath)) {
-        pathsSet.add(fullPath);
-      }
-    }
-
-    const uniquePaths = Array.from(pathsSet);
-    console.log('[extractImagePaths] Final extracted paths (unique):', uniquePaths.length);
-    return uniquePaths;
+    return finalPrompt;
   };
 
-  // Update embedded images when prompt changes
+  // Update embedded images from attached files
   useEffect(() => {
-    console.log('[useEffect] Prompt changed:', prompt);
-    const imagePaths = extractImagePaths(prompt);
-    console.log('[useEffect] Setting embeddedImages to:', imagePaths);
+    const imagePaths = attachedFiles.filter(f => f.type === 'image').map(f => f.path);
     setEmbeddedImages(imagePaths);
-  }, [prompt, projectPath]);
+  }, [attachedFiles]);
 
   // Set up Tauri drag-drop event listener
   useEffect(() => {
@@ -326,36 +293,31 @@ const FloatingPromptInputInner = (
             lastDropTime = currentTime;
 
             const droppedPaths = event.payload.paths as string[];
-            const imagePaths = droppedPaths.filter(isImageFile);
-
-            if (imagePaths.length > 0) {
-              setPrompt(currentPrompt => {
-                const existingPaths = extractImagePaths(currentPrompt);
-                const newPaths = imagePaths.filter(p => !existingPaths.includes(p));
-
-                if (newPaths.length === 0) {
-                  return currentPrompt; // All dropped images are already in the prompt
+            
+            // Process all dropped files
+            setAttachedFiles(prev => {
+              const newFiles: {path: string, type: 'image' | 'file'}[] = [];
+              
+              droppedPaths.forEach(path => {
+                const isImage = isImageFile(path);
+                const fileType = isImage ? 'image' : 'file';
+                
+                // Check if already attached in the current state
+                const existingPaths = prev.map(f => f.path);
+                if (!existingPaths.includes(path)) {
+                  newFiles.push({ path, type: fileType });
                 }
-
-                // Wrap paths with spaces in quotes for clarity
-                const mentionsToAdd = newPaths.map(p => {
-                  // If path contains spaces, wrap in quotes
-                  if (p.includes(' ')) {
-                    return `@"${p}"`;
-                  }
-                  return `@${p}`;
-                }).join(' ');
-                const newPrompt = currentPrompt + (currentPrompt.endsWith(' ') || currentPrompt === '' ? '' : ' ') + mentionsToAdd + ' ';
-
-                setTimeout(() => {
-                  const target = isExpanded ? expandedTextareaRef.current : textareaRef.current;
-                  target?.focus();
-                  target?.setSelectionRange(newPrompt.length, newPrompt.length);
-                }, 0);
-
-                return newPrompt;
               });
-            }
+              
+              // Only update if there are new files to add
+              return newFiles.length > 0 ? [...prev, ...newFiles] : prev;
+            });
+            
+            // Focus the textarea
+            setTimeout(() => {
+              const target = isExpanded ? expandedTextareaRef.current : textareaRef.current;
+              target?.focus();
+            }, 0);
           }
         });
       } catch (error) {
@@ -384,8 +346,8 @@ const FloatingPromptInputInner = (
   }, [isExpanded]);
 
   const handleSend = () => {
-    if (prompt.trim() && !disabled) {
-      let finalPrompt = prompt.trim();
+    if ((prompt.trim() || attachedFiles.length > 0) && !disabled) {
+      let finalPrompt = buildFinalPrompt(prompt.trim());
       
       // Append thinking phrase if not auto mode
       const thinkingMode = THINKING_MODES.find(m => m.id === selectedThinkingMode);
@@ -395,6 +357,7 @@ const FloatingPromptInputInner = (
       
       onSend(finalPrompt, selectedModel);
       setPrompt("");
+      setAttachedFiles([]);
       setEmbeddedImages([]);
     }
   };
@@ -635,21 +598,14 @@ const FloatingPromptInputInner = (
           reader.onload = () => {
             const base64Data = reader.result as string;
             
-            // Add the base64 data URL directly to the prompt
-            setPrompt(currentPrompt => {
-              // Use the data URL directly as the image reference
-              const mention = `@"${base64Data}"`;
-              const newPrompt = currentPrompt + (currentPrompt.endsWith(' ') || currentPrompt === '' ? '' : ' ') + mention + ' ';
-              
-              // Focus the textarea and move cursor to end
-              setTimeout(() => {
-                const target = isExpanded ? expandedTextareaRef.current : textareaRef.current;
-                target?.focus();
-                target?.setSelectionRange(newPrompt.length, newPrompt.length);
-              }, 0);
-
-              return newPrompt;
-            });
+            // Add to attached files instead of prompt
+            setAttachedFiles(prev => [...prev, { path: base64Data, type: 'image' }]);
+            
+            // Focus the textarea
+            setTimeout(() => {
+              const target = isExpanded ? expandedTextareaRef.current : textareaRef.current;
+              target?.focus();
+            }, 0);
           };
           
           reader.readAsDataURL(blob);
@@ -675,40 +631,38 @@ const FloatingPromptInputInner = (
   };
 
   const handleRemoveImage = (index: number) => {
-    // Remove the corresponding @mention from the prompt
+    // Remove from attached files
     const imagePath = embeddedImages[index];
+    setAttachedFiles(prev => prev.filter(f => f.path !== imagePath));
+  };
+  
+  const handleRemoveFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
     
-    // For data URLs, we need to handle them specially since they're always quoted
-    if (imagePath.startsWith('data:')) {
-      // Simply remove the exact quoted data URL
-      const quotedPath = `@"${imagePath}"`;
-      const newPrompt = prompt.replace(quotedPath, '').trim();
-      setPrompt(newPrompt);
-      return;
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const path = reader.result as string;
+        const isImage = file.type.startsWith('image/');
+        
+        // Check if already attached
+        const existingPaths = attachedFiles.map(f => f.path);
+        if (!existingPaths.includes(path)) {
+          setAttachedFiles(prev => [...prev, { path, type: isImage ? 'image' : 'file' }]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-    
-    // For file paths, use the original logic
-    const escapedPath = imagePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const escapedRelativePath = imagePath.replace(projectPath + '/', '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
-    // Create patterns for both quoted and unquoted mentions
-    const patterns = [
-      // Quoted full path
-      new RegExp(`@"${escapedPath}"\\s?`, 'g'),
-      // Unquoted full path
-      new RegExp(`@${escapedPath}\\s?`, 'g'),
-      // Quoted relative path
-      new RegExp(`@"${escapedRelativePath}"\\s?`, 'g'),
-      // Unquoted relative path
-      new RegExp(`@${escapedRelativePath}\\s?`, 'g')
-    ];
-
-    let newPrompt = prompt;
-    for (const pattern of patterns) {
-      newPrompt = newPrompt.replace(pattern, '');
-    }
-
-    setPrompt(newPrompt.trim());
   };
 
   const selectedModelData = MODELS.find(m => m.id === selectedModel) || MODELS[0];
@@ -876,7 +830,31 @@ const FloatingPromptInputInner = (
         onDrop={handleDrop}
       >
         <div className="max-w-5xl mx-auto">
-          {/* Image previews */}
+          {/* Attached files display */}
+          {attachedFiles.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-wrap">
+              {attachedFiles.map((file, index) => (
+                <div key={index} className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-md">
+                  {file.type === 'image' ? (
+                    <ImageIcon className="h-3 w-3 text-blue-500" />
+                  ) : (
+                    <Paperclip className="h-3 w-3 text-gray-500" />
+                  )}
+                  <span className="text-xs max-w-[150px] truncate">
+                    {file.path.startsWith('data:') ? 'Pasted Image' : file.path.split('/').pop()}
+                  </span>
+                  <button
+                    onClick={() => handleRemoveFile(index)}
+                    className="ml-1 text-muted-foreground hover:text-foreground"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Image previews for viewing */}
           {embeddedImages.length > 0 && (
             <ImagePreview
               images={embeddedImages}
@@ -887,6 +865,26 @@ const FloatingPromptInputInner = (
 
           <div className="p-4">
             <div className="flex items-end gap-3">
+              {/* File Attachment Button */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileInputChange}
+                className="hidden"
+                accept="*"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                className="h-10 w-10"
+                title="Attach files"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              
               {/* Model Picker */}
               <Popover
                 trigger={

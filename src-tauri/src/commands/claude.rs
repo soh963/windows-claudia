@@ -238,6 +238,9 @@ fn create_command_with_env(program: &str) -> Command {
         tokio_cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
+    // Clear environment to avoid Git Bash interference
+    tokio_cmd.env_clear();
+
     // Copy over all environment variables
     for (key, value) in std::env::vars() {
         if key == "PATH"
@@ -252,7 +255,31 @@ fn create_command_with_env(program: &str) -> Command {
             || key == "NVM_BIN"
             || key == "HOMEBREW_PREFIX"
             || key == "HOMEBREW_CELLAR"
+            // Windows environment variables
+            || key == "USERPROFILE"
+            || key == "APPDATA"
+            || key == "LOCALAPPDATA"
+            || key == "ProgramFiles"
+            || key == "ProgramFiles(x86)"
+            || key == "TEMP"
+            || key == "TMP"
+            || key == "SystemRoot"
+            || key == "COMSPEC"
+            || key == "PATHEXT"
+            // Proxy environment variables
+            || key == "HTTP_PROXY"
+            || key == "HTTPS_PROXY"
+            || key == "NO_PROXY"
+            || key == "ALL_PROXY"
         {
+            // Skip Git Bash specific variables that might cause issues
+            if key == "SHELL" && value.contains("/usr/bin/bash") {
+                continue;
+            }
+            if key == "MSYSTEM" || key == "MINGW_PREFIX" || key == "MINGW_CHOST" {
+                continue;
+            }
+            
             log::debug!("Inheriting env var: {}={}", key, value);
             tokio_cmd.env(&key, &value);
         }
@@ -280,13 +307,45 @@ fn create_system_command(
     project_path: &str,
 ) -> Command {
     let mut cmd = if claude_path.ends_with(".cmd") {
-        // For Windows .cmd files, use cmd /c with proper flags
+        // For Windows .cmd files, use cmd /c with proper escaping
         #[cfg(target_os = "windows")]
         {
-            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-            let mut cmd = Command::new(comspec);
+            // Force use of Windows cmd.exe, not Git Bash or other shells
+            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
+            let mut cmd = Command::new(cmd_exe);
+            
+            // Build the complete command string with proper quoting
+            let mut command_parts = Vec::new();
+            
+            // Quote the path if it contains spaces
+            if claude_path.contains(' ') {
+                command_parts.push(format!("\"{}\"", claude_path));
+            } else {
+                command_parts.push(claude_path.to_string());
+            }
+            
+            // Add arguments with proper quoting
+            for arg in &args {
+                if arg.contains(' ') || arg.contains('"') {
+                    command_parts.push(format!("\"{}\"", arg.replace('"', "\\\"")));
+                } else {
+                    command_parts.push(arg.clone());
+                }
+            }
+            
+            let full_command = command_parts.join(" ");
+            
             cmd.arg("/c");
-            cmd.arg(claude_path);
+            cmd.arg(&full_command);
+            
+            // Clear any MSYS2/Git Bash environment variables that might interfere
+            cmd.env_remove("MSYSTEM");
+            cmd.env_remove("MSYS");
+            cmd.env_remove("MINGW_PREFIX");
+            cmd.env_remove("MSYSTEM_PREFIX");
+            cmd.env("COMSPEC", cmd_exe);  // Force correct COMSPEC
+            
+            log::debug!("Windows .cmd command: {} /c {}", cmd_exe, full_command);
             
             // Apply CREATE_NO_WINDOW with additional flags to ensure no console window
             use std::os::windows::process::CommandExt;
@@ -295,19 +354,25 @@ fn create_system_command(
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let mut cmd = create_command_with_env("cmd");
-            cmd.arg("/c");
-            cmd.arg(claude_path);
+            // On non-Windows systems, .cmd files shouldn't exist
+            // If they do, try to execute them with sh
+            let mut cmd = create_command_with_env("sh");
+            cmd.arg("-c");
+            let mut command_str = format!("\"{}\"", claude_path);
+            for arg in &args {
+                command_str.push_str(&format!(" \"{}\"", arg.replace('"', "\\\"")));
+            }
+            cmd.arg(command_str);
             cmd
         }
     } else {
-        create_command_with_env(claude_path)
+        let mut cmd = create_command_with_env(claude_path);
+        // Add all arguments normally for non-.cmd files
+        for arg in args {
+            cmd.arg(arg);
+        }
+        cmd
     };
-    
-    // Add all arguments
-    for arg in args {
-        cmd.arg(arg);
-    }
     
     cmd.current_dir(project_path)
         .stdout(Stdio::piped())
@@ -593,10 +658,28 @@ pub async fn check_claude_auth(app: AppHandle) -> Result<ClaudeAuthStatus, Strin
     let mut cmd = if claude_path.ends_with(".cmd") {
         #[cfg(target_os = "windows")]
         {
-            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-            let mut cmd = Command::new(comspec);
+            // Force use of Windows cmd.exe, not Git Bash or other shells
+            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
+            let mut cmd = Command::new(cmd_exe);
+            
+            // Build the complete command string with proper quoting
+            let full_command = if claude_path.contains(' ') {
+                format!("\"{}\" mcp list", claude_path)
+            } else {
+                format!("{} mcp list", claude_path)
+            };
+            
             cmd.arg("/c");
-            cmd.arg(&claude_path);
+            cmd.arg(&full_command);
+            
+            // Clear any MSYS2/Git Bash environment variables that might interfere
+            cmd.env_remove("MSYSTEM");
+            cmd.env_remove("MSYS");
+            cmd.env_remove("MINGW_PREFIX");
+            cmd.env_remove("MSYSTEM_PREFIX");
+            cmd.env("COMSPEC", cmd_exe);  // Force correct COMSPEC
+            
+            log::debug!("Auth check command: {} /c {}", cmd_exe, full_command);
             
             // Apply CREATE_NO_WINDOW with additional flags
             use std::os::windows::process::CommandExt;
@@ -605,9 +688,9 @@ pub async fn check_claude_auth(app: AppHandle) -> Result<ClaudeAuthStatus, Strin
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let mut cmd = Command::new("cmd");
-            cmd.arg("/c");
-            cmd.arg(&claude_path);
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c");
+            cmd.arg(&format!("\"{}\" mcp list", claude_path));
             cmd
         }
     } else {
@@ -618,11 +701,10 @@ pub async fn check_claude_auth(app: AppHandle) -> Result<ClaudeAuthStatus, Strin
             use std::os::windows::process::CommandExt;
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
+        // Use 'claude mcp list' as a test command - it should work if authenticated
+        cmd.arg("mcp").arg("list");
         cmd
     };
-    
-    // Use 'claude mcp list' as a test command - it should work if authenticated
-    cmd.arg("mcp").arg("list");
 
     match cmd.output().await {
         Ok(output) => {
@@ -949,6 +1031,7 @@ pub async fn execute_claude_code(
     );
 
     let claude_path = find_claude_binary(&app)?;
+    log::info!("Claude binary path: {}", claude_path);
     
     let args = vec![
         "-p".to_string(),

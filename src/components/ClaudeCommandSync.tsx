@@ -176,7 +176,10 @@ export const ClaudeCommandSync: React.FC<ClaudeCommandSyncProps> = ({ setToast }
           {/* Status Row */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Badge variant={claudeAvailable ? "default" : "destructive"}>
+              <Badge 
+                variant={claudeAvailable === null ? "secondary" : claudeAvailable ? "default" : "destructive"}
+                className={claudeAvailable ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" : ""}
+              >
                 {claudeAvailable === null ? 'Checking...' :
                  claudeAvailable ? 'Claude Available' : 'Claude Not Found'}
               </Badge>
@@ -223,19 +226,19 @@ export const ClaudeCommandSync: React.FC<ClaudeCommandSyncProps> = ({ setToast }
           {syncResult && (
             <div className="grid grid-cols-3 gap-4 pt-4 border-t">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-2xl font-bold text-blue-500 dark:text-blue-400">
                   {syncResult.commands_found}
                 </div>
                 <div className="text-sm text-muted-foreground">Found</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-500 dark:text-green-400">
                   {syncResult.new_commands}
                 </div>
                 <div className="text-sm text-muted-foreground">New</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-600">
+                <div className="text-2xl font-bold text-yellow-500 dark:text-yellow-400">
                   {syncResult.updated_commands}
                 </div>
                 <div className="text-sm text-muted-foreground">Updated</div>
@@ -245,8 +248,8 @@ export const ClaudeCommandSync: React.FC<ClaudeCommandSyncProps> = ({ setToast }
 
           {/* Error Message */}
           {syncResult?.error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3">
-              <div className="text-sm text-red-800">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
+              <div className="text-sm text-destructive">
                 <strong>Error:</strong> {syncResult.error}
               </div>
             </div>
@@ -256,7 +259,7 @@ export const ClaudeCommandSync: React.FC<ClaudeCommandSyncProps> = ({ setToast }
 
       {/* Synced Commands Preview */}
       {syncedCommands.length > 0 && (
-        <Card>
+        <Card className="border-muted">
           <CardHeader>
             <CardTitle>Synced Commands ({syncedCommands.length})</CardTitle>
             <CardDescription>
@@ -268,10 +271,10 @@ export const ClaudeCommandSync: React.FC<ClaudeCommandSyncProps> = ({ setToast }
               {syncedCommands.map((command) => (
                 <div 
                   key={command.id} 
-                  className="border rounded-lg p-3 hover:bg-gray-50 transition-colors"
+                  className="border rounded-lg p-4 bg-card hover:bg-accent transition-colors"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <code className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+                  <div className="flex items-center justify-between mb-3">
+                    <code className="text-sm font-mono bg-muted text-foreground px-2 py-1 rounded">
                       {command.full_command}
                     </code>
                     <Badge variant="outline" className="text-xs">
@@ -280,12 +283,12 @@ export const ClaudeCommandSync: React.FC<ClaudeCommandSyncProps> = ({ setToast }
                   </div>
                   
                   {command.description && (
-                    <p className="text-sm text-muted-foreground mb-2">
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
                       {command.description}
                     </p>
                   )}
                   
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {command.accepts_arguments && (
                       <Badge variant="secondary" className="text-xs">Args</Badge>
                     )}

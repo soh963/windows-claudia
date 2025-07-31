@@ -70,7 +70,6 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
   const [runsLoading, setRunsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [view, setView] = useState<"list" | "create" | "edit" | "execute">("list");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   // const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -79,7 +78,7 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const AGENTS_PER_PAGE = 9; // 3x3 grid
+  // Remove pagination - show all agents with scroll
 
   useEffect(() => {
     loadAgents();
@@ -219,6 +218,7 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
   const handleImportAgent = async () => {
     try {
       // Show native open dialog
+      console.log("Opening file dialog with multiple selection...");
       const filePaths = await open({
         multiple: true,
         filters: [{
@@ -227,6 +227,8 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
         }]
       });
       
+      console.log("Selected files:", filePaths);
+      
       if (!filePaths || filePaths.length === 0) {
         // User cancelled the dialog
         return;
@@ -234,6 +236,7 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
       
       // Import agents from the selected files
       const filePathsArray = Array.isArray(filePaths) ? filePaths : [filePaths];
+      console.log("Processing files:", filePathsArray);
       let successCount = 0;
       let failedCount = 0;
       
@@ -262,10 +265,7 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
     }
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(agents.length / AGENTS_PER_PAGE);
-  const startIndex = (currentPage - 1) * AGENTS_PER_PAGE;
-  const paginatedAgents = agents.slice(startIndex, startIndex + AGENTS_PER_PAGE);
+  // No pagination - show all agents
 
   const renderIcon = (iconName: string) => {
     const Icon = AGENT_ICONS[iconName as AgentIconName] || AGENT_ICONS.bot;
@@ -306,14 +306,14 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
   // Removed viewRun case - now using modal preview in AgentRunsList
 
   return (
-    <div className={cn("flex flex-col h-full bg-background", className)}>
-      <div className="w-full max-w-6xl mx-auto flex flex-col h-full p-6">
+    <div className={cn("flex flex-col h-full bg-background overflow-hidden", className)}>
+      <div className="w-full max-w-6xl mx-auto flex flex-col h-full p-6 overflow-hidden">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="mb-6"
+          className="flex-shrink-0 mb-6"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -373,14 +373,14 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+            className="flex-shrink-0 mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
           >
             {error}
           </motion.div>
         )}
 
         {/* Main Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key="agents"
@@ -388,10 +388,10 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.2 }}
-              className="pt-6 space-y-8"
+              className="h-full flex flex-col overflow-hidden"
             >
               {/* Agents Grid */}
-              <div>
+              <div className="flex-1 min-h-0 overflow-hidden">
                 {loading ? (
                   <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -409,10 +409,10 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
                     </Button>
                   </div>
                 ) : (
-                  <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <AnimatePresence mode="popLayout">
-                        {paginatedAgents.map((agent, index) => (
+                  <div className="h-full overflow-y-auto">
+                    <AnimatePresence mode="popLayout">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                        {agents.map((agent, index) => (
                           <motion.div
                             key={agent.id}
                             initial={{ opacity: 0, scale: 0.9 }}
@@ -477,40 +477,15 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
                             </Card>
                           </motion.div>
                         ))}
-                      </AnimatePresence>
-                    </div>
-
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                      <div className="mt-6 flex justify-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                        >
-                          Previous
-                        </Button>
-                        <span className="flex items-center px-3 text-sm">
-                          Page {currentPage} of {totalPages}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          disabled={currentPage === totalPages}
-                        >
-                          Next
-                        </Button>
                       </div>
-                    )}
-                  </>
+                    </AnimatePresence>
+                  </div>
                 )}
               </div>
 
               {/* Execution History */}
               {!loading && agents.length > 0 && (
-                <div className="overflow-hidden">
+                <div className="flex-shrink-0 border-t pt-4">
                   <div className="flex items-center gap-2 mb-4">
                     <History className="h-5 w-5 text-muted-foreground" />
                     <h2 className="text-lg font-semibold">Recent Executions</h2>

@@ -264,6 +264,21 @@ fn main() {
             set_claude_sync_enabled,
             get_synced_claude_commands,
             check_claude_availability,
+            
+            // Intelligent Routing
+            commands::intelligent_routing::analyze_chat_input,
+            commands::intelligent_routing::parse_mcp_install_request,
+            
+            // MCP Manager
+            commands::mcp_manager::search_mcp_servers,
+            commands::mcp_manager::install_mcp_server,
+            commands::mcp_manager::auto_install_mcp,
+            
+            // Dashboard
+            commands::dashboard::dashboard_get_summary,
+            commands::dashboard::dashboard_update_health_metric,
+            commands::dashboard::dashboard_update_feature,
+            commands::dashboard_seed::dashboard_seed_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

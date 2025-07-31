@@ -441,6 +441,78 @@ export interface ImportServerResult {
 }
 
 /**
+ * Tool type that can be invoked
+ */
+export type ToolType = 
+  | { agent: string }
+  | { slash_command: string }
+  | { super_claude: true }
+  | { mcp_server: string };
+
+/**
+ * Tool invocation decision
+ */
+export interface ToolInvocation {
+  tool_type: ToolType;
+  confidence: number;
+  reason: string;
+  priority: number;
+}
+
+/**
+ * Routing result containing all tools to invoke
+ */
+export interface RoutingResult {
+  invocations: ToolInvocation[];
+  detected_intent: string;
+  complexity_score: number;
+  domain: string;
+}
+
+/**
+ * MCP installation request
+ */
+export interface McpInstallRequest {
+  query: string;
+  detected_packages: string[];
+  confidence: number;
+}
+
+/**
+ * MCP Server metadata
+ */
+export interface McpServerInfo {
+  name: string;
+  display_name: string;
+  description: string;
+  npm_package?: string;
+  github_repo?: string;
+  install_command: string;
+  config_template: any;
+  categories: string[];
+  popularity: number;
+}
+
+/**
+ * MCP installation status
+ */
+export interface McpInstallStatus {
+  server_name: string;
+  status: 'searching' | 'found' | 'installing' | 'configuring' | 'testing' | 'completed' | 'failed';
+  message: string;
+  progress: number;
+}
+
+/**
+ * MCP search result
+ */
+export interface McpSearchResult {
+  servers: McpServerInfo[];
+  total_found: number;
+  source: string;
+}
+
+/**
  * API client for interacting with the Rust backend
  */
 export const api = {

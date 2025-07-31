@@ -19,6 +19,7 @@ interface UseTabStateReturn {
   createUsageTab: () => string | null;
   createMCPTab: () => string | null;
   createSettingsTab: () => string | null;
+  createDashboardTab: () => string | null;
   createClaudeMdTab: () => string | null;
   createClaudeFileTab: (fileId: string, fileName: string) => string;
   createCreateAgentTab: () => string;
@@ -155,6 +156,23 @@ export const useTabState = (): UseTabStateReturn => {
       status: 'idle',
       hasUnsavedChanges: false,
       icon: 'settings'
+    });
+  }, [addTab, tabs, setActiveTab]);
+
+  const createDashboardTab = useCallback((): string | null => {
+    // Check if dashboard tab already exists (singleton)
+    const existingTab = tabs.find(tab => tab.type === 'dashboard');
+    if (existingTab) {
+      setActiveTab(existingTab.id);
+      return existingTab.id;
+    }
+
+    return addTab({
+      type: 'dashboard',
+      title: 'Dashboard',
+      status: 'idle',
+      hasUnsavedChanges: false,
+      icon: 'activity'
     });
   }, [addTab, tabs, setActiveTab]);
 
@@ -325,6 +343,7 @@ export const useTabState = (): UseTabStateReturn => {
     createUsageTab,
     createMCPTab,
     createSettingsTab,
+    createDashboardTab,
     createClaudeMdTab,
     createClaudeFileTab,
     createCreateAgentTab,

@@ -33,6 +33,7 @@ import { SplitPane } from "@/components/ui/split-pane";
 import { WebviewPreview } from "./WebviewPreview";
 import type { ClaudeStreamMessage } from "./AgentExecution";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { IntelligentChat } from "./IntelligentChat";
 
 interface ClaudeCodeSessionProps {
   /**
@@ -1145,6 +1146,17 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
 
         {/* Floating Prompt Input - Always visible */}
         <ErrorBoundary>
+          {/* Intelligent Chat Analysis */}
+          <div className="fixed bottom-40 left-1/2 -translate-x-1/2 z-20 w-full max-w-3xl px-4">
+            <IntelligentChat 
+              input={floatingPromptRef.current?.getInput() || ""}
+              onToolsDetected={(tools) => {
+                // Can be used to show tools in UI or influence routing
+                console.log('Tools detected:', tools);
+              }}
+            />
+          </div>
+
           {/* Queued Prompts Display */}
           <AnimatePresence>
             {queuedPrompts.length > 0 && (

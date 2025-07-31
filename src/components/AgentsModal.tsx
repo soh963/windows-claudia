@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Plus, Loader2, Play, Clock, CheckCircle, XCircle, Trash2, Import, ChevronDown, FileJson, Globe, Download } from 'lucide-react';
+import { Bot, Plus, Loader2, Play, Clock, CheckCircle, XCircle, Trash2, Import, ChevronDown, FileJson, Globe, Download, Search } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Toast } from '@/components/ui/toast';
+import { Input } from '@/components/ui/input';
 import { api, type Agent, type AgentRunWithMetrics } from '@/lib/api';
 import { useTabState } from '@/hooks/useTabState';
 import { formatISOTimestamp } from '@/lib/date-utils';
@@ -40,6 +41,7 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [showGitHubBrowser, setShowGitHubBrowser] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { createAgentTab, createCreateAgentTab } = useTabState();
 
   // Load agents when modal opens
@@ -194,11 +196,31 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
     }
   };
 
+  // Filter agents based on search query
+  const filteredAgents = agents.filter(agent => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      agent.name.toLowerCase().includes(query) ||
+      (agent.default_task && agent.default_task.toLowerCase().includes(query))
+    );
+  });
+
+  // Filter running agents based on search query
+  const filteredRunningAgents = runningAgents.filter(run => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      run.agent_name.toLowerCase().includes(query) ||
+      run.task.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[600px] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2">
             <Bot className="w-5 h-5" />
             Agent Management
@@ -208,8 +230,11 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="mx-6">
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value);
+          setSearchQuery(''); // Clear search when switching tabs
+        }} className="flex-1 flex flex-col min-h-0">
+          <TabsList className="mx-6 mt-4 mb-0">
             <TabsTrigger value="agents">Available Agents</TabsTrigger>
             <TabsTrigger value="running" className="relative">
               Running Agents
@@ -221,45 +246,60 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 overflow-hidden">
-            <TabsContent value="agents" className="h-full m-0">
-              <ScrollArea className="h-full px-6 pb-6">
-                {/* Action buttons at the top */}
-                <div className="flex gap-2 mb-4 pt-4">
-                  <Button onClick={handleCreateAgent} className="flex-1">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Agent
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="flex-1">
-                        <Import className="w-4 h-4 mr-2" />
-                        Import Agent
-                        <ChevronDown className="w-4 h-4 ml-2" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuItem onClick={handleImportFromFile}>
-                        <FileJson className="w-4 h-4 mr-2" />
-                        From File
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleImportFromGitHub}>
-                        <Globe className="w-4 h-4 mr-2" />
-                        From GitHub
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <TabsContent value="agents" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+              <div className="flex flex-col h-full min-h-0">
+                {/* Search and action buttons at the top */}
+                <div className="px-6 pt-4 pb-2 flex-shrink-0">
+                  <div className="relative mb-4">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search agents..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleCreateAgent} className="flex-1">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Agent
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="flex-1">
+                          <Import className="w-4 h-4 mr-2" />
+                          Import Agent
+                          <ChevronDown className="w-4 h-4 ml-2" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onClick={handleImportFromFile}>
+                          <FileJson className="w-4 h-4 mr-2" />
+                          From File
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleImportFromGitHub}>
+                          <Globe className="w-4 h-4 mr-2" />
+                          From GitHub
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <ScrollArea className="h-full px-6 pb-6">
                 {loading ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
                   </div>
-                ) : agents.length === 0 ? (
+                ) : filteredAgents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <Bot className="w-12 h-12 text-muted-foreground mb-4" />
-                    <p className="text-lg font-medium mb-2">No agents available</p>
+                    <p className="text-lg font-medium mb-2">
+                      {searchQuery ? 'No agents found' : 'No agents available'}
+                    </p>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Create your first agent to get started
+                      {searchQuery ? `No agents match "${searchQuery}"` : 'Create your first agent to get started'}
                     </p>
                     <Button onClick={() => {
                       onOpenChange(false);
@@ -271,7 +311,7 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
                   </div>
                 ) : (
                   <div className="grid gap-4 py-4">
-                    {agents.map((agent) => (
+                    {filteredAgents.map((agent) => (
                       <motion.div
                         key={agent.id}
                         initial={{ opacity: 0, y: 10 }}
@@ -321,23 +361,41 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
                     ))}
                   </div>
                 )}
-              </ScrollArea>
+                  </ScrollArea>
+                </div>
+              </div>
             </TabsContent>
 
-            <TabsContent value="running" className="h-full m-0">
-              <ScrollArea className="h-full px-6 pb-6">
-                {runningAgents.length === 0 ? (
+            <TabsContent value="running" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+              <div className="flex flex-col h-full min-h-0">
+                {/* Search input for running agents */}
+                <div className="px-6 pt-4 pb-2 flex-shrink-0">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search running agents..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <ScrollArea className="h-full px-6 pb-6">
+                {filteredRunningAgents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <Clock className="w-12 h-12 text-muted-foreground mb-4" />
-                    <p className="text-lg font-medium mb-2">No running agents</p>
+                    <p className="text-lg font-medium mb-2">
+                      {searchQuery ? 'No running agents found' : 'No running agents'}
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      Agent executions will appear here when started
+                      {searchQuery ? `No running agents match "${searchQuery}"` : 'Agent executions will appear here when started'}
                     </p>
                   </div>
                 ) : (
                   <div className="grid gap-4 py-4">
                     <AnimatePresence mode="popLayout">
-                      {runningAgents.map((run) => (
+                      {filteredRunningAgents.map((run) => (
                         <motion.div
                           key={run.id}
                           layout
@@ -379,7 +437,9 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
                     </AnimatePresence>
                   </div>
                 )}
-              </ScrollArea>
+                  </ScrollArea>
+                </div>
+              </div>
             </TabsContent>
           </div>
         </Tabs>

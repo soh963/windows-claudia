@@ -47,7 +47,7 @@ type View =
  */
 function AppContent() {
   const [view, setView] = useState<View>("tabs");
-  const { createClaudeMdTab, createSettingsTab, createUsageTab, createMCPTab } = useTabState();
+  const { createClaudeMdTab, createSettingsTab, createUsageTab, createMCPTab, createDashboardTab } = useTabState();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -459,6 +459,7 @@ function AppContent() {
         onClaudeClick={() => createClaudeMdTab()}
         onSettingsClick={() => createSettingsTab()}
         onUsageClick={() => createUsageTab()}
+        onDashboardClick={() => createDashboardTab()}
         onMCPClick={() => createMCPTab()}
         onInfoClick={() => setShowNFO(true)}
         onAgentsClick={() => setShowAgentsModal(true)}

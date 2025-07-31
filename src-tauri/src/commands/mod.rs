@@ -1,8 +1,12 @@
 pub mod agents;
 pub mod claude;
 pub mod claude_sync;
+pub mod dashboard;
+pub mod dashboard_seed;
 pub mod mcp;
 pub mod usage;
 pub mod storage;
 pub mod slash_commands;
 pub mod proxy;
+pub mod intelligent_routing;
+pub mod mcp_manager;
