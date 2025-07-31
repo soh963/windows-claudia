@@ -8,9 +8,11 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::AppHandle;
 
+
 /// Helper function to create a std::process::Command with proper environment variables
 /// This ensures commands like Claude can find Node.js and other dependencies
 fn create_command_with_env(program: &str) -> Command {
+    // The parent function already sets CREATE_NO_WINDOW on Windows
     crate::claude_binary::create_command_with_env(program)
 }
 
@@ -102,11 +104,30 @@ fn execute_claude_mcp_command(app_handle: &AppHandle, args: Vec<&str>) -> Result
     let claude_path = find_claude_binary(app_handle)?;
     
     let mut cmd = if claude_path.ends_with(".cmd") {
-        // For Windows .cmd files, use cmd /c
-        let mut cmd = create_command_with_env("cmd");
-        cmd.arg("/c");
-        cmd.arg(&claude_path);
-        cmd
+        // For Windows .cmd files, use cmd /c with proper flags
+        #[cfg(target_os = "windows")]
+        {
+            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+            let mut cmd = Command::new(comspec);
+            cmd.arg("/c");
+            cmd.arg(&claude_path);
+            
+            // Apply CREATE_NO_WINDOW with additional flags
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                cmd.creation_flags(CREATE_NO_WINDOW | 0x00000200); // CREATE_NEW_PROCESS_GROUP
+            }
+            cmd
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = create_command_with_env("cmd");
+            cmd.arg("/c");
+            cmd.arg(&claude_path);
+            cmd
+        }
     } else {
         create_command_with_env(&claude_path)
     };

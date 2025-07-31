@@ -9,6 +9,10 @@
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  },
   "app": {
     "windows": [
       {

@@ -8,6 +8,12 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::Manager;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Type of Claude installation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum InstallationType {
@@ -173,7 +179,15 @@ fn try_which_command() -> Option<ClaudeInstallation> {
     
     debug!("Trying '{}' claude to find binary...", command_name);
 
-    match Command::new(command_name).arg("claude").output() {
+    let mut cmd = Command::new(command_name);
+    cmd.arg("claude");
+    
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    
+    match cmd.output() {
         Ok(output) if output.status.success() => {
             let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
@@ -374,7 +388,15 @@ fn find_standard_installations() -> Vec<ClaudeInstallation> {
     }
 
     // Also check if claude is available in PATH (without full path)
-    if let Ok(output) = Command::new("claude").arg("--version").output() {
+    let mut path_cmd = Command::new("claude");
+    path_cmd.arg("--version");
+    
+    #[cfg(target_os = "windows")]
+    {
+        path_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    
+    if let Ok(output) = path_cmd.output() {
         if output.status.success() {
             debug!("claude is available in PATH");
             let version = extract_version_from_output(&output.stdout);
@@ -403,6 +425,11 @@ fn get_claude_version(path: &str) -> Result<Option<String>, String> {
         cmd.arg("--version");
         cmd
     };
+    
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     
     match cmd.output() {
         Ok(output) => {
@@ -525,6 +552,12 @@ pub fn create_command_with_env(program: &str) -> Command {
     let mut cmd = Command::new(program);
     
     info!("Creating command for: {}", program);
+    
+    // Hide console window on Windows
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
 
     // Inherit essential environment variables from parent process
     for (key, value) in std::env::vars() {

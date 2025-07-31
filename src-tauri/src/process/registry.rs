@@ -4,6 +4,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::process::Child;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Type of process being tracked
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ProcessType {
@@ -359,14 +365,26 @@ impl ProcessRegistry {
         info!("Attempting to kill process {} by PID {}", run_id, pid);
 
         let kill_result = if cfg!(target_os = "windows") {
-            std::process::Command::new("taskkill")
-                .args(["/F", "/PID", &pid.to_string()])
-                .output()
+            let mut cmd = std::process::Command::new("taskkill");
+            cmd.args(["/F", "/PID", &pid.to_string()]);
+            
+            #[cfg(target_os = "windows")]
+            {
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            
+            cmd.output()
         } else {
             // First try SIGTERM
-            let term_result = std::process::Command::new("kill")
-                .args(["-TERM", &pid.to_string()])
-                .output();
+            let mut term_cmd = std::process::Command::new("kill");
+            term_cmd.args(["-TERM", &pid.to_string()]);
+            
+            #[cfg(target_os = "windows")]
+            {
+                term_cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            
+            let term_result = term_cmd.output();
 
             match &term_result {
                 Ok(output) if output.status.success() => {
@@ -375,9 +393,15 @@ impl ProcessRegistry {
                     std::thread::sleep(std::time::Duration::from_secs(2));
 
                     // Check if still running
-                    let check_result = std::process::Command::new("kill")
-                        .args(["-0", &pid.to_string()])
-                        .output();
+                    let mut check_cmd = std::process::Command::new("kill");
+                    check_cmd.args(["-0", &pid.to_string()]);
+                    
+                    #[cfg(target_os = "windows")]
+                    {
+                        check_cmd.creation_flags(CREATE_NO_WINDOW);
+                    }
+                    
+                    let check_result = check_cmd.output();
 
                     if let Ok(output) = check_result {
                         if output.status.success() {
@@ -386,9 +410,15 @@ impl ProcessRegistry {
                                 "Process {} still running after SIGTERM, sending SIGKILL",
                                 pid
                             );
-                            std::process::Command::new("kill")
-                                .args(["-KILL", &pid.to_string()])
-                                .output()
+                            let mut kill_cmd = std::process::Command::new("kill");
+                            kill_cmd.args(["-KILL", &pid.to_string()]);
+                            
+                            #[cfg(target_os = "windows")]
+                            {
+                                kill_cmd.creation_flags(CREATE_NO_WINDOW);
+                            }
+                            
+                            kill_cmd.output()
                         } else {
                             term_result
                         }
@@ -399,9 +429,15 @@ impl ProcessRegistry {
                 _ => {
                     // SIGTERM failed, try SIGKILL directly
                     warn!("SIGTERM failed for PID {}, trying SIGKILL", pid);
-                    std::process::Command::new("kill")
-                        .args(["-KILL", &pid.to_string()])
-                        .output()
+                    let mut kill_cmd = std::process::Command::new("kill");
+                    kill_cmd.args(["-KILL", &pid.to_string()]);
+                    
+                    #[cfg(target_os = "windows")]
+                    {
+                        kill_cmd.creation_flags(CREATE_NO_WINDOW);
+                    }
+                    
+                    kill_cmd.output()
                 }
             }
         };

@@ -15,6 +15,12 @@ use tauri_plugin_shell::process::CommandEvent;
 use tokio::io::{AsyncBufReadExt, BufReader as TokioBufReader};
 use tokio::process::Command;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Finds the full path to the claude binary
 /// This is necessary because macOS apps have a limited PATH environment
 fn find_claude_binary(app_handle: &AppHandle) -> Result<String, String> {
@@ -1244,10 +1250,15 @@ async fn spawn_agent_system(
                     "🔍 Process likely stuck waiting for input, attempting to kill PID: {}",
                     pid
                 );
-                let kill_result = std::process::Command::new("kill")
-                    .arg("-TERM")
-                    .arg(pid.to_string())
-                    .output();
+                let mut kill_cmd = std::process::Command::new("kill");
+                kill_cmd.arg("-TERM").arg(pid.to_string());
+                
+                #[cfg(target_os = "windows")]
+                {
+                    kill_cmd.creation_flags(CREATE_NO_WINDOW);
+                }
+                
+                let kill_result = kill_cmd.output();
 
                 match kill_result {
                     Ok(output) if output.status.success() => {
@@ -1842,6 +1853,12 @@ fn create_command_with_env(program: &str) -> Command {
     // Create a new tokio Command from the program path
     let mut tokio_cmd = Command::new(program);
 
+    // Hide console window on Windows
+    #[cfg(target_os = "windows")]
+    {
+        tokio_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
     // Copy over all environment variables from the std::process::Command
     // This is a workaround since we can't directly convert between the two types
     for (key, value) in std::env::vars() {
@@ -1857,6 +1874,21 @@ fn create_command_with_env(program: &str) -> Command {
             || key == "NVM_BIN"
             || key == "HOMEBREW_PREFIX"
             || key == "HOMEBREW_CELLAR"
+            // Windows environment variables
+            || key == "USERPROFILE"
+            || key == "APPDATA"
+            || key == "LOCALAPPDATA"
+            || key == "ProgramFiles"
+            || key == "ProgramFiles(x86)"
+            || key == "TEMP"
+            || key == "TMP"
+            || key == "SystemRoot"
+            || key == "COMSPEC"
+            // Proxy environment variables
+            || key == "HTTP_PROXY"
+            || key == "HTTPS_PROXY"
+            || key == "NO_PROXY"
+            || key == "ALL_PROXY"
         {
             tokio_cmd.env(&key, &value);
         }
@@ -2012,7 +2044,7 @@ pub async fn fetch_github_agents() -> Result<Vec<GitHubAgentFile>, String> {
     info!("Fetching agents from GitHub repository...");
 
     let client = reqwest::Client::new();
-    let url = "https://api.github.com/repos/getAsterisk/claudia/contents/cc_agents";
+    let url = "https://api.github.com/repos/soh963/windows-claudia/contents/cc_agents";
 
     let response = client
         .get(url)

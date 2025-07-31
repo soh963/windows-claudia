@@ -219,23 +219,41 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
   const handleImportAgent = async () => {
     try {
       // Show native open dialog
-      const filePath = await open({
-        multiple: false,
+      const filePaths = await open({
+        multiple: true,
         filters: [{
           name: 'Claudia Agent',
           extensions: ['claudia.json', 'json']
         }]
       });
       
-      if (!filePath) {
+      if (!filePaths || filePaths.length === 0) {
         // User cancelled the dialog
         return;
       }
       
-      // Import the agent from the selected file
-      await api.importAgentFromFile(filePath as string);
+      // Import agents from the selected files
+      const filePathsArray = Array.isArray(filePaths) ? filePaths : [filePaths];
+      let successCount = 0;
+      let failedCount = 0;
       
-      setToast({ message: "Agent imported successfully", type: "success" });
+      for (const filePath of filePathsArray) {
+        try {
+          await api.importAgentFromFile(filePath as string);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to import agent from ${filePath}:`, err);
+          failedCount++;
+        }
+      }
+      
+      const message = failedCount > 0 
+        ? `Imported ${successCount} agents successfully. ${failedCount} failed.`
+        : filePathsArray.length === 1
+          ? "Agent imported successfully"
+          : `Successfully imported ${successCount} agents`;
+      
+      setToast({ message, type: failedCount > 0 ? "error" : "success" });
       await loadAgents();
     } catch (err) {
       console.error("Failed to import agent:", err);
@@ -330,7 +348,7 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={handleImportAgent}>
                     <FileJson className="h-4 w-4 mr-2" />
-                    From File
+                    From File(s)
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setShowGitHubBrowser(true)}>
                     <Globe className="h-4 w-4 mr-2" />

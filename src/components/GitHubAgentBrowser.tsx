@@ -9,6 +9,7 @@ import {
   Check,
   Globe,
   FileJson,
+  Package,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,9 @@ export const GitHubAgentBrowser: React.FC<GitHubAgentBrowserProps> = ({
   const [selectedAgent, setSelectedAgent] = useState<AgentPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const [existingAgents, setExistingAgents] = useState<Agent[]>([]);
+  const [importingAll, setImportingAll] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importStatus, setImportStatus] = useState<string>("");
 
   useEffect(() => {
     if (isOpen) {
@@ -133,6 +137,59 @@ export const GitHubAgentBrowser: React.FC<GitHubAgentBrowserProps> = ({
     }
   };
 
+  const handleImportAll = async () => {
+    const unimportedAgents = agents.filter(agent => !isAgentImported(agent.name));
+    
+    if (unimportedAgents.length === 0) {
+      alert("All agents are already imported!");
+      return;
+    }
+
+    if (!confirm(`Import ${unimportedAgents.length} agents?`)) {
+      return;
+    }
+
+    setImportingAll(true);
+    setImportProgress(0);
+    setImportStatus("Starting import...");
+
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < unimportedAgents.length; i++) {
+      const agent = unimportedAgents[i];
+      const agentName = getAgentDisplayName(agent.name);
+      
+      setImportStatus(`Importing ${agentName}... (${i + 1}/${unimportedAgents.length})`);
+      setImportProgress(((i + 1) / unimportedAgents.length) * 100);
+
+      try {
+        await api.importAgentFromGitHub(agent.download_url);
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to import ${agentName}:`, err);
+        failedCount++;
+      }
+
+      // Small delay to prevent overwhelming the system
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Refresh existing agents list
+    await fetchExistingAgents();
+
+    setImportingAll(false);
+    setImportProgress(0);
+    setImportStatus("");
+
+    const message = failedCount > 0 
+      ? `Imported ${successCount} agents successfully. ${failedCount} failed.`
+      : `Successfully imported all ${successCount} agents!`;
+    
+    alert(message);
+    onImportSuccess();
+  };
+
   const filteredAgents = agents.filter(agent =>
     agent.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -186,17 +243,52 @@ export const GitHubAgentBrowser: React.FC<GitHubAgentBrowserProps> = ({
             </p>
           </div>
 
-          {/* Search Bar */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search agents..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+          {/* Search Bar and Import All */}
+          <div className="mb-4 space-y-3">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search agents..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button
+                onClick={handleImportAll}
+                disabled={loading || importingAll || agents.length === 0}
+                variant="default"
+                className="flex items-center gap-2"
+              >
+                <Package className="h-4 w-4" />
+                Import All
+                {agents.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">
+                    {agents.filter(agent => !isAgentImported(agent.name)).length}
+                  </Badge>
+                )}
+              </Button>
             </div>
+
+            {/* Import Progress */}
+            {importingAll && (
+              <div className="bg-primary/10 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-sm font-medium">{importStatus}</span>
+                  <span className="text-sm text-muted-foreground ml-auto">
+                    {Math.round(importProgress)}%
+                  </span>
+                </div>
+                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${importProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Content */}

@@ -9,7 +9,9 @@ use std::time::SystemTime;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
-use regex;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Global state to track current Claude process
 pub struct ClaudeProcessState {
@@ -229,6 +231,13 @@ fn create_command_with_env(program: &str) -> Command {
     // Create a new tokio Command from the program path
     let mut tokio_cmd = Command::new(program);
 
+    // Hide console window on Windows
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        tokio_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
     // Copy over all environment variables
     for (key, value) in std::env::vars() {
         if key == "PATH"
@@ -271,11 +280,26 @@ fn create_system_command(
     project_path: &str,
 ) -> Command {
     let mut cmd = if claude_path.ends_with(".cmd") {
-        // For Windows .cmd files, use cmd /c
-        let mut cmd = create_command_with_env("cmd");
-        cmd.arg("/c");
-        cmd.arg(claude_path);
-        cmd
+        // For Windows .cmd files, use cmd /c with proper flags
+        #[cfg(target_os = "windows")]
+        {
+            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+            let mut cmd = Command::new(comspec);
+            cmd.arg("/c");
+            cmd.arg(claude_path);
+            
+            // Apply CREATE_NO_WINDOW with additional flags to ensure no console window
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(CREATE_NO_WINDOW | 0x00000200); // CREATE_NEW_PROCESS_GROUP
+            cmd
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = create_command_with_env("cmd");
+            cmd.arg("/c");
+            cmd.arg(claude_path);
+            cmd
+        }
     } else {
         create_command_with_env(claude_path)
     };
@@ -541,6 +565,96 @@ pub async fn get_system_prompt() -> Result<String, String> {
     }
 
     fs::read_to_string(&claude_md_path).map_err(|e| format!("Failed to read CLAUDE.md: {}", e))
+}
+
+/// Structure for authentication status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaudeAuthStatus {
+    pub is_authenticated: bool,
+    pub message: String,
+}
+
+/// Checks if Claude Code is authenticated
+#[tauri::command]
+pub async fn check_claude_auth(app: AppHandle) -> Result<ClaudeAuthStatus, String> {
+    log::info!("Checking Claude Code authentication status");
+
+    let claude_path = match find_claude_binary(&app) {
+        Ok(path) => path,
+        Err(e) => {
+            return Ok(ClaudeAuthStatus {
+                is_authenticated: false,
+                message: format!("Claude Code not found: {}", e),
+            });
+        }
+    };
+
+    // Try to run a simple claude command that would fail if not authenticated
+    let mut cmd = if claude_path.ends_with(".cmd") {
+        #[cfg(target_os = "windows")]
+        {
+            let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+            let mut cmd = Command::new(comspec);
+            cmd.arg("/c");
+            cmd.arg(&claude_path);
+            
+            // Apply CREATE_NO_WINDOW with additional flags
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(CREATE_NO_WINDOW | 0x00000200); // CREATE_NEW_PROCESS_GROUP
+            cmd
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = Command::new("cmd");
+            cmd.arg("/c");
+            cmd.arg(&claude_path);
+            cmd
+        }
+    } else {
+        let mut cmd = Command::new(&claude_path);
+        // Hide console window on Windows
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        cmd
+    };
+    
+    // Use 'claude mcp list' as a test command - it should work if authenticated
+    cmd.arg("mcp").arg("list");
+
+    match cmd.output().await {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            
+            // Check for authentication errors in output
+            if stderr.contains("Please authenticate") || stderr.contains("not authenticated") || 
+               stderr.contains("setup-token") || stderr.contains("login") {
+                Ok(ClaudeAuthStatus {
+                    is_authenticated: false,
+                    message: "Claude Code is not authenticated. Please run 'claude setup-token' to authenticate.".to_string(),
+                })
+            } else if output.status.success() || stdout.contains("No MCP servers configured") {
+                Ok(ClaudeAuthStatus {
+                    is_authenticated: true,
+                    message: "Claude Code is authenticated and ready to use.".to_string(),
+                })
+            } else {
+                Ok(ClaudeAuthStatus {
+                    is_authenticated: false,
+                    message: format!("Unable to verify authentication status: {}", stderr),
+                })
+            }
+        }
+        Err(e) => {
+            Ok(ClaudeAuthStatus {
+                is_authenticated: false,
+                message: format!("Failed to check authentication: {}", e),
+            })
+        }
+    }
 }
 
 /// Checks if Claude Code is installed and gets its version
