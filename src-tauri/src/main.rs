@@ -45,6 +45,10 @@ use commands::storage::{
     storage_insert_row, storage_execute_sql, storage_reset_database,
 };
 use commands::proxy::{get_proxy_settings, save_proxy_settings, apply_proxy_settings};
+use commands::claude_sync::{
+    sync_claude_commands, get_claude_sync_state, set_claude_sync_enabled,
+    get_synced_claude_commands, check_claude_availability,
+};
 use process::ProcessRegistryState;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -57,6 +61,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // Initialize agents database
             let conn = init_database(&app.handle()).expect("Failed to initialize agents database");
@@ -252,6 +257,13 @@ fn main() {
             // Proxy Settings
             get_proxy_settings,
             save_proxy_settings,
+            
+            // Claude Sync
+            sync_claude_commands,
+            get_claude_sync_state,
+            set_claude_sync_enabled,
+            get_synced_claude_commands,
+            check_claude_availability,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

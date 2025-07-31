@@ -14,7 +14,8 @@ import {
   Terminal,
   AlertCircle,
   User,
-  Building2
+  Building2,
+  Bot
 } from "lucide-react";
 import type { SlashCommand } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,9 @@ interface SlashCommandPickerProps {
 
 // Get icon for command based on its properties
 const getCommandIcon = (command: SlashCommand) => {
+  // Claude Code CLI commands (system scope) get special Bot icon
+  if (command.scope === "system") return Bot;
+  
   // If it has bash commands, show terminal icon
   if (command.has_bash_commands) return Terminal;
   
@@ -84,7 +88,7 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [activeTab, setActiveTab] = useState<string>("custom");
+  const [activeTab, setActiveTab] = useState<string>("default");
   
   const commandListRef = useRef<HTMLDivElement>(null);
   
@@ -105,11 +109,11 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
     
     // Filter by active tab
     if (activeTab === "default") {
-      // Show default/built-in commands
-      filteredByTab = commands.filter(cmd => cmd.scope === "default");
+      // Show default/built-in commands (including Claude Code CLI commands)
+      filteredByTab = commands.filter(cmd => cmd.scope === "default" || cmd.scope === "system");
     } else {
       // Show all custom commands (both user and project)
-      filteredByTab = commands.filter(cmd => cmd.scope !== "default");
+      filteredByTab = commands.filter(cmd => cmd.scope !== "default" && cmd.scope !== "system");
     }
     
     // Then filter by search query
@@ -350,8 +354,13 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
                                 <span className="font-medium">
                                   {command.full_command}
                                 </span>
-                                <span className="text-xs text-muted-foreground px-1.5 py-0.5 bg-muted rounded">
-                                  {command.scope}
+                                <span className={cn(
+                                  "text-xs px-1.5 py-0.5 rounded font-medium",
+                                  command.scope === "system" 
+                                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" 
+                                    : "bg-muted text-muted-foreground"
+                                )}>
+                                  {command.scope === "system" ? "Claude Code CLI" : command.scope}
                                 </span>
                               </div>
                               {command.description && (
@@ -414,6 +423,14 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
                                 <div className="flex items-baseline gap-2">
                                   <span className="font-mono text-sm text-primary">
                                     {command.full_command}
+                                  </span>
+                                  <span className={cn(
+                                    "text-xs px-1.5 py-0.5 rounded font-medium",
+                                    command.scope === "system" 
+                                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" 
+                                      : "bg-muted text-muted-foreground"
+                                  )}>
+                                    {command.scope === "system" ? "Claude Code CLI" : command.scope}
                                   </span>
                                   {command.accepts_arguments && (
                                     <span className="text-xs text-muted-foreground">
@@ -488,6 +505,14 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
                                       <div className="flex items-baseline gap-2">
                                         <span className="font-mono text-sm text-primary">
                                           {command.full_command}
+                                        </span>
+                                        <span className={cn(
+                                          "text-xs px-1.5 py-0.5 rounded font-medium",
+                                          command.scope === "system" 
+                                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" 
+                                            : "bg-muted text-muted-foreground"
+                                        )}>
+                                          {command.scope === "system" ? "Claude Code CLI" : command.scope}
                                         </span>
                                         {command.accepts_arguments && (
                                           <span className="text-xs text-muted-foreground">

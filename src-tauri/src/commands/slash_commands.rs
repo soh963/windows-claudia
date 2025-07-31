@@ -245,16 +245,229 @@ fn create_default_commands() -> Vec<SlashCommand> {
     ]
 }
 
+/// Create Claude Code CLI compatible slash commands
+fn create_claude_code_defaults() -> Vec<SlashCommand> {
+    vec![
+        SlashCommand {
+            id: "claude-analyze".to_string(),
+            name: "analyze".to_string(),
+            full_command: "/analyze".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Analyze $ARGUMENTS for patterns, issues, and improvements. Multi-dimensional code and system analysis with evidence-based reasoning.".to_string(),
+            description: Some("Multi-dimensional code analysis".to_string()),
+            allowed_tools: vec!["Read".to_string(), "Grep".to_string(), "Bash".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-build".to_string(),
+            name: "build".to_string(),
+            full_command: "/build".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Build $ARGUMENTS with framework detection and optimization. Project builder with intelligent persona activation and tool orchestration.".to_string(),
+            description: Some("Project builder with framework detection".to_string()),
+            allowed_tools: vec!["Bash".to_string(), "Read".to_string(), "Write".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: true,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-implement".to_string(),
+            name: "implement".to_string(),
+            full_command: "/implement".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Implement $ARGUMENTS with intelligent framework detection and best practices. Feature and code implementation with context-aware persona activation.".to_string(),
+            description: Some("Feature and code implementation".to_string()),
+            allowed_tools: vec!["Write".to_string(), "Edit".to_string(), "Read".to_string(), "MultiEdit".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-improve".to_string(),
+            name: "improve".to_string(),
+            full_command: "/improve".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Improve $ARGUMENTS with evidence-based enhancements. Code enhancement with quality analysis and optimization strategies.".to_string(),
+            description: Some("Evidence-based code enhancement".to_string()),
+            allowed_tools: vec!["Edit".to_string(), "Read".to_string(), "Grep".to_string(), "MultiEdit".to_string(), "Bash".to_string()],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-design".to_string(),
+            name: "design".to_string(),
+            full_command: "/design".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Design and architect $ARGUMENTS with system-wide analysis".to_string(),
+            description: Some("System design and architecture planning".to_string()),
+            allowed_tools: vec!["Read".to_string(), "Write".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-test".to_string(),
+            name: "test".to_string(),
+            full_command: "/test".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Generate and run tests for $ARGUMENTS with comprehensive coverage".to_string(),
+            description: Some("Testing workflow automation".to_string()),
+            allowed_tools: vec!["Read".to_string(), "Write".to_string(), "Bash".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: true,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-document".to_string(),
+            name: "document".to_string(),
+            full_command: "/document".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Create comprehensive documentation for $ARGUMENTS".to_string(),
+            description: Some("Documentation generation".to_string()),
+            allowed_tools: vec!["Read".to_string(), "Write".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-git".to_string(),
+            name: "git".to_string(),
+            full_command: "/git".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Git workflow assistance for $ARGUMENTS".to_string(),
+            description: Some("Git workflow automation".to_string()),
+            allowed_tools: vec!["Bash".to_string(), "Read".to_string(), "Write".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: true,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        // New Claude Code CLI commands (2025)
+        SlashCommand {
+            id: "claude-agents".to_string(),
+            name: "agents".to_string(),
+            full_command: "/agents".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Create and manage specialized Sub Agents for $ARGUMENTS".to_string(),
+            description: Some("Sub Agent creation with domain expertise".to_string()),
+            allowed_tools: vec!["Task".to_string(), "Write".to_string(), "Read".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-init".to_string(),
+            name: "init".to_string(),
+            full_command: "/init".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Create CLAUDE.md file for project-specific instructions".to_string(),
+            description: Some("Initialize project configuration".to_string()),
+            allowed_tools: vec!["Write".to_string(), "Read".to_string()],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: false,
+        },
+        SlashCommand {
+            id: "claude-clear".to_string(),
+            name: "clear".to_string(),
+            full_command: "/clear".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Reset the current session's context".to_string(),
+            description: Some("Clear session context".to_string()),
+            allowed_tools: vec![],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: false,
+        },
+        SlashCommand {
+            id: "claude-compact".to_string(),
+            name: "compact".to_string(),
+            full_command: "/compact".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Summarize the conversation to continue without hitting context limit".to_string(),
+            description: Some("Compact conversation history".to_string()),
+            allowed_tools: vec![],
+            has_bash_commands: false,
+            has_file_references: false,
+            accepts_arguments: false,
+        },
+        SlashCommand {
+            id: "claude-review".to_string(),
+            name: "review".to_string(),
+            full_command: "/review".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Review $ARGUMENTS (PR, file, or code block)".to_string(),
+            description: Some("Code review assistant".to_string()),
+            allowed_tools: vec!["Read".to_string(), "Grep".to_string(), "TodoWrite".to_string()],
+            has_bash_commands: false,
+            has_file_references: true,
+            accepts_arguments: true,
+        },
+        SlashCommand {
+            id: "claude-explain".to_string(),
+            name: "explain".to_string(),
+            full_command: "/explain".to_string(),
+            scope: "system".to_string(),
+            namespace: None,
+            file_path: "".to_string(),
+            content: "Explain $ARGUMENTS in detail".to_string(),
+            description: Some("Code explanation assistant".to_string()),
+            allowed_tools: vec!["Read".to_string(), "Grep".to_string()],
+            has_bash_commands: false,
+            has_file_references: true,
+            accepts_arguments: true,
+        },
+    ]
+}
+
 /// Discover all custom slash commands
 #[tauri::command]
 pub async fn slash_commands_list(
     project_path: Option<String>,
+    app: tauri::AppHandle,
 ) -> Result<Vec<SlashCommand>, String> {
     info!("Discovering slash commands");
     let mut commands = Vec::new();
     
     // Add default commands
     commands.extend(create_default_commands());
+    
+    // Add Claude Code CLI compatible commands
+    commands.extend(create_claude_code_defaults());
+    
+    // Try to add synced Claude commands if available
+    if let Ok(synced_commands) = crate::commands::claude_sync::get_synced_claude_commands(app.clone()).await {
+        info!("Adding {} synced Claude commands", synced_commands.len());
+        commands.extend(synced_commands);
+    }
     
     // Load project commands if project path is provided
     if let Some(proj_path) = project_path {
@@ -322,13 +535,8 @@ pub async fn slash_command_get(command_id: String) -> Result<SlashCommand, Strin
     }
     
     // The actual implementation would need to reconstruct the path and reload the command
-    // For now, we'll list all commands and find the matching one
-    let commands = slash_commands_list(None).await?;
-    
-    commands
-        .into_iter()
-        .find(|cmd| cmd.id == command_id)
-        .ok_or_else(|| format!("Command not found: {}", command_id))
+    // For now, we'll return a simplified error since we need AppHandle for sync
+    Err("Command retrieval not implemented without AppHandle".to_string())
 }
 
 /// Create or update a slash command
@@ -416,7 +624,11 @@ pub async fn slash_command_save(
 
 /// Delete a slash command
 #[tauri::command]
-pub async fn slash_command_delete(command_id: String, project_path: Option<String>) -> Result<String, String> {
+pub async fn slash_command_delete(
+    command_id: String, 
+    project_path: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
     info!("Deleting slash command: {}", command_id);
     
     // First, we need to determine if this is a project command by parsing the ID
@@ -428,7 +640,7 @@ pub async fn slash_command_delete(command_id: String, project_path: Option<Strin
     }
     
     // List all commands (including project commands if applicable)
-    let commands = slash_commands_list(project_path).await?;
+    let commands = slash_commands_list(project_path, app).await?;
     
     // Find the command by ID
     let command = commands
