@@ -1951,5 +1951,29 @@ export const api = {
       console.error("Failed to delete slash command:", error);
       throw error;
     }
+  },
+
+  /**
+   * Executes a slash command by routing it to Claude Code CLI
+   * @param command - The slash command to execute
+   * @param args - Arguments to substitute in the command
+   * @param projectPath - Working directory for the command
+   * @returns Promise resolving when execution starts (not when complete)
+   */
+  async executeClaudeSlashCommand(
+    command: SlashCommand,
+    args: string,
+    projectPath: string
+  ): Promise<void> {
+    try {
+      return await invoke<void>("execute_claude_slash_command", {
+        command,
+        arguments: args,
+        projectPath
+      });
+    } catch (error) {
+      console.error("Failed to execute slash command:", error);
+      throw error;
+    }
   }
 };

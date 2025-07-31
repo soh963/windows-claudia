@@ -559,6 +559,30 @@ const FloatingPromptInputInner = (
     }, 0);
   };
 
+  const handleSlashCommandExecute = async (command: SlashCommand, args: string) => {
+    if (!projectPath) {
+      console.error("Project path is required for command execution");
+      return;
+    }
+
+    try {
+      // Import api here to avoid circular dependencies
+      const { api } = await import("@/lib/api");
+      await api.executeClaudeSlashCommand(command, args, projectPath);
+      
+      setShowSlashCommandPicker(false);
+      setSlashCommandQuery("");
+      
+      // Clear the current prompt since we're executing directly
+      setPrompt("");
+      
+      console.log(`Executing command: ${command.full_command} with args: ${args}`);
+    } catch (error) {
+      console.error("Failed to execute slash command:", error);
+      // TODO: Show error toast to user
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (showFilePicker && e.key === 'Escape') {
       e.preventDefault();
@@ -1036,6 +1060,7 @@ const FloatingPromptInputInner = (
                     <SlashCommandPicker
                       projectPath={projectPath}
                       onSelect={handleSlashCommandSelect}
+                      onExecute={handleSlashCommandExecute}
                       onClose={handleSlashCommandPickerClose}
                       initialQuery={slashCommandQuery}
                     />

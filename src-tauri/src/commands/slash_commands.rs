@@ -622,6 +622,177 @@ pub async fn slash_command_save(
         .map_err(|e| format!("Failed to load saved command: {}", e))
 }
 
+/// Execute a slash command by routing it to Claude Code CLI
+#[tauri::command]
+pub async fn execute_claude_slash_command(
+    app: tauri::AppHandle,
+    command: SlashCommand,
+    arguments: String,
+    project_path: String,
+) -> Result<(), String> {
+    use std::process::Stdio;
+    use tokio::process::Command;
+    
+    info!("Executing slash command: {} with arguments: {}", command.full_command, arguments);
+    
+    // Find Claude binary
+    let claude_binary = crate::claude_binary::find_claude_binary(&app)
+        .map_err(|e| format!("Claude binary not found: {}", e))?;
+    
+    // Process command content with argument substitution
+    let mut processed_content = command.content.clone();
+    
+    // Replace $ARGUMENTS placeholder
+    if command.accepts_arguments && !arguments.is_empty() {
+        processed_content = processed_content.replace("$ARGUMENTS", &arguments);
+    }
+    
+    // Build Claude Code CLI command
+    let mut claude_args = vec![];
+    
+    // Add the processed content as the prompt
+    claude_args.push("-p".to_string());
+    claude_args.push(processed_content);
+    
+    // Add allowed tools as flags if specified
+    if !command.allowed_tools.is_empty() {
+        for tool in &command.allowed_tools {
+            claude_args.push("--allow-tool".to_string());
+            claude_args.push(tool.clone());
+        }
+    }
+    
+    // Add output format for streaming
+    claude_args.push("--output-format".to_string());
+    claude_args.push("stream-json".to_string());
+    
+    // Add verbose flag for better debugging
+    claude_args.push("--verbose".to_string());
+    
+    // Skip permissions for smooth execution
+    claude_args.push("--dangerously-skip-permissions".to_string());
+    
+    debug!("Claude command args: {:?}", claude_args);
+    
+    // Create command
+    let mut cmd = if claude_binary.ends_with(".cmd") {
+        // Windows .cmd handling
+        #[cfg(target_os = "windows")]
+        {
+            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
+            let mut cmd = Command::new(cmd_exe);
+            
+            let mut command_parts = vec![];
+            if claude_binary.contains(' ') {
+                command_parts.push(format!("\"{}\"", claude_binary));
+            } else {
+                command_parts.push(claude_binary.clone());
+            }
+            
+            for arg in &claude_args {
+                if arg.contains(' ') || arg.contains('"') {
+                    command_parts.push(format!("\"{}\"", arg.replace('"', "\\\"")));
+                } else {
+                    command_parts.push(arg.clone());
+                }
+            }
+            
+            let full_command = command_parts.join(" ");
+            cmd.arg("/c").arg(&full_command);
+            
+            // Hide console window
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = Command::new("sh");
+            cmd.arg("-c");
+            let mut command_str = format!("\"{}\"", claude_binary);
+            for arg in &claude_args {
+                command_str.push_str(&format!(" \"{}\"", arg.replace('"', "\\\"")));
+            }
+            cmd.arg(command_str);
+            cmd
+        }
+    } else {
+        let mut cmd = Command::new(&claude_binary);
+        for arg in claude_args {
+            cmd.arg(arg);
+        }
+        
+        // Hide console window on Windows
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        cmd
+    };
+    
+    // Set working directory and stdio
+    cmd.current_dir(&project_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    
+    // Spawn the process
+    let mut child = cmd.spawn()
+        .map_err(|e| format!("Failed to spawn Claude process: {}", e))?;
+    
+    // Get the process ID for tracking
+    let pid = child.id().unwrap_or(0);
+    info!("Spawned Claude process with PID: {}", pid);
+    
+    // Handle streaming output (similar to existing execute_claude_code)
+    let stdout = child.stdout.take().ok_or("Failed to get stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to get stderr")?;
+    
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    
+    let stdout_reader = BufReader::new(stdout);
+    let stderr_reader = BufReader::new(stderr);
+    
+    // Spawn tasks to read stdout and stderr
+    let app_stdout = app.clone();
+    let stdout_task = tokio::spawn(async move {
+        let mut lines = stdout_reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            debug!("Claude stdout: {}", line);
+            let _ = app_stdout.emit("claude-slash-output", &line);
+        }
+    });
+    
+    let app_stderr = app.clone();  
+    let stderr_task = tokio::spawn(async move {
+        let mut lines = stderr_reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            error!("Claude stderr: {}", line);
+            let _ = app_stderr.emit("claude-slash-error", &line);
+        }
+    });
+    
+    // Wait for completion in background
+    let app_wait = app.clone();
+    tokio::spawn(async move {
+        let _ = stdout_task.await;
+        let _ = stderr_task.await;
+        
+        match child.wait().await {
+            Ok(status) => {
+                info!("Claude slash command completed with status: {}", status);
+                let _ = app_wait.emit("claude-slash-complete", status.success());
+            }
+            Err(e) => {
+                error!("Failed to wait for Claude process: {}", e);
+                let _ = app_wait.emit("claude-slash-complete", false);
+            }
+        }
+    });
+    
+    Ok(())
+}
+
 /// Delete a slash command
 #[tauri::command]
 pub async fn slash_command_delete(

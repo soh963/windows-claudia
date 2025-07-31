@@ -2,6 +2,16 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { 
   X, 
@@ -29,6 +39,10 @@ interface SlashCommandPickerProps {
    * Callback when a command is selected
    */
   onSelect: (command: SlashCommand) => void;
+  /**
+   * Callback when a command is executed
+   */
+  onExecute?: (command: SlashCommand, args: string) => void;
   /**
    * Callback to close the picker
    */
@@ -78,6 +92,7 @@ const getCommandIcon = (command: SlashCommand) => {
 export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
   projectPath,
   onSelect,
+  onExecute,
   onClose,
   initialQuery = "",
   className,
@@ -89,6 +104,9 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState<string>("default");
+  const [showExecuteModal, setShowExecuteModal] = useState(false);
+  const [selectedCommand, setSelectedCommand] = useState<SlashCommand | null>(null);
+  const [commandArguments, setCommandArguments] = useState("");
   
   const commandListRef = useRef<HTMLDivElement>(null);
   
@@ -174,7 +192,7 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
         case 'Enter':
           e.preventDefault();
           if (filteredCommands.length > 0 && selectedIndex < filteredCommands.length) {
-            onSelect(filteredCommands[selectedIndex]);
+            handleCommandClick(filteredCommands[selectedIndex]);
           }
           break;
           
@@ -222,7 +240,35 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
   };
   
   const handleCommandClick = (command: SlashCommand) => {
-    onSelect(command);
+    // If onExecute is provided and command accepts arguments, show modal
+    if (onExecute && command.accepts_arguments) {
+      setSelectedCommand(command);
+      setCommandArguments("");
+      setShowExecuteModal(true);
+    } else if (onExecute) {
+      // Execute directly if no arguments needed
+      onExecute(command, "");
+      onClose();
+    } else {
+      // Fallback to onSelect for backward compatibility
+      onSelect(command);
+    }
+  };
+
+  const handleExecuteCommand = () => {
+    if (selectedCommand && onExecute) {
+      onExecute(selectedCommand, commandArguments);
+      setShowExecuteModal(false);
+      setSelectedCommand(null);
+      setCommandArguments("");
+      onClose();
+    }
+  };
+
+  const handleCancelExecute = () => {
+    setShowExecuteModal(false);
+    setSelectedCommand(null);
+    setCommandArguments("");
   };
   
   // Group commands by scope and namespace for the Custom tab
@@ -566,9 +612,79 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
       {/* Footer */}
       <div className="border-t border-border p-2">
         <p className="text-xs text-muted-foreground text-center">
-          ↑↓ Navigate • Enter Select • Esc Close
+          ↑↓ Navigate • Enter {onExecute ? 'Execute' : 'Select'} • Esc Close
         </p>
       </div>
+
+      {/* Execute Command Modal */}
+      <Dialog open={showExecuteModal} onOpenChange={setShowExecuteModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Execute Command</DialogTitle>
+            <DialogDescription>
+              {selectedCommand && (
+                <>
+                  Execute <code className="font-mono bg-muted px-1 py-0.5 rounded">
+                    {selectedCommand.full_command}
+                  </code>
+                  {selectedCommand.description && (
+                    <span className="block mt-2 text-sm">
+                      {selectedCommand.description}
+                    </span>
+                  )}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {selectedCommand?.accepts_arguments && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="arguments" className="text-right">
+                  Arguments
+                </Label>
+                <Input
+                  id="arguments"
+                  value={commandArguments}
+                  onChange={(e) => setCommandArguments(e.target.value)}
+                  className="col-span-3"
+                  placeholder="Enter command arguments..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleExecuteCommand();
+                    }
+                  }}
+                />
+              </div>
+            )}
+            {selectedCommand?.allowed_tools && selectedCommand.allowed_tools.length > 0 && (
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label className="text-right text-sm">
+                  Tools
+                </Label>
+                <div className="col-span-3 flex flex-wrap gap-1">
+                  {selectedCommand.allowed_tools.map((tool) => (
+                    <span 
+                      key={tool}
+                      className="text-xs bg-muted px-2 py-1 rounded"
+                    >
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelExecute}>
+              Cancel
+            </Button>
+            <Button onClick={handleExecuteCommand}>
+              Execute
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }; 

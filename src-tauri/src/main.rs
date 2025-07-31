@@ -253,6 +253,7 @@ fn main() {
             commands::slash_commands::slash_command_get,
             commands::slash_commands::slash_command_save,
             commands::slash_commands::slash_command_delete,
+            commands::slash_commands::execute_claude_slash_command,
             
             // Proxy Settings
             get_proxy_settings,
