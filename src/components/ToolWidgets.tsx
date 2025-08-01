@@ -1789,28 +1789,10 @@ export const MultiEditResultWidget: React.FC<{
   );
 };
 
-'''
-export const ThinkingWidget: React.FC<{
-  thinking: string;
-  signature?: string;
-}> = ({ thinking, signature }) => {
-  return (
-    <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-      <Bot className="h-5 w-5 text-primary mt-0.5 animate-pulse" />
-      <div className="flex-1 space-y-1">
-        <p className="text-sm text-muted-foreground italic">{thinking}</p>
-        {signature && (
-          <p className="text-xs text-muted-foreground/50">{signature}</p>
-        )}
-      </div>
-    </div>
-  );
-};
-
 /**
  * Widget for displaying system reminders (instead of raw XML)
  */
-export const SystemReminderWidget: React.FC<{ message: string }> = ({ message }) => {''
+export const SystemReminderWidget: React.FC<{ message: string }> = ({ message }) => {
   // Extract icon based on message content
   let icon = <Info className="h-4 w-4" />;
   let colorClass = "border-blue-500/20 bg-blue-500/5 text-blue-600";

@@ -842,7 +842,97 @@ D:\claudia\src-tauri\target\release\bundle\nsis\Claudia_0.1.0_x64-setup.exe
 
 ---
 
-## 🚀 v0.2.1 UI/UX 개선 및 안정성 강화
+## 🚀 v0.2.1 빌드 및 오류 해결
+
+### 2025-08-01 - 버전 0.2.1 빌드 과정
+
+#### 빌드 시 발생한 문제점들과 해결 방법
+
+##### 1. React Error #130 해결 (CRITICAL)
+- **문제**: "Minified React error #130; visit https://reactjs.org/docs/error-decoder.html?invariant=130&args[]=undefined&args[]="
+- **원인**: 컴포넌트가 undefined를 렌더링하려고 시도
+  - `StreamMessage.tsx`에서 여러 곳에서 `return <></>` 사용
+  - 특히 IIFE(즉시 실행 함수) 내부에서 빈 fragment 반환이 문제
+- **해결**: 
+  - 모든 `return <></>` → `return null` 변경
+  - 총 9개 위치 수정 (줄번호: 89, 269, 300, 314, 321, 339, 394, 627, 634, 717)
+- **핵심 코드 변경**:
+  ```typescript
+  // BEFORE - React Error #130 발생
+  if (message.isMeta && !message.leafUuid && !message.summary) {
+    return <></>;
+  }
+  
+  // AFTER - 안전한 코드
+  if (message.isMeta && !message.leafUuid && !message.summary) {
+    return null;
+  }
+  ```
+- **상태**: ✅ 완료
+
+##### 2. TypeScript 문법 오류 - 잘못된 문자열
+- **문제**: `src/components/ToolWidgets.tsx(1792,3): error TS1005: ';' expected.`
+- **원인**: 1792번째 줄에 잘못된 `'''` 문자열 삽입
+- **해결**: 
+  ```typescript
+  // 1792번 줄의 ''' 제거
+  };
+
+  '''  // <- 이 줄 삭제
+  export const ThinkingWidget...
+  ```
+- **상태**: ✅ 완료
+
+##### 3. TypeScript 문법 오류 - 함수 선언 오류
+- **문제**: SystemReminderWidget 함수 선언에 `{''` 추가됨
+- **원인**: 1812번째 줄에 문법 오류
+- **해결**:
+  ```typescript
+  // BEFORE
+  export const SystemReminderWidget: React.FC<{ message: string }> = ({ message }) => {''
+  
+  // AFTER
+  export const SystemReminderWidget: React.FC<{ message: string }> = ({ message }) => {
+  ```
+- **상태**: ✅ 완료
+
+##### 4. 중복 컴포넌트 선언
+- **문제**: `Cannot redeclare block-scoped variable 'ThinkingWidget'`
+- **원인**: ThinkingWidget이 두 번 선언됨 (1792번, 2310번 줄)
+- **해결**: 
+  - 첫 번째 간단한 버전 (1792-1807번 줄) 제거
+  - 두 번째 완전한 버전 (2310-2349번 줄) 유지
+- **상태**: ✅ 완료
+
+##### 5. 빌드 성공
+- **버전 업데이트**: 
+  - `package.json`: "version": "0.2.1"
+  - `Cargo.toml`: version = "0.2.1"
+  - `tauri.conf.json`: "version": "0.2.1"
+- **빌드 결과**:
+  - MSI: `Claudia_0.2.1_x64_en-US.msi` (11.6 MB)
+  - NSIS: `Claudia_0.2.1_x64-setup.exe` (7.4 MB)
+- **빌드 시간**: 
+  - TypeScript + Vite: ~5초
+  - Rust 컴파일: ~2분 17초
+- **상태**: ✅ 완료
+
+#### Rust 컴파일 경고 (기능에 영향 없음)
+1. **미사용 imports**: `dashboard.rs`, `agents.rs`, `slash_commands.rs`
+2. **미사용 변수**: `total_checks` in `analysis/mod.rs`
+3. **미사용 상수**: `CREATE_NO_WINDOW` 여러 파일
+4. **해결 방법**: `#[allow(dead_code)]` 또는 `_` 접두사 사용
+
+#### Vite 빌드 경고 (최적화 기회)
+- 동적 import와 정적 import가 동시에 사용되는 컴포넌트들
+- 영향: 코드 분할이 되지 않음 (성능 최적화 기회 손실)
+- 해결: 둘 중 하나의 import 방식만 사용
+
+### 문서화 완료
+- `BUILD-TROUBLESHOOTING.md` 생성
+  - 모든 빌드 오류와 해결 방법 상세 기록
+  - 예방 방법 및 빠른 해결 가이드 포함
+  - 빌드 프로세스 체크리스트 제공
 
 ### 2025-08-01 - React Error #130 및 UI 개선 작업
 
