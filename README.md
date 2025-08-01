@@ -163,7 +163,6 @@ Think of Claudia as your command center for Claude Code - bridging the gap betwe
 
 ```
 CC Projects → Select Project → View Sessions → Resume or Start New
-CC 프로젝트 → 프로젝트 선택 → 세션 보기 → 재개 또는 새로 시작
 ```
 
 - Click on any project to view its sessions / 어떤 프로젝트든 클릭하여 세션 보기
@@ -174,7 +173,6 @@ CC 프로젝트 → 프로젝트 선택 → 세션 보기 → 재개 또는 새�
 
 ```
 CC Agents → Create Agent → Configure → Execute
-CC 에이전트 → 에이전트 생성 → 구성 → 실행
 ```
 
 1. **Design Your Agent / 에이전트 디자인**: Set name, icon, and system prompt / 이름, 아이콘, 시스템 프롬프트 설정
@@ -186,7 +184,6 @@ CC 에이전트 → 에이전트 생성 → 구성 → 실행
 
 ```
 Menu → Usage Dashboard → View Analytics
-메뉴 → 사용량 대시보드 → 분석 보기
 ```
 
 - Monitor costs by model, project, and date / 모델, 프로젝트, 날짜별 비용 모니터링
@@ -197,7 +194,6 @@ Menu → Usage Dashboard → View Analytics
 
 ```
 Menu → MCP Manager → Add Server → Configure
-메뉴 → MCP 관리자 → 서버 추가 → 구성
 ```
 
 - Add servers manually or via JSON / 수동으로 또는 JSON을 통해 서버 추가
@@ -307,10 +303,10 @@ brew install pkg-config
    
    **For Production Build / 프로덕션 빌드**
    ```bash
-   # Build the application / 애플리케이션 빌드
+   # Build the application
    bun run tauri build
    
-   # The built executable will be in: / 빌드된 실행 파일 위치:
+   # The built executable will be in:
    # - Linux: src-tauri/target/release/
    # - macOS: src-tauri/target/release/
    # - Windows: src-tauri/target/release/
@@ -357,7 +353,7 @@ brew install pkg-config
 After building, you can verify the application works:
 
 ```bash
-# Run the built executable directly / 빌드된 실행 파일 직접 실행
+# Run the built executable directly
 # Linux/macOS
 ./src-tauri/target/release/claudia
 
@@ -369,7 +365,7 @@ After building, you can verify the application works:
 
 The build process creates several artifacts:
 
-- **Executable**: The main Claudia application / 메인 Claudia 애플리케이션
+- **Executable**: The main Claudia application
 - **Installers** (when using `tauri build`):
   - `.deb` package (Linux)
   - `.AppImage` (Linux)
@@ -409,19 +405,19 @@ claudia/
 ### Development Commands / 개발 명령어
 
 ```bash
-# Start development server / 개발 서버 시작
+# Start development server
 bun run tauri dev
 
-# Run frontend only / 프론트엔드만 실행
+# Run frontend only
 bun run dev
 
-# Type checking / 타입 체크
+# Type checking
 bunx tsc --noEmit
 
-# Run Rust tests / Rust 테스트 실행
+# Run Rust tests
 cd src-tauri && cargo test
 
-# Format code / 코드 포맷팅
+# Format code
 cd src-tauri && cargo fmt
 ```
 
@@ -692,7 +688,7 @@ CREATE TABLE risk_items (
 git clone https://github.com/soh963/windows-claudia.git
 cd windows-claudia
 
-# Install dependencies (optimized for Windows)
+# Install dependencies
 bun install
 
 # Build for production
