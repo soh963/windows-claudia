@@ -369,10 +369,11 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
               <div className="flex-1 overflow-y-auto p-6">
                 <ProjectSelector 
                   onProjectSelect={(project) => {
+                    console.log('Dashboard project selected:', project);
                     // Update tab with selected project data
                     updateTab(tab.id, {
                       projectData: project,
-                      title: `Dashboard - ${project.name || project.path.split('/').pop()}`
+                      title: `Dashboard - ${project.name || project.path.split(/[/\\]/).pop()}`
                     });
                   }}
                 />
@@ -380,6 +381,7 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
             </motion.div>
           );
         }
+        // Rendering DashboardMain with selected project
         return (
           <DashboardMain 
             projectId={dashboardProject.id} 

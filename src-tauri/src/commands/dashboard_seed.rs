@@ -15,6 +15,26 @@ pub async fn dashboard_seed_data(
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let timestamp = Utc::now().timestamp();
     
+    // First, ensure the project exists in the projects table
+    let project_exists = conn
+        .prepare("SELECT 1 FROM projects WHERE id = ?")
+        .and_then(|mut stmt| stmt.query_row([&project_id], |_| Ok(())))
+        .is_ok();
+    
+    if !project_exists {
+        // Try to create a project record with a reasonable default path
+        let default_path = std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| "D:\\claudia".to_string());
+        
+        if let Err(e) = conn.execute(
+            "INSERT OR IGNORE INTO projects (id, path, name, created_at) VALUES (?1, ?2, ?3, datetime('now'))",
+            params![&project_id, &default_path, &project_id]
+        ) {
+            return Err(format!("Failed to create project record: {}", e));
+        }
+    }
+    
     // Seed health metrics
     let health_metrics = vec![
         ("security", 85.0, "Good security posture with minor improvements needed"),

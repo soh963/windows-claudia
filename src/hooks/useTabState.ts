@@ -160,7 +160,7 @@ export const useTabState = (): UseTabStateReturn => {
   }, [addTab, tabs, setActiveTab]);
 
   const createDashboardTab = useCallback((projectData?: any): string | null => {
-    // If no project data provided, try to get it from active chat tab
+    // If no project data provided, try to get it from active chat tab or use current directory
     if (!projectData) {
       // Check if there's an active chat tab with session data
       const activeChatTab = tabs.find(tab => 
@@ -174,15 +174,24 @@ export const useTabState = (): UseTabStateReturn => {
         projectData = {
           id: activeChatTab.sessionData.project_id,
           path: activeChatTab.sessionData.project_path,
-          name: activeChatTab.sessionData.project_path.split('/').pop()
+          name: activeChatTab.sessionData.project_path.split('/').pop() || 'Project'
         };
       } else if (activeChatTab && activeChatTab.initialProjectPath) {
         // Use initial project path if session data not available
         projectData = {
           id: activeChatTab.initialProjectPath,
           path: activeChatTab.initialProjectPath,
-          name: activeChatTab.initialProjectPath.split('/').pop()
+          name: activeChatTab.initialProjectPath.split('/').pop() || 'Project'
         };
+      } else {
+        // Fallback to current working directory (D:\claudia)
+        const currentPath = 'D:\\claudia';
+        projectData = {
+          id: currentPath,
+          path: currentPath,
+          name: 'claudia'
+        };
+        console.log('Using fallback project data:', projectData);
       }
     }
     
@@ -197,9 +206,12 @@ export const useTabState = (): UseTabStateReturn => {
         return existingTab.id;
       }
       
+      const tabTitle = `Dashboard - ${projectData.name || projectData.path.split(/[\\/]/).pop() || 'Project'}`;
+      console.log('Creating dashboard tab with project data:', projectData, 'title:', tabTitle);
+      
       return addTab({
         type: 'dashboard',
-        title: `Dashboard - ${projectData.path.split('/').pop() || 'Project'}`,
+        title: tabTitle,
         status: 'idle',
         hasUnsavedChanges: false,
         icon: 'activity',

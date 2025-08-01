@@ -91,7 +91,13 @@ const ProjectGoals: React.FC<ProjectGoalsProps> = ({
   const testsProgress = goals.tests_completion || 0;
   const deploymentProgress = goals.deployment_readiness || 0;
 
-  const secondaryGoals = goals.secondary_goals ? JSON.parse(goals.secondary_goals) : [];
+  const secondaryGoals = goals.secondary_goals ? (() => {
+    try {
+      return JSON.parse(goals.secondary_goals);
+    } catch {
+      return [];
+    }
+  })() : [];
   
   // Determine project health
   const projectHealth = {

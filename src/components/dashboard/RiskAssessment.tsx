@@ -324,7 +324,13 @@ const RiskAssessment: React.FC<RiskAssessmentProps> = ({
           })
           .map((risk) => {
             const riskScore = getRiskScore(risk);
-            const filePaths = risk.file_paths ? JSON.parse(risk.file_paths) : [];
+            const filePaths = risk.file_paths ? (() => {
+              try {
+                return JSON.parse(risk.file_paths);
+              } catch {
+                return [];
+              }
+            })() : [];
             
             return (
               <Card key={risk.id} className={cn(

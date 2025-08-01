@@ -173,8 +173,20 @@ const FeatureIndependence: React.FC<FeatureIndependenceProps> = ({
           .map((feature) => {
             const independenceScore = feature.independence_score || 0;
             const complexityScore = feature.complexity_score || 0;
-            const dependencies = feature.dependencies ? JSON.parse(feature.dependencies) : [];
-            const filePaths = feature.file_paths ? JSON.parse(feature.file_paths) : [];
+            const dependencies = feature.dependencies ? (() => {
+              try {
+                return JSON.parse(feature.dependencies);
+              } catch {
+                return [];
+              }
+            })() : [];
+            const filePaths = feature.file_paths ? (() => {
+              try {
+                return JSON.parse(feature.file_paths);
+              } catch {
+                return [];
+              }
+            })() : [];
             
             return (
               <Card key={feature.id} className="hover:shadow-md transition-shadow">

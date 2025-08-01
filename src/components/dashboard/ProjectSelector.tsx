@@ -40,6 +40,12 @@ export function ProjectSelector({ onProjectSelect }: ProjectSelectorProps) {
       // If we have a current project, auto-select it
       if (current) {
         onProjectSelect(current);
+      } else if (recent.length > 0) {
+        // If no current project but we have recent projects, select the most recent
+        onProjectSelect(recent[0]);
+      } else if (all.length > 0) {
+        // If no recent projects, select the first available project
+        onProjectSelect(all[0]);
       }
     } catch (error) {
       console.error('Failed to load projects:', error);

@@ -38,11 +38,37 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
         () => api.dashboardGetSummary(projectId),
         { projectId }
       );
+      
       setData(summary);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
-      // Set null to prevent errors
-      setData(null);
+      
+      // Try to auto-seed data if the project exists but has no dashboard data
+      try {
+        await api.dashboardSeedData(projectId);
+        
+        // Retry fetching after seeding
+        const { result: summary } = await measureAsync(
+          'dashboard:fetchSummaryAfterSeed',
+          () => api.dashboardGetSummary(projectId),
+          { projectId }
+        );
+        
+        setData(summary);
+      } catch (seedError) {
+        console.error('Failed to seed and fetch dashboard data:', seedError);
+        // Set null to prevent errors, but log the issue
+        setData(null);
+        
+        // Show user-friendly error message
+        if (typeof window !== 'undefined' && 'showToast' in window) {
+          (window as any).showToast({
+            title: "Dashboard Data Error",
+            description: "Unable to load dashboard data. Click 'Seed Data' to initialize.",
+            variant: "destructive"
+          });
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -63,12 +89,12 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
   const handleAnalyze = async () => {
     setAnalyzing(true);
     try {
-      const { result } = await measureAsync(
+      await measureAsync(
         'dashboard:analyzeProject',
         () => api.dashboardAnalyzeProject(projectId, projectPath),
         { projectId, projectPath }
       );
-      console.log(result);
+      // Analysis completed successfully
       // Refresh data after analysis
       await fetchDashboardData();
     } catch (error) {
@@ -81,13 +107,13 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
   const handleSeedData = async () => {
     setLoading(true);
     try {
-      const { result: message } = await measureAsync(
+      await measureAsync(
         'dashboard:seedData',
         () => api.dashboardSeedData(projectId),
         { projectId }
       );
       // Show success message (assuming you have a toast system)
-      console.log(message);
+      // Seeded successfully
       // Refresh the data
       await fetchDashboardData();
     } catch (error) {

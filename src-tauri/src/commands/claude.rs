@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{BufRead, BufReader};
@@ -1324,7 +1325,13 @@ async fn spawn_claude_process(app: AppHandle, mut cmd: Command, prompt: String, 
             if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&line) {
                 if msg["type"] == "system" && msg["subtype"] == "init" {
                     if let Some(claude_session_id) = msg["session_id"].as_str() {
-                        let mut session_id_guard = session_id_holder_clone.lock().unwrap();
+                        let mut session_id_guard = match session_id_holder_clone.lock() {
+                            Ok(guard) => guard,
+                            Err(e) => {
+                                error!("Failed to acquire session_id lock: {}", e);
+                                return;
+                            }
+                        };
                         if session_id_guard.is_none() {
                             *session_id_guard = Some(claude_session_id.to_string());
                             log::info!("Extracted Claude session ID: {}", claude_session_id);
@@ -1339,7 +1346,13 @@ async fn spawn_claude_process(app: AppHandle, mut cmd: Command, prompt: String, 
                             ) {
                                 Ok(run_id) => {
                                     log::info!("Registered Claude session with run_id: {}", run_id);
-                                    let mut run_id_guard = run_id_holder_clone.lock().unwrap();
+                                    let mut run_id_guard = match run_id_holder_clone.lock() {
+                                        Ok(guard) => guard,
+                                        Err(e) => {
+                                            error!("Failed to acquire run_id lock: {}", e);
+                                            return;
+                                        }
+                                    };
                                     *run_id_guard = Some(run_id);
                                 }
                                 Err(e) => {
@@ -1352,13 +1365,17 @@ async fn spawn_claude_process(app: AppHandle, mut cmd: Command, prompt: String, 
             }
             
             // Store live output in registry if we have a run_id
-            if let Some(run_id) = *run_id_holder_clone.lock().unwrap() {
-                let _ = registry_clone.append_live_output(run_id, &line);
+            if let Ok(guard) = run_id_holder_clone.lock() {
+                if let Some(run_id) = *guard {
+                    let _ = registry_clone.append_live_output(run_id, &line);
+                }
             }
             
             // Emit the line to the frontend with session isolation if we have session ID
-            if let Some(ref session_id) = *session_id_holder_clone.lock().unwrap() {
-                let _ = app_handle.emit(&format!("claude-output:{}", session_id), &line);
+            if let Ok(guard) = session_id_holder_clone.lock() {
+                if let Some(ref session_id) = *guard {
+                    let _ = app_handle.emit(&format!("claude-output:{}", session_id), &line);
+                }
             }
             // Also emit to the generic event for backward compatibility
             let _ = app_handle.emit("claude-output", &line);
@@ -1372,8 +1389,10 @@ async fn spawn_claude_process(app: AppHandle, mut cmd: Command, prompt: String, 
         while let Ok(Some(line)) = lines.next_line().await {
             log::error!("Claude stderr: {}", line);
             // Emit error lines to the frontend with session isolation if we have session ID
-            if let Some(ref session_id) = *session_id_holder_clone2.lock().unwrap() {
-                let _ = app_handle_stderr.emit(&format!("claude-error:{}", session_id), &line);
+            if let Ok(guard) = session_id_holder_clone2.lock() {
+                if let Some(ref session_id) = *guard {
+                    let _ = app_handle_stderr.emit(&format!("claude-error:{}", session_id), &line);
+                }
             }
             // Also emit to the generic event for backward compatibility
             let _ = app_handle_stderr.emit("claude-error", &line);
@@ -1411,9 +1430,11 @@ async fn spawn_claude_process(app: AppHandle, mut cmd: Command, prompt: String, 
                     log::error!("Failed to wait for Claude process: {}", e);
                     // Add a small delay to ensure all messages are processed
                     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    if let Some(ref session_id) = *session_id_holder_clone3.lock().unwrap() {
-                        let _ = app_handle_wait
-                            .emit(&format!("claude-complete:{}", session_id), false);
+                    if let Ok(guard) = session_id_holder_clone3.lock() {
+                        if let Some(ref session_id) = *guard {
+                            let _ = app_handle_wait
+                                .emit(&format!("claude-complete:{}", session_id), false);
+                        }
                     }
                     // Also emit to the generic event for backward compatibility
                     let _ = app_handle_wait.emit("claude-complete", false);
@@ -1422,8 +1443,10 @@ async fn spawn_claude_process(app: AppHandle, mut cmd: Command, prompt: String, 
         }
 
         // Unregister from ProcessRegistry if we have a run_id
-        if let Some(run_id) = *run_id_holder_clone2.lock().unwrap() {
-            let _ = registry_clone2.unregister_process(run_id);
+        if let Ok(guard) = run_id_holder_clone2.lock() {
+            if let Some(run_id) = *guard {
+                let _ = registry_clone2.unregister_process(run_id);
+            }
         }
 
         // Clear the process from state
