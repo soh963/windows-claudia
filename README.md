@@ -3,9 +3,18 @@
 
   <a href="https://claudiacode.com"><h1>Claudia</h1></a>
   
-  <div id="language-selector" style="margin: 10px 0;">
-    <button onclick="switchLanguage('ko')" id="btn-ko" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; margin: 0 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">🇰🇷 한국어</button>
-    <button onclick="switchLanguage('en')" id="btn-en" style="background: #64748b; color: white; border: none; padding: 8px 16px; margin: 0 5px; border-radius: 6px; cursor: pointer;">🇺🇸 English</button>
+  <div id="language-selector" style="margin: 15px 0; text-align: center;">
+    <button onclick="switchLanguage('ko')" id="btn-ko" 
+            style="background: #3b82f6; color: white; border: none; padding: 10px 20px; margin: 0 8px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.3s ease;">
+      🇰🇷 한국어
+    </button>
+    <button onclick="switchLanguage('en')" id="btn-en" 
+            style="background: #64748b; color: white; border: none; padding: 10px 20px; margin: 0 8px; border-radius: 8px; cursor: pointer; font-weight: normal; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.3s ease;">
+      🇺🇸 English
+    </button>
+    <div style="margin-top: 8px; font-size: 12px; color: #666; opacity: 0.8;">
+      💡 <strong>Tip:</strong> Press <kbd style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Ctrl+L</kbd> to switch languages
+    </div>
   </div>
 
   <div id="content-ko">
@@ -36,40 +45,130 @@
 
 <script>
 function switchLanguage(lang) {
-  const koContent = document.getElementById('content-ko');
-  const enContent = document.getElementById('content-en');
+  // 언어 버튼 요소들
   const koBtn = document.getElementById('btn-ko');
   const enBtn = document.getElementById('btn-en');
+  
+  // 주 콘텐츠 요소들
+  const koContent = document.getElementById('content-ko');
+  const enContent = document.getElementById('content-en');
+  
+  // 모든 언어별 섹션들
   const allKoSections = document.querySelectorAll('.lang-ko');
   const allEnSections = document.querySelectorAll('.lang-en');
   
+  // 로컬 스토리지에 언어 설정 저장
+  localStorage.setItem('claudia-lang', lang);
+  
   if (lang === 'ko') {
-    koContent.style.display = 'block';
-    enContent.style.display = 'none';
-    koBtn.style.background = '#3b82f6';
-    koBtn.style.fontWeight = 'bold';
-    enBtn.style.background = '#64748b';
-    enBtn.style.fontWeight = 'normal';
+    // 한국어 모드 활성화
+    if (koContent) koContent.style.display = 'block';
+    if (enContent) enContent.style.display = 'none';
     
-    allKoSections.forEach(el => el.style.display = 'block');
-    allEnSections.forEach(el => el.style.display = 'none');
-  } else {
-    koContent.style.display = 'none';
-    enContent.style.display = 'block';
-    enBtn.style.background = '#3b82f6';
-    enBtn.style.fontWeight = 'bold';
-    koBtn.style.background = '#64748b';
-    koBtn.style.fontWeight = 'normal';
+    // 버튼 스타일 업데이트
+    if (koBtn) {
+      koBtn.style.background = '#3b82f6';
+      koBtn.style.fontWeight = 'bold';
+      koBtn.style.transform = 'scale(1.05)';
+    }
+    if (enBtn) {
+      enBtn.style.background = '#64748b';
+      enBtn.style.fontWeight = 'normal';
+      enBtn.style.transform = 'scale(1)';
+    }
     
-    allKoSections.forEach(el => el.style.display = 'none');
-    allEnSections.forEach(el => el.style.display = 'block');
+    // 모든 언어별 섹션 표시/숨김
+    allKoSections.forEach(el => {
+      if (el) el.style.display = 'block';
+    });
+    allEnSections.forEach(el => {
+      if (el) el.style.display = 'none';
+    });
+    
+  } else if (lang === 'en') {
+    // 영어 모드 활성화
+    if (koContent) koContent.style.display = 'none';
+    if (enContent) enContent.style.display = 'block';
+    
+    // 버튼 스타일 업데이트
+    if (enBtn) {
+      enBtn.style.background = '#3b82f6';
+      enBtn.style.fontWeight = 'bold';
+      enBtn.style.transform = 'scale(1.05)';
+    }
+    if (koBtn) {
+      koBtn.style.background = '#64748b';
+      koBtn.style.fontWeight = 'normal';
+      koBtn.style.transform = 'scale(1)';
+    }
+    
+    // 모든 언어별 섹션 표시/숨김
+    allKoSections.forEach(el => {
+      if (el) el.style.display = 'none';
+    });
+    allEnSections.forEach(el => {
+      if (el) el.style.display = 'block';
+    });
   }
+  
+  // 부드러운 전환 효과 추가
+  document.body.style.transition = 'opacity 0.2s ease-in-out';
 }
 
-// Initialize Korean as default
+// 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-  switchLanguage('ko');
+  // 버튼에 호버 효과 및 전환 효과 추가
+  const buttons = document.querySelectorAll('#language-selector button');
+  buttons.forEach(button => {
+    button.style.transition = 'all 0.3s ease';
+    button.style.border = 'none';
+    button.style.outline = 'none';
+    
+    button.addEventListener('mouseenter', function() {
+      // 활성 버튼인지 확인 (파란색 배경인 경우)
+      const isActive = this.style.background.includes('59, 130, 246') || this.style.background === '#3b82f6';
+      if (isActive) return;
+      
+      this.style.background = '#475569';
+      this.style.transform = 'scale(1.02)';
+      this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+    });
+    
+    button.addEventListener('mouseleave', function() {
+      // 활성 버튼인지 확인 (파란색 배경인 경우)
+      const isActive = this.style.background.includes('59, 130, 246') || this.style.background === '#3b82f6';
+      if (isActive) return;
+      
+      this.style.background = '#64748b';
+      this.style.transform = 'scale(1)';
+      this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+    });
+  });
+  
+  // 저장된 언어 설정 확인 또는 기본값(한국어) 사용
+  const savedLang = localStorage.getItem('claudia-lang') || 'ko';
+  switchLanguage(savedLang);
+  
+  // 키보드 단축키 지원 (Ctrl+L로 언어 전환)
+  document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'l') {
+      e.preventDefault();
+      const currentLang = localStorage.getItem('claudia-lang') || 'ko';
+      const newLang = currentLang === 'ko' ? 'en' : 'ko';
+      switchLanguage(newLang);
+    }
+  });
 });
+
+// 언어 자동 감지 (브라우저 언어 설정 기반)
+function detectLanguage() {
+  const browserLang = navigator.language || navigator.userLanguage;
+  if (browserLang.startsWith('ko')) {
+    return 'ko';
+  } else {
+    return 'en';
+  }
+}
 </script>
 
 ![457013521-6133a738-d0cb-4d3e-8746-c6768c82672c](https://github.com/user-attachments/assets/a028de9e-d881-44d8-bae5-7326ab3558b9)
