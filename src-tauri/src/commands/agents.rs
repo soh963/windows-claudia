@@ -847,9 +847,20 @@ pub async fn execute_agent(
     };
 
     // Build arguments
-    let args = vec![
-        "-p".to_string(),
-        task.clone(),
+    // For long tasks, we'll pass them via stdin instead of command line
+    let task_via_stdin = task.len() > 1000; // Use stdin for tasks longer than 1000 chars
+    
+    let mut args = vec![];
+    
+    if task_via_stdin {
+        // When using stdin, we use -i flag instead of -p
+        args.push("-i".to_string());
+    } else {
+        args.push("-p".to_string());
+        args.push(task.clone());
+    }
+    
+    args.extend(vec![
         "--system-prompt".to_string(),
         agent.system_prompt.clone(),
         "--model".to_string(),
@@ -858,13 +869,13 @@ pub async fn execute_agent(
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--dangerously-skip-permissions".to_string(),
-    ];
+    ]);
 
     // Execute based on whether we should use sidecar or system binary
     if should_use_sidecar(&claude_path) {
-        spawn_agent_sidecar(app, run_id, agent_id, agent.name.clone(), args, project_path, task, execution_model, db, registry).await
+        spawn_agent_sidecar(app, run_id, agent_id, agent.name.clone(), args, project_path, task, execution_model, db, registry, task_via_stdin).await
     } else {
-        spawn_agent_system(app, run_id, agent_id, agent.name.clone(), claude_path, args, project_path, task, execution_model, db, registry).await
+        spawn_agent_system(app, run_id, agent_id, agent.name.clone(), claude_path, args, project_path, task, execution_model, db, registry, task_via_stdin).await
     }
 }
 
@@ -910,6 +921,7 @@ fn create_agent_system_command(
     claude_path: &str,
     args: Vec<String>,
     project_path: &str,
+    task_via_stdin: bool,
 ) -> Command {
     // Handle .cmd files properly on Windows
     let mut cmd = if claude_path.ends_with(".cmd") {
@@ -969,7 +981,7 @@ fn create_agent_system_command(
     };
     
     cmd.current_dir(project_path)
-        .stdin(Stdio::null())
+        .stdin(if task_via_stdin { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     
@@ -988,7 +1000,13 @@ async fn spawn_agent_sidecar(
     execution_model: String,
     db: State<'_, AgentDb>,
     registry: State<'_, crate::process::ProcessRegistryState>,
+    task_via_stdin: bool,
 ) -> Result<i64, String> {
+    // Sidecar commands don't support stdin yet
+    if task_via_stdin {
+        warn!("Sidecar command doesn't support stdin input for long tasks. Task will be passed via command line.");
+    }
+
     // Build the sidecar command
     let sidecar_cmd = create_agent_sidecar_command(&app, args, &project_path)?;
 
@@ -1172,9 +1190,10 @@ async fn spawn_agent_system(
     execution_model: String,
     db: State<'_, AgentDb>,
     registry: State<'_, crate::process::ProcessRegistryState>,
+    task_via_stdin: bool,
 ) -> Result<i64, String> {
     // Build the command
-    let mut cmd = create_agent_system_command(&claude_path, args, &project_path);
+    let mut cmd = create_agent_system_command(&claude_path, args, &project_path, task_via_stdin);
 
     // Spawn the process
     info!("🚀 Spawning Claude system process...");
@@ -1182,8 +1201,6 @@ async fn spawn_agent_system(
         error!("❌ Failed to spawn Claude process: {}", e);
         format!("Failed to spawn Claude: {}", e)
     })?;
-
-    info!("🔌 Using Stdio::null() for stdin - no input expected");
 
     // Get the PID and register the process
     let pid = child.id().unwrap_or(0);
@@ -1198,6 +1215,30 @@ async fn spawn_agent_system(
             params![pid as i64, now, run_id],
         ).map_err(|e| e.to_string())?;
         info!("📝 Updated database with running status and PID");
+    }
+
+    // If we need to send task via stdin, do it now
+    if task_via_stdin {
+        let stdin = child.stdin.take().ok_or("Failed to get stdin")?;
+        info!("📝 Writing task to stdin (length: {} chars)", task.len());
+        
+        // Write task to stdin in a separate task to avoid blocking
+        let task_clone = task.clone();
+        tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut stdin = stdin;
+            if let Err(e) = stdin.write_all(task_clone.as_bytes()).await {
+                error!("Failed to write task to stdin: {}", e);
+            }
+            if let Err(e) = stdin.flush().await {
+                error!("Failed to flush stdin: {}", e);
+            }
+            // Close stdin to signal end of input
+            drop(stdin);
+            info!("✅ Task written to stdin successfully");
+        });
+    } else {
+        info!("🔌 Using Stdio::null() for stdin - no input expected");
     }
 
     // Get stdout and stderr

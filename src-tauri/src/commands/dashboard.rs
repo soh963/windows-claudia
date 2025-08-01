@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{error, info};
+use log::{error, info, warn};
 use rusqlite::{params, Connection, OptionalExtension, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -175,30 +175,36 @@ pub async fn dashboard_analyze_project(
     project_path: String,
 ) -> Result<String, String> {
     use crate::analysis::ProjectAnalyzer;
-    use crate::commands::dashboard_utils::normalize_path;
     use std::path::Path;
     
     info!("Starting comprehensive project analysis for project: {}", project_id);
+    info!("Project path provided: {}", project_path);
     
-    // Validate and normalize project path
-    let canonical_path = match normalize_path(&project_path) {
-        Ok(path) => path,
-        Err(e) => {
-            error!("Invalid project path '{}': {}", project_path, e);
-            return Err(format!("Invalid project path '{}': {}", project_path, e));
+    // Try to use the path as-is first, then try normalization
+    let working_path = if Path::new(&project_path).exists() {
+        info!("Using provided path as-is: {}", project_path);
+        project_path.clone()
+    } else {
+        // Try path normalization
+        info!("Path does not exist as-is, attempting normalization");
+        match crate::commands::dashboard_utils::normalize_path(&project_path) {
+            Ok(normalized) => {
+                info!("Successfully normalized path: {} -> {}", project_path, normalized);
+                normalized
+            }
+            Err(e) => {
+                // If normalization fails, try to create a dummy analyzer anyway
+                // This allows the dashboard to function even without full analysis
+                warn!("Path normalization failed: {}. Using provided path anyway.", e);
+                project_path.clone()
+            }
         }
     };
     
-    // Double-check that the path exists
-    if !Path::new(&canonical_path).exists() {
-        error!("Project path does not exist: {}", canonical_path);
-        return Err(format!("Project path does not exist: {}", canonical_path));
-    }
+    info!("Analyzing project at path: {}", working_path);
     
-    info!("Analyzing project at normalized path: {}", canonical_path);
-    
-    // Create analyzer instance with normalized path
-    let analyzer = ProjectAnalyzer::new(canonical_path.clone(), project_id.clone());
+    // Create analyzer instance with working path
+    let analyzer = ProjectAnalyzer::new(working_path.clone(), project_id.clone());
     
     // Perform health analysis
     match analyzer.analyze_health().await {

@@ -61,6 +61,7 @@ impl Default for ClaudeSyncState {
 }
 
 /// Global sync state for background tasks
+#[derive(Clone)]
 pub struct GlobalSyncState {
     pub state: Arc<Mutex<ClaudeSyncState>>,
     pub sync_in_progress: Arc<Mutex<bool>>,

@@ -227,7 +227,7 @@ pub async fn create_project_if_not_exists(
     
     conn.execute(
         query,
-        rusqlite::params![&project_id, &path, &project_name],
+        rusqlite::params![&project_id, &canonical_path, &project_name],
     )
     .map_err(|e| format!("Failed to create project: {}", e))?;
     

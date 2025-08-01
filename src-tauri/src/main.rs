@@ -155,19 +155,20 @@ fn main() {
             app.manage(ClaudeProcessState::default());
 
             // Initialize Claude sync state
-            let sync_state = std::sync::Arc::new(GlobalSyncState::default());
-            app.manage(sync_state.clone());
+            let sync_state = GlobalSyncState::default();
+            let sync_state_clone = sync_state.clone();
+            app.manage(sync_state);
 
             // Start automatic Claude sync background task after setup is complete
             let app_handle = app.handle().clone();
-            let sync_state_clone = sync_state.clone();
+            let sync_state_arc = std::sync::Arc::new(sync_state_clone);
             
             // Spawn the background task in a separate thread to avoid borrow issues
             std::thread::spawn(move || {
                 tauri::async_runtime::spawn(async move {
                     // Wait a bit for the app to be fully initialized
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    start_auto_sync(app_handle, sync_state_clone).await;
+                    start_auto_sync(app_handle, sync_state_arc).await;
                 });
             });
 
