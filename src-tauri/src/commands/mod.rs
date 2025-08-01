@@ -1,8 +1,19 @@
 pub mod agents;
+pub mod ai_usage_tracker;
+pub mod ai_session_integrator;
 pub mod claude;
 pub mod claude_sync;
 pub mod dashboard;
 pub mod dashboard_seed;
+pub mod dashboard_utils;
+// Temporarily disabled for compilation
+// pub mod health_analyzer;
+// pub mod ai_analyzer;
+// pub mod risk_detector;
+// pub mod performance_monitor;
+// pub mod documentation_analyzer;
+// pub mod workflow_visualizer;
+// pub mod realtime_collector;
 pub mod mcp;
 pub mod usage;
 pub mod storage;

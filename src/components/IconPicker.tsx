@@ -395,7 +395,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
             </div>
           ) : (
             <div className="space-y-6">
-              <AnimatePresence mode="wait">
+              <AnimatePresence mode="sync">
                 {Object.entries(filteredCategories).map(([category, icons]) => (
                   <motion.div
                     key={category}

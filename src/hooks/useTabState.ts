@@ -19,7 +19,7 @@ interface UseTabStateReturn {
   createUsageTab: () => string | null;
   createMCPTab: () => string | null;
   createSettingsTab: () => string | null;
-  createDashboardTab: () => string | null;
+  createDashboardTab: (projectData?: any) => string | null;
   createClaudeMdTab: () => string | null;
   createClaudeFileTab: (fileId: string, fileName: string) => string;
   createCreateAgentTab: () => string;
@@ -159,9 +159,56 @@ export const useTabState = (): UseTabStateReturn => {
     });
   }, [addTab, tabs, setActiveTab]);
 
-  const createDashboardTab = useCallback((): string | null => {
-    // Check if dashboard tab already exists (singleton)
-    const existingTab = tabs.find(tab => tab.type === 'dashboard');
+  const createDashboardTab = useCallback((projectData?: any): string | null => {
+    // If no project data provided, try to get it from active chat tab
+    if (!projectData) {
+      // Check if there's an active chat tab with session data
+      const activeChatTab = tabs.find(tab => 
+        tab.type === 'chat' && 
+        tab.id === activeTabId && 
+        (tab.sessionData || tab.initialProjectPath)
+      );
+      
+      if (activeChatTab && activeChatTab.sessionData) {
+        // Extract project data from session
+        projectData = {
+          id: activeChatTab.sessionData.project_id,
+          path: activeChatTab.sessionData.project_path,
+          name: activeChatTab.sessionData.project_path.split('/').pop()
+        };
+      } else if (activeChatTab && activeChatTab.initialProjectPath) {
+        // Use initial project path if session data not available
+        projectData = {
+          id: activeChatTab.initialProjectPath,
+          path: activeChatTab.initialProjectPath,
+          name: activeChatTab.initialProjectPath.split('/').pop()
+        };
+      }
+    }
+    
+    // If project data is provided or found, check for project-specific dashboard tab
+    if (projectData) {
+      const existingTab = tabs.find(tab => 
+        tab.type === 'dashboard' && 
+        tab.projectData?.id === projectData.id
+      );
+      if (existingTab) {
+        setActiveTab(existingTab.id);
+        return existingTab.id;
+      }
+      
+      return addTab({
+        type: 'dashboard',
+        title: `Dashboard - ${projectData.path.split('/').pop() || 'Project'}`,
+        status: 'idle',
+        hasUnsavedChanges: false,
+        icon: 'activity',
+        projectData
+      });
+    }
+    
+    // Check if general dashboard tab already exists (singleton)
+    const existingTab = tabs.find(tab => tab.type === 'dashboard' && !tab.projectData);
     if (existingTab) {
       setActiveTab(existingTab.id);
       return existingTab.id;
@@ -174,7 +221,7 @@ export const useTabState = (): UseTabStateReturn => {
       hasUnsavedChanges: false,
       icon: 'activity'
     });
-  }, [addTab, tabs, setActiveTab]);
+  }, [addTab, tabs, setActiveTab, activeTabId]);
 
   const createClaudeMdTab = useCallback((): string | null => {
     // Check if claude-md tab already exists (singleton)

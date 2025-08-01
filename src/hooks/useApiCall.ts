@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useToast } from './useToast';
 
 interface ApiCallOptions {
   onSuccess?: (data: any) => void;
@@ -30,6 +31,8 @@ export function useApiCall<T>(
   const [error, setError] = useState<Error | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
+  // Use toast hook - if provider is not available, useToast will throw
+  const toast = useToast();
 
   const {
     onSuccess,
@@ -62,8 +65,7 @@ export function useApiCall<T>(
         setData(result);
         
         if (showSuccessToast) {
-          // TODO: Implement toast notification
-          console.log('Success:', successMessage);
+          toast.showToast(successMessage, 'success');
         }
 
         onSuccess?.(result);
@@ -81,8 +83,7 @@ export function useApiCall<T>(
         setError(error);
 
         if (showErrorToast) {
-          // TODO: Implement toast notification
-          console.error('Error:', errorMessage || error.message);
+          toast.showToast(errorMessage || error.message, 'error');
         }
 
         onError?.(error);

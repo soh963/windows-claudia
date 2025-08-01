@@ -172,7 +172,7 @@ export const SessionList: React.FC<SessionListProps> = React.memo(({
         </Card>
       ) : (
         <>
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="sync">
             <motion.div
               key={currentPage}
               initial={{ opacity: 0, x: -20 }}

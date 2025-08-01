@@ -8,17 +8,75 @@ import { ProjectList } from '@/components/ProjectList';
 import { SessionList } from '@/components/SessionList';
 import { RunningClaudeSessions } from '@/components/RunningClaudeSessions';
 import { Button } from '@/components/ui/button';
+import { SkeletonList } from '@/components/ui/skeleton';
+import { pageVariants, slideVariants, staggerContainer, staggerItem, buttonVariants } from '@/lib/animations';
 
-// Lazy load heavy components
-const ClaudeCodeSession = lazy(() => import('@/components/ClaudeCodeSession').then(m => ({ default: m.ClaudeCodeSession })));
-const AgentRunOutputViewer = lazy(() => import('@/components/AgentRunOutputViewer'));
-const AgentExecution = lazy(() => import('@/components/AgentExecution').then(m => ({ default: m.AgentExecution })));
-const CreateAgent = lazy(() => import('@/components/CreateAgent').then(m => ({ default: m.CreateAgent })));
-const UsageDashboard = lazy(() => import('@/components/UsageDashboard').then(m => ({ default: m.UsageDashboard })));
-const MCPManager = lazy(() => import('@/components/MCPManager').then(m => ({ default: m.MCPManager })));
-const Settings = lazy(() => import('@/components/Settings').then(m => ({ default: m.Settings })));
-const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor').then(m => ({ default: m.MarkdownEditor })));
-const DashboardMain = lazy(() => import('@/components/dashboard/DashboardMain').then(m => ({ default: m.default })));
+// Lazy load heavy components - Production-safe imports with fallbacks
+const ErrorFallback: React.FC<{ componentName: string }> = ({ componentName }) => (
+  <div className="p-4 text-red-500 border border-red-300 rounded">
+    Error: {componentName} failed to load
+  </div>
+);
+
+const ClaudeCodeSession = lazy(() => 
+  import('@/components/ClaudeCodeSession')
+    .then(module => ({ default: module.ClaudeCodeSession }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="ClaudeCodeSession" /> }))
+);
+
+const ProjectSelector = lazy(() => 
+  import('@/components/dashboard/ProjectSelector')
+    .then(module => ({ default: module.ProjectSelector }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="ProjectSelector" /> }))
+);
+
+const AgentRunOutputViewer = lazy(() => 
+  import('@/components/AgentRunOutputViewer')
+    .then(module => ({ default: module.default }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="AgentRunOutputViewer" /> }))
+);
+
+const AgentExecution = lazy(() => 
+  import('@/components/AgentExecution')
+    .then(module => ({ default: module.AgentExecution }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="AgentExecution" /> }))
+);
+
+const CreateAgent = lazy(() => 
+  import('@/components/CreateAgent')
+    .then(module => ({ default: module.CreateAgent }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="CreateAgent" /> }))
+);
+
+const UsageDashboard = lazy(() => 
+  import('@/components/UsageDashboard')
+    .then(module => ({ default: module.UsageDashboard }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="UsageDashboard" /> }))
+);
+
+const MCPManager = lazy(() => 
+  import('@/components/MCPManager')
+    .then(module => ({ default: module.MCPManager }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="MCPManager" /> }))
+);
+
+const Settings = lazy(() => 
+  import('@/components/Settings')
+    .then(module => ({ default: module.Settings }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="Settings" /> }))
+);
+
+const MarkdownEditor = lazy(() => 
+  import('@/components/MarkdownEditor')
+    .then(module => ({ default: module.MarkdownEditor }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="MarkdownEditor" /> }))
+);
+
+const DashboardMain = lazy(() => 
+  import('@/components/dashboard/DashboardMain')
+    .then(module => ({ default: module.default }))
+    .catch(() => ({ default: () => <ErrorFallback componentName="DashboardMain" /> }))
+);
 // const ClaudeFileEditor = lazy(() => import('@/components/ClaudeFileEditor').then(m => ({ default: m.ClaudeFileEditor })));
 
 // Import non-lazy components for projects view
@@ -29,19 +87,19 @@ interface TabPanelProps {
 }
 
 const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
-  const { updateTab, createChatTab } = useTabState();
+  const { updateTab, createChatTab, createDashboardTab } = useTabState();
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = React.useState<Project | null>(null);
   const [sessions, setSessions] = React.useState<Session[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   
-  // Load projects when tab becomes active and is of type 'projects'
+  // Load projects when tab becomes active and is of type 'projects' or 'dashboard' without project
   useEffect(() => {
-    if (isActive && tab.type === 'projects') {
+    if (isActive && (tab.type === 'projects' || (tab.type === 'dashboard' && !tab.projectData))) {
       loadProjects();
     }
-  }, [isActive, tab.type]);
+  }, [isActive, tab.type, tab.projectData]);
   
   const loadProjects = async () => {
     try {
@@ -89,43 +147,63 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
     switch (tab.type) {
       case 'projects':
         return (
-          <div className="h-full overflow-y-auto">
+          <motion.div 
+            className="h-full overflow-y-auto"
+            variants={pageVariants}
+            initial="initial"
+            animate="in"
+            exit="out"
+          >
             <div className="container mx-auto p-6">
               {/* Header */}
-              <div className="mb-6">
+              <motion.div 
+                className="mb-6"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
                 <h1 className="text-3xl font-bold tracking-tight">CC Projects</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Browse your Claude Code sessions
                 </p>
-              </div>
+              </motion.div>
 
               {/* Error display */}
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive max-w-2xl"
-                >
-                  {error}
-                </motion.div>
-              )}
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive max-w-2xl overflow-hidden"
+                  >
+                    {error}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Loading state */}
               {loading && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <SkeletonList items={6} className="mb-6" />
+                </motion.div>
               )}
 
               {/* Content */}
               {!loading && (
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="sync">
                   {selectedProject ? (
                     <motion.div
                       key="sessions"
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
+                      variants={slideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      custom={1}
                       transition={{ duration: 0.3 }}
                     >
                       <SessionList
@@ -153,71 +231,95 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
                   ) : (
                     <motion.div
                       key="projects"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
+                      variants={slideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      custom={-1}
                       transition={{ duration: 0.3 }}
                     >
-                      {/* New session button at the top */}
                       <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="mb-4"
+                        variants={staggerContainer}
+                        initial="hidden"
+                        animate="show"
+                        className="space-y-6"
                       >
-                        <Button
-                          onClick={handleNewSession}
-                          size="default"
-                          className="w-full max-w-md"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          New Claude Code session
-                        </Button>
+                        {/* New session button at the top */}
+                        <motion.div variants={staggerItem} className="mb-4">
+                          <motion.div
+                            variants={buttonVariants}
+                            whileHover="hover"
+                            whileTap="tap"
+                          >
+                            <Button
+                              onClick={handleNewSession}
+                              size="default"
+                              className="w-full max-w-md transition-all duration-200"
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              New Claude Code session
+                            </Button>
+                          </motion.div>
+                        </motion.div>
+
+                        {/* Running Claude Sessions */}
+                        <motion.div variants={staggerItem}>
+                          <RunningClaudeSessions />
+                        </motion.div>
+
+                        {/* Project list */}
+                        <motion.div variants={staggerItem}>
+                          {projects.length > 0 ? (
+                            <ProjectList
+                              projects={projects}
+                              onProjectClick={handleProjectClick}
+                              onProjectSettings={(project) => {
+                                // Project settings functionality can be added here if needed
+                                console.log('Project settings clicked for:', project);
+                              }}
+                              onProjectDashboard={(project) => {
+                                // Create a dashboard tab with project data
+                                createDashboardTab(project);
+                              }}
+                              loading={loading}
+                              className="animate-fade-in"
+                            />
+                          ) : (
+                            <motion.div 
+                              className="py-8 text-center"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: 0.5 }}
+                            >
+                              <p className="text-sm text-muted-foreground">
+                                No projects found in ~/.claude/projects
+                              </p>
+                            </motion.div>
+                          )}
+                        </motion.div>
                       </motion.div>
-
-                      {/* Running Claude Sessions */}
-                      <RunningClaudeSessions />
-
-                      {/* Project list */}
-                      {projects.length > 0 ? (
-                        <ProjectList
-                          projects={projects}
-                          onProjectClick={handleProjectClick}
-                          onProjectSettings={(project) => {
-                            // Project settings functionality can be added here if needed
-                            console.log('Project settings clicked for:', project);
-                          }}
-                          loading={loading}
-                          className="animate-fade-in"
-                        />
-                      ) : (
-                        <div className="py-8 text-center">
-                          <p className="text-sm text-muted-foreground">
-                            No projects found in ~/.claude/projects
-                          </p>
-                        </div>
-                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
               )}
             </div>
-          </div>
+          </motion.div>
         );
       
       case 'chat':
         return (
-          <ClaudeCodeSession
-            session={tab.sessionData} // Pass the full session object if available
-            initialProjectPath={tab.initialProjectPath || tab.sessionId}
-            onBack={() => {
-              // Go back to projects view in the same tab
-              updateTab(tab.id, {
-                type: 'projects',
-                title: 'CC Projects',
-              });
-            }}
-          />
+          <div className="h-full">
+            <ClaudeCodeSession
+              session={tab.sessionData}
+              initialProjectPath={tab.initialProjectPath || tab.sessionId}
+              onBack={() => {
+                updateTab(tab.id, {
+                  type: 'projects',
+                  title: 'CC Projects',
+                });
+              }}
+            />
+          </div>
         );
       
       case 'agent':
@@ -233,19 +335,65 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
       
       
       case 'usage':
-        return <UsageDashboard onBack={() => {}} />;
+        return (
+          <div className="h-full">
+            <UsageDashboard onBack={() => {}} />
+          </div>
+        );
       
       case 'mcp':
-        return <MCPManager onBack={() => {}} />;
+        return (
+          <div className="h-full">
+            <MCPManager onBack={() => {}} />
+          </div>
+        );
       
       case 'settings':
-        return <Settings onBack={() => {}} />;
+        return (
+          <div className="h-full">
+            <Settings onBack={() => {}} />
+          </div>
+        );
       
       case 'dashboard':
-        return <DashboardMain />;
+        // Use project data from tab if available, otherwise show project selector
+        const dashboardProject = tab.projectData || selectedProject;
+        if (!dashboardProject) {
+          // Show project selector within dashboard
+          return (
+            <motion.div className="h-full flex flex-col">
+              <div className="p-4 border-b">
+                <h1 className="text-2xl font-bold">Project Dashboard</h1>
+                <p className="text-sm text-muted-foreground">Select a project to view its dashboard</p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                <ProjectSelector 
+                  onProjectSelect={(project) => {
+                    // Update tab with selected project data
+                    updateTab(tab.id, {
+                      projectData: project,
+                      title: `Dashboard - ${project.name || project.path.split('/').pop()}`
+                    });
+                  }}
+                />
+              </div>
+            </motion.div>
+          );
+        }
+        return (
+          <DashboardMain 
+            projectId={dashboardProject.id} 
+            projectPath={dashboardProject.path} 
+            onBack={() => updateTab(tab.id, { type: 'projects' })} 
+          />
+        );
       
       case 'claude-md':
-        return <MarkdownEditor onBack={() => {}} />;
+        return (
+          <div className="h-full">
+            <MarkdownEditor onBack={() => {}} />
+          </div>
+        );
       
       case 'claude-file':
         if (!tab.claudeFileId) {
@@ -260,24 +408,26 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
           return <div className="p-4">No agent data specified</div>;
         }
         return (
-          <AgentExecution
-            agent={tab.agentData}
-            onBack={() => {}}
-          />
+          <div className="h-full">
+            <AgentExecution
+              agent={tab.agentData}
+              onBack={() => {}}
+            />
+          </div>
         );
       
       case 'create-agent':
         return (
-          <CreateAgent
-            onAgentCreated={() => {
-              // Close this tab after agent is created
-              window.dispatchEvent(new CustomEvent('close-tab', { detail: { tabId: tab.id } }));
-            }}
-            onBack={() => {
-              // Close this tab when back is clicked
-              window.dispatchEvent(new CustomEvent('close-tab', { detail: { tabId: tab.id } }));
-            }}
-          />
+          <div className="h-full">
+            <CreateAgent
+              onAgentCreated={() => {
+                window.dispatchEvent(new CustomEvent('close-tab', { detail: { tabId: tab.id } }));
+              }}
+              onBack={() => {
+                window.dispatchEvent(new CustomEvent('close-tab', { detail: { tabId: tab.id } }));
+              }}
+            />
+          </div>
         );
       
       case 'import-agent':
@@ -402,7 +552,7 @@ export const TabContent: React.FC = () => {
   
   return (
     <div className="flex-1 h-full relative">
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         {tabs.map((tab) => (
           <TabPanel
             key={tab.id}

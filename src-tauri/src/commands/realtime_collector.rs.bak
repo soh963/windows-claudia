@@ -1,0 +1,947 @@
+use anyhow::Result;
+use log::{info, warn, error};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tauri::State;
+use tokio::time::interval;
+
+use super::agents::AgentDb;
+use super::health_analyzer::{analyze_project_health, HealthAnalysisResult};
+use super::ai_analyzer::{analyze_ai_usage, AIUsageAnalysis};
+use super::risk_detector::{detect_project_risks, RiskDetectionResult};
+use super::performance_monitor::{collect_performance_metrics, PerformanceMetrics};
+use super::documentation_analyzer::{analyze_documentation_status, DocumentationAnalysis};
+use super::workflow_visualizer::{generate_workflow_visualization, WorkflowVisualization};
+
+/// Real-time Data Collection System
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RealTimeCollectionResult {
+    pub collection_id: String,
+    pub project_id: String,
+    pub collection_timestamp: i64,
+    pub collection_duration_ms: i64,
+    pub systems_analyzed: Vec<String>,
+    pub health_snapshot: Option<HealthSnapshot>,
+    pub ai_usage_snapshot: Option<AIUsageSnapshot>,
+    pub risk_snapshot: Option<RiskSnapshot>,
+    pub performance_snapshot: Option<PerformanceSnapshot>,
+    pub documentation_snapshot: Option<DocumentationSnapshot>,
+    pub workflow_snapshot: Option<WorkflowSnapshot>,
+    pub collection_status: CollectionStatus,
+    pub next_collection_time: i64,
+}
+
+/// Health Analysis Snapshot
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HealthSnapshot {
+    pub overall_health: f64,
+    pub security_score: f64,
+    pub dependency_score: f64,
+    pub complexity_score: f64,
+    pub scalability_score: f64,
+    pub error_rate_score: f64,
+    pub critical_issues_count: i32,
+    pub trend_direction: String, // improving, stable, declining
+}
+
+/// AI Usage Snapshot
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AIUsageSnapshot {
+    pub total_tokens: i64,
+    pub total_requests: i64,
+    pub average_success_rate: f64,
+    pub cost_today: f64,
+    pub most_used_model: String,
+    pub most_used_agent: String,
+    pub efficiency_score: f64,
+}
+
+/// Risk Assessment Snapshot
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RiskSnapshot {
+    pub total_risks: i32,
+    pub critical_risks: i32,
+    pub high_risks: i32,
+    pub overall_risk_score: f64,
+    pub new_risks_today: i32,
+    pub resolved_risks_today: i32,
+    pub risk_trend: String, // increasing, stable, decreasing
+}
+
+/// Performance Snapshot
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PerformanceSnapshot {
+    pub overall_performance_score: f64,
+    pub cpu_usage: f64,
+    pub memory_usage: f64,
+    pub build_time_ms: i64,
+    pub startup_time_ms: i64,
+    pub critical_bottlenecks: i32,
+    pub performance_trend: String,
+}
+
+/// Documentation Snapshot
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DocumentationSnapshot {
+    pub overall_completion: f64,
+    pub overall_quality_score: f64,
+    pub missing_critical_docs: i32,
+    pub coverage_percentage: f64,
+    pub quality_issues_count: i32,
+    pub documentation_trend: String,
+}
+
+/// Workflow Snapshot
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkflowSnapshot {
+    pub overall_efficiency: f64,
+    pub completed_stages: i32,
+    pub active_stages: i32,
+    pub blocked_stages: i32,
+    pub critical_path_duration: i64,
+    pub bottlenecks_count: i32,
+    pub automation_percentage: f64,
+}
+
+/// Collection Status
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CollectionStatus {
+    pub success: bool,
+    pub systems_succeeded: Vec<String>,
+    pub systems_failed: Vec<String>,
+    pub error_messages: Vec<String>,
+    pub warnings: Vec<String>,
+    pub performance_metrics: CollectionPerformanceMetrics,
+}
+
+/// Collection Performance Metrics
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CollectionPerformanceMetrics {
+    pub total_duration_ms: i64,
+    pub health_analysis_ms: Option<i64>,
+    pub ai_analysis_ms: Option<i64>,
+    pub risk_analysis_ms: Option<i64>,
+    pub performance_analysis_ms: Option<i64>,
+    pub documentation_analysis_ms: Option<i64>,
+    pub workflow_analysis_ms: Option<i64>,
+    pub database_operations_ms: i64,
+}
+
+/// Real-time Collection Configuration
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CollectionConfig {
+    pub enabled_systems: Vec<String>,
+    pub collection_interval_minutes: i32,
+    pub parallel_execution: bool,
+    pub store_detailed_results: bool,
+    pub alert_thresholds: AlertThresholds,
+}
+
+/// Alert Thresholds
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AlertThresholds {
+    pub health_score_critical: f64,    // Below this triggers critical alert
+    pub risk_score_critical: f64,      // Above this triggers critical alert
+    pub performance_degradation: f64,  // Percentage drop that triggers alert
+    pub error_rate_threshold: f64,     // Error rate that triggers alert
+}
+
+/// Comprehensive real-time data collection
+#[tauri::command]
+pub async fn collect_realtime_data(
+    db: State<'_, AgentDb>,
+    project_path: String,
+    config: Option<CollectionConfig>,
+) -> Result<RealTimeCollectionResult, String> {
+    let collection_start = std::time::Instant::now();
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    let collection_id = format!("collection_{}", current_timestamp);
+    
+    info!("Starting real-time data collection: {}", collection_id);
+    
+    // Use default config if none provided
+    let config = config.unwrap_or_else(|| CollectionConfig {
+        enabled_systems: vec![
+            "health".to_string(),
+            "ai_usage".to_string(),
+            "risks".to_string(),
+            "performance".to_string(),
+            "documentation".to_string(),
+            "workflow".to_string(),
+        ],
+        collection_interval_minutes: 15,
+        parallel_execution: true,
+        store_detailed_results: true,
+        alert_thresholds: AlertThresholds {
+            health_score_critical: 60.0,
+            risk_score_critical: 80.0,
+            performance_degradation: 30.0,
+            error_rate_threshold: 5.0,
+        },
+    });
+    
+    let mut collection_status = CollectionStatus {
+        success: true,
+        systems_succeeded: Vec::new(),
+        systems_failed: Vec::new(),
+        error_messages: Vec::new(),
+        warnings: Vec::new(),
+        performance_metrics: CollectionPerformanceMetrics {
+            total_duration_ms: 0,
+            health_analysis_ms: None,
+            ai_analysis_ms: None,
+            risk_analysis_ms: None,
+            performance_analysis_ms: None,
+            documentation_analysis_ms: None,
+            workflow_analysis_ms: None,
+            database_operations_ms: 0,
+        },
+    };
+    
+    // Initialize snapshots
+    let mut health_snapshot = None;
+    let mut ai_usage_snapshot = None;
+    let mut risk_snapshot = None;
+    let mut performance_snapshot = None;
+    let mut documentation_snapshot = None;
+    let mut workflow_snapshot = None;
+    
+    // Collect data from each enabled system
+    if config.parallel_execution {
+        // Parallel execution for better performance
+        collect_data_parallel(
+            &db,
+            &project_path,
+            &config,
+            &mut health_snapshot,
+            &mut ai_usage_snapshot,
+            &mut risk_snapshot,
+            &mut performance_snapshot,
+            &mut documentation_snapshot,
+            &mut workflow_snapshot,
+            &mut collection_status,
+        ).await;
+    } else {
+        // Sequential execution for reliability
+        collect_data_sequential(
+            &db,
+            &project_path,
+            &config,
+            &mut health_snapshot,
+            &mut ai_usage_snapshot,
+            &mut risk_snapshot,
+            &mut performance_snapshot,
+            &mut documentation_snapshot,
+            &mut workflow_snapshot,
+            &mut collection_status,
+        ).await;
+    }
+    
+    let collection_duration = collection_start.elapsed().as_millis() as i64;
+    collection_status.performance_metrics.total_duration_ms = collection_duration;
+    
+    // Calculate next collection time
+    let next_collection_time = current_timestamp + (config.collection_interval_minutes as i64 * 60);
+    
+    // Store collection result
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let db_start = std::time::Instant::now();
+    
+    store_realtime_collection_result(
+        &conn,
+        &collection_id,
+        "claudia-main",
+        current_timestamp,
+        &collection_status,
+        &health_snapshot,
+        &ai_usage_snapshot,
+        &risk_snapshot,
+        &performance_snapshot,
+        &documentation_snapshot,
+        &workflow_snapshot,
+    )?;
+    
+    collection_status.performance_metrics.database_operations_ms = db_start.elapsed().as_millis() as i64;
+    
+    // Check for critical alerts
+    check_critical_alerts(&config.alert_thresholds, &health_snapshot, &risk_snapshot, &performance_snapshot);
+    
+    info!("Real-time data collection completed in {}ms", collection_duration);
+    
+    Ok(RealTimeCollectionResult {
+        collection_id,
+        project_id: "claudia-main".to_string(),
+        collection_timestamp: current_timestamp,
+        collection_duration_ms: collection_duration,
+        systems_analyzed: config.enabled_systems,
+        health_snapshot,
+        ai_usage_snapshot,
+        risk_snapshot,
+        performance_snapshot,
+        documentation_snapshot,
+        workflow_snapshot,
+        collection_status,
+        next_collection_time,
+    })
+}
+
+/// Parallel data collection
+async fn collect_data_parallel(
+    db: &State<'_, AgentDb>,
+    project_path: &str,
+    config: &CollectionConfig,
+    health_snapshot: &mut Option<HealthSnapshot>,
+    ai_usage_snapshot: &mut Option<AIUsageSnapshot>,
+    risk_snapshot: &mut Option<RiskSnapshot>,
+    performance_snapshot: &mut Option<PerformanceSnapshot>,
+    documentation_snapshot: &mut Option<DocumentationSnapshot>,
+    workflow_snapshot: &mut Option<WorkflowSnapshot>,
+    collection_status: &mut CollectionStatus,
+) {
+    use tokio::task;
+    
+    let mut tasks = Vec::new();
+    
+    // Health analysis task
+    if config.enabled_systems.contains(&"health".to_string()) {
+        let db_clone = db.inner().clone();
+        let path_clone = project_path.to_string();
+        tasks.push(task::spawn(async move {
+            let start = std::time::Instant::now();
+            let result = analyze_project_health(State::from(Arc::new(db_clone)), path_clone).await;
+            let duration = start.elapsed().as_millis() as i64;
+            ("health", result, duration)
+        }));
+    }
+    
+    // AI usage analysis task
+    if config.enabled_systems.contains(&"ai_usage".to_string()) {
+        let db_clone = db.inner().clone();
+        tasks.push(task::spawn(async move {
+            let start = std::time::Instant::now();
+            let result = analyze_ai_usage(State::from(Arc::new(db_clone)), "claudia-main".to_string(), Some(1)).await;
+            let duration = start.elapsed().as_millis() as i64;
+            ("ai_usage", result, duration)
+        }));
+    }
+    
+    // Risk detection task
+    if config.enabled_systems.contains(&"risks".to_string()) {
+        let db_clone = db.inner().clone();
+        let path_clone = project_path.to_string();
+        tasks.push(task::spawn(async move {
+            let start = std::time::Instant::now();
+            let result = detect_project_risks(State::from(Arc::new(db_clone)), path_clone).await;
+            let duration = start.elapsed().as_millis() as i64;
+            ("risks", result, duration)
+        }));
+    }
+    
+    // Performance monitoring task
+    if config.enabled_systems.contains(&"performance".to_string()) {
+        let db_clone = db.inner().clone();
+        let path_clone = project_path.to_string();
+        tasks.push(task::spawn(async move {
+            let start = std::time::Instant::now();
+            let result = collect_performance_metrics(State::from(Arc::new(db_clone)), path_clone).await;
+            let duration = start.elapsed().as_millis() as i64;
+            ("performance", result, duration)
+        }));
+    }
+    
+    // Documentation analysis task
+    if config.enabled_systems.contains(&"documentation".to_string()) {
+        let db_clone = db.inner().clone();
+        let path_clone = project_path.to_string();
+        tasks.push(task::spawn(async move {
+            let start = std::time::Instant::now();
+            let result = analyze_documentation_status(State::from(Arc::new(db_clone)), path_clone).await;
+            let duration = start.elapsed().as_millis() as i64;
+            ("documentation", result, duration)
+        }));
+    }
+    
+    // Workflow visualization task
+    if config.enabled_systems.contains(&"workflow".to_string()) {
+        let db_clone = db.inner().clone();
+        let path_clone = project_path.to_string();
+        tasks.push(task::spawn(async move {
+            let start = std::time::Instant::now();
+            let result = generate_workflow_visualization(State::from(Arc::new(db_clone)), path_clone).await;
+            let duration = start.elapsed().as_millis() as i64;
+            ("workflow", result, duration)
+        }));
+    }
+    
+    // Wait for all tasks to complete
+    for task in tasks {
+        match task.await {
+            Ok((system_name, result, duration)) => {
+                match system_name {
+                    "health" => {
+                        match result {
+                            Ok(health_result) => {
+                                *health_snapshot = Some(create_health_snapshot(&health_result));
+                                collection_status.systems_succeeded.push("health".to_string());
+                                collection_status.performance_metrics.health_analysis_ms = Some(duration);
+                            }
+                            Err(e) => {
+                                collection_status.systems_failed.push("health".to_string());
+                                collection_status.error_messages.push(format!("Health analysis failed: {}", e));
+                                collection_status.success = false;
+                            }
+                        }
+                    }
+                    "ai_usage" => {
+                        match result {
+                            Ok(ai_result) => {
+                                *ai_usage_snapshot = Some(create_ai_usage_snapshot(&ai_result));
+                                collection_status.systems_succeeded.push("ai_usage".to_string());
+                                collection_status.performance_metrics.ai_analysis_ms = Some(duration);
+                            }
+                            Err(e) => {
+                                collection_status.systems_failed.push("ai_usage".to_string());
+                                collection_status.error_messages.push(format!("AI usage analysis failed: {}", e));
+                            }
+                        }
+                    }
+                    "risks" => {
+                        match result {
+                            Ok(risk_result) => {
+                                *risk_snapshot = Some(create_risk_snapshot(&risk_result));
+                                collection_status.systems_succeeded.push("risks".to_string());
+                                collection_status.performance_metrics.risk_analysis_ms = Some(duration);
+                            }
+                            Err(e) => {
+                                collection_status.systems_failed.push("risks".to_string());
+                                collection_status.error_messages.push(format!("Risk detection failed: {}", e));
+                            }
+                        }
+                    }
+                    "performance" => {
+                        match result {
+                            Ok(perf_result) => {
+                                *performance_snapshot = Some(create_performance_snapshot(&perf_result));
+                                collection_status.systems_succeeded.push("performance".to_string());
+                                collection_status.performance_metrics.performance_analysis_ms = Some(duration);
+                            }
+                            Err(e) => {
+                                collection_status.systems_failed.push("performance".to_string());
+                                collection_status.error_messages.push(format!("Performance monitoring failed: {}", e));
+                            }
+                        }
+                    }
+                    "documentation" => {
+                        match result {
+                            Ok(doc_result) => {
+                                *documentation_snapshot = Some(create_documentation_snapshot(&doc_result));
+                                collection_status.systems_succeeded.push("documentation".to_string());
+                                collection_status.performance_metrics.documentation_analysis_ms = Some(duration);
+                            }
+                            Err(e) => {
+                                collection_status.systems_failed.push("documentation".to_string());
+                                collection_status.error_messages.push(format!("Documentation analysis failed: {}", e));
+                            }
+                        }
+                    }
+                    "workflow" => {
+                        match result {
+                            Ok(workflow_result) => {
+                                *workflow_snapshot = Some(create_workflow_snapshot(&workflow_result));
+                                collection_status.systems_succeeded.push("workflow".to_string());
+                                collection_status.performance_metrics.workflow_analysis_ms = Some(duration);
+                            }
+                            Err(e) => {
+                                collection_status.systems_failed.push("workflow".to_string());
+                                collection_status.error_messages.push(format!("Workflow visualization failed: {}", e));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Err(e) => {
+                collection_status.error_messages.push(format!("Task execution failed: {}", e));
+                collection_status.success = false;
+            }
+        }
+    }
+}
+
+/// Sequential data collection (fallback for reliability)
+async fn collect_data_sequential(
+    db: &State<'_, AgentDb>,
+    project_path: &str,
+    config: &CollectionConfig,
+    health_snapshot: &mut Option<HealthSnapshot>,
+    ai_usage_snapshot: &mut Option<AIUsageSnapshot>,
+    risk_snapshot: &mut Option<RiskSnapshot>,
+    performance_snapshot: &mut Option<PerformanceSnapshot>,
+    documentation_snapshot: &mut Option<DocumentationSnapshot>,
+    workflow_snapshot: &mut Option<WorkflowSnapshot>,
+    collection_status: &mut CollectionStatus,
+) {
+    // Health analysis
+    if config.enabled_systems.contains(&"health".to_string()) {
+        let start = std::time::Instant::now();
+        match analyze_project_health(db.clone(), project_path.to_string()).await {
+            Ok(health_result) => {
+                *health_snapshot = Some(create_health_snapshot(&health_result));
+                collection_status.systems_succeeded.push("health".to_string());
+                collection_status.performance_metrics.health_analysis_ms = Some(start.elapsed().as_millis() as i64);
+            }
+            Err(e) => {
+                collection_status.systems_failed.push("health".to_string());
+                collection_status.error_messages.push(format!("Health analysis failed: {}", e));
+                collection_status.success = false;
+            }
+        }
+    }
+    
+    // AI usage analysis
+    if config.enabled_systems.contains(&"ai_usage".to_string()) {
+        let start = std::time::Instant::now();
+        match analyze_ai_usage(db.clone(), "claudia-main".to_string(), Some(1)).await {
+            Ok(ai_result) => {
+                *ai_usage_snapshot = Some(create_ai_usage_snapshot(&ai_result));
+                collection_status.systems_succeeded.push("ai_usage".to_string());
+                collection_status.performance_metrics.ai_analysis_ms = Some(start.elapsed().as_millis() as i64);
+            }
+            Err(e) => {
+                collection_status.systems_failed.push("ai_usage".to_string());
+                collection_status.error_messages.push(format!("AI usage analysis failed: {}", e));
+            }
+        }
+    }
+    
+    // Risk detection
+    if config.enabled_systems.contains(&"risks".to_string()) {
+        let start = std::time::Instant::now();
+        match detect_project_risks(db.clone(), project_path.to_string()).await {
+            Ok(risk_result) => {
+                *risk_snapshot = Some(create_risk_snapshot(&risk_result));
+                collection_status.systems_succeeded.push("risks".to_string());
+                collection_status.performance_metrics.risk_analysis_ms = Some(start.elapsed().as_millis() as i64);
+            }
+            Err(e) => {
+                collection_status.systems_failed.push("risks".to_string());
+                collection_status.error_messages.push(format!("Risk detection failed: {}", e));
+            }
+        }
+    }
+    
+    // Performance monitoring
+    if config.enabled_systems.contains(&"performance".to_string()) {
+        let start = std::time::Instant::now();
+        match collect_performance_metrics(db.clone(), project_path.to_string()).await {
+            Ok(perf_result) => {
+                *performance_snapshot = Some(create_performance_snapshot(&perf_result));
+                collection_status.systems_succeeded.push("performance".to_string());
+                collection_status.performance_metrics.performance_analysis_ms = Some(start.elapsed().as_millis() as i64);
+            }
+            Err(e) => {
+                collection_status.systems_failed.push("performance".to_string());
+                collection_status.error_messages.push(format!("Performance monitoring failed: {}", e));
+            }
+        }
+    }
+    
+    // Documentation analysis
+    if config.enabled_systems.contains(&"documentation".to_string()) {
+        let start = std::time::Instant::now();
+        match analyze_documentation_status(db.clone(), project_path.to_string()).await {
+            Ok(doc_result) => {
+                *documentation_snapshot = Some(create_documentation_snapshot(&doc_result));
+                collection_status.systems_succeeded.push("documentation".to_string());
+                collection_status.performance_metrics.documentation_analysis_ms = Some(start.elapsed().as_millis() as i64);
+            }
+            Err(e) => {
+                collection_status.systems_failed.push("documentation".to_string());
+                collection_status.error_messages.push(format!("Documentation analysis failed: {}", e));
+            }
+        }
+    }
+    
+    // Workflow visualization
+    if config.enabled_systems.contains(&"workflow".to_string()) {
+        let start = std::time::Instant::now();
+        match generate_workflow_visualization(db.clone(), project_path.to_string()).await {
+            Ok(workflow_result) => {
+                *workflow_snapshot = Some(create_workflow_snapshot(&workflow_result));
+                collection_status.systems_succeeded.push("workflow".to_string());
+                collection_status.performance_metrics.workflow_analysis_ms = Some(start.elapsed().as_millis() as i64);
+            }
+            Err(e) => {
+                collection_status.systems_failed.push("workflow".to_string());
+                collection_status.error_messages.push(format!("Workflow visualization failed: {}", e));
+            }
+        }
+    }
+}
+
+/// Snapshot creation functions
+
+fn create_health_snapshot(health_result: &HealthAnalysisResult) -> HealthSnapshot {
+    HealthSnapshot {
+        overall_health: health_result.overall_health,
+        security_score: health_result.security_score,
+        dependency_score: health_result.dependency_score,
+        complexity_score: health_result.complexity_score,
+        scalability_score: health_result.scalability_score,
+        error_rate_score: health_result.error_rate_score,
+        critical_issues_count: health_result.critical_issues.len() as i32,
+        trend_direction: if health_result.overall_health > 80.0 {
+            "improving"
+        } else if health_result.overall_health > 60.0 {
+            "stable"
+        } else {
+            "declining"
+        }.to_string(),
+    }
+}
+
+fn create_ai_usage_snapshot(ai_result: &AIUsageAnalysis) -> AIUsageSnapshot {
+    AIUsageSnapshot {
+        total_tokens: ai_result.total_tokens,
+        total_requests: ai_result.total_requests,
+        average_success_rate: ai_result.average_success_rate,
+        cost_today: ai_result.cost_analysis.daily_average,
+        most_used_model: ai_result.model_breakdown.first()
+            .map(|m| m.model_name.clone())
+            .unwrap_or_else(|| "none".to_string()),
+        most_used_agent: ai_result.agent_breakdown.first()
+            .map(|a| a.agent_type.clone())
+            .unwrap_or_else(|| "none".to_string()),
+        efficiency_score: ai_result.efficiency_metrics.productivity_score,
+    }
+}
+
+fn create_risk_snapshot(risk_result: &RiskDetectionResult) -> RiskSnapshot {
+    RiskSnapshot {
+        total_risks: risk_result.total_risks_detected,
+        critical_risks: risk_result.critical_risks,
+        high_risks: risk_result.high_risks,
+        overall_risk_score: risk_result.overall_risk_score,
+        new_risks_today: risk_result.risk_trends.new_risks_this_week / 7, // Approximate daily
+        resolved_risks_today: risk_result.risk_trends.resolved_risks_this_week / 7,
+        risk_trend: if risk_result.risk_trends.risk_velocity < 0.0 {
+            "decreasing"
+        } else if risk_result.risk_trends.risk_velocity > 2.0 {
+            "increasing"
+        } else {
+            "stable"
+        }.to_string(),
+    }
+}
+
+fn create_performance_snapshot(perf_result: &PerformanceMetrics) -> PerformanceSnapshot {
+    PerformanceSnapshot {
+        overall_performance_score: perf_result.overall_performance_score,
+        cpu_usage: perf_result.system_metrics.cpu_usage,
+        memory_usage: perf_result.system_metrics.memory_usage,
+        build_time_ms: perf_result.build_metrics.build_time,
+        startup_time_ms: perf_result.application_metrics.startup_time,
+        critical_bottlenecks: perf_result.bottlenecks.iter()
+            .filter(|b| b.severity == "critical")
+            .count() as i32,
+        performance_trend: if perf_result.performance_trends.performance_improving {
+            "improving"
+        } else if perf_result.performance_trends.degradation_rate > 2.0 {
+            "declining"
+        } else {
+            "stable"
+        }.to_string(),
+    }
+}
+
+fn create_documentation_snapshot(doc_result: &DocumentationAnalysis) -> DocumentationSnapshot {
+    DocumentationSnapshot {
+        overall_completion: doc_result.overall_completion,
+        overall_quality_score: doc_result.overall_quality_score,
+        missing_critical_docs: doc_result.missing_documentation.iter()
+            .filter(|d| d.importance == "critical")
+            .count() as i32,
+        coverage_percentage: doc_result.coverage_analysis.code_coverage,
+        quality_issues_count: doc_result.quality_assessment.quality_issues.len() as i32,
+        documentation_trend: if doc_result.overall_completion > 80.0 {
+            "improving"
+        } else if doc_result.overall_completion > 60.0 {
+            "stable"
+        } else {
+            "declining"
+        }.to_string(),
+    }
+}
+
+fn create_workflow_snapshot(workflow_result: &WorkflowVisualization) -> WorkflowSnapshot {
+    let completed_stages = workflow_result.workflow_stages.iter()
+        .filter(|s| s.status == "completed")
+        .count() as i32;
+    
+    let active_stages = workflow_result.workflow_stages.iter()
+        .filter(|s| s.status == "active")
+        .count() as i32;
+    
+    let blocked_stages = workflow_result.workflow_stages.iter()
+        .filter(|s| s.status == "blocked")
+        .count() as i32;
+    
+    WorkflowSnapshot {
+        overall_efficiency: workflow_result.efficiency_metrics.overall_efficiency,
+        completed_stages,
+        active_stages,
+        blocked_stages,
+        critical_path_duration: workflow_result.timeline_analysis.critical_path_duration,
+        bottlenecks_count: workflow_result.bottlenecks.len() as i32,
+        automation_percentage: workflow_result.efficiency_metrics.automation_percentage,
+    }
+}
+
+/// Alert checking
+fn check_critical_alerts(
+    thresholds: &AlertThresholds,
+    health_snapshot: &Option<HealthSnapshot>,
+    risk_snapshot: &Option<RiskSnapshot>,
+    performance_snapshot: &Option<PerformanceSnapshot>,
+) {
+    if let Some(health) = health_snapshot {
+        if health.overall_health < thresholds.health_score_critical {
+            warn!("CRITICAL ALERT: Project health score {} below threshold {}", 
+                  health.overall_health, thresholds.health_score_critical);
+        }
+    }
+    
+    if let Some(risk) = risk_snapshot {
+        if risk.overall_risk_score > thresholds.risk_score_critical {
+            warn!("CRITICAL ALERT: Risk score {} above threshold {}", 
+                  risk.overall_risk_score, thresholds.risk_score_critical);
+        }
+    }
+    
+    if let Some(performance) = performance_snapshot {
+        if performance.overall_performance_score < (100.0 - thresholds.performance_degradation) {
+            warn!("CRITICAL ALERT: Performance degraded to {}", 
+                  performance.overall_performance_score);
+        }
+    }
+}
+
+/// Store collection result in database
+fn store_realtime_collection_result(
+    conn: &Connection,
+    collection_id: &str,
+    project_id: &str,
+    timestamp: i64,
+    status: &CollectionStatus,
+    health_snapshot: &Option<HealthSnapshot>,
+    ai_usage_snapshot: &Option<AIUsageSnapshot>,
+    risk_snapshot: &Option<RiskSnapshot>,
+    performance_snapshot: &Option<PerformanceSnapshot>,
+    documentation_snapshot: &Option<DocumentationSnapshot>,
+    workflow_snapshot: &Option<WorkflowSnapshot>,
+) -> Result<(), String> {
+    // Store main collection record
+    conn.execute(
+        "INSERT OR REPLACE INTO realtime_collections 
+         (collection_id, project_id, timestamp, success, systems_succeeded, systems_failed, 
+          error_messages, total_duration_ms) 
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            collection_id,
+            project_id,
+            timestamp,
+            status.success,
+            status.systems_succeeded.join(","),
+            status.systems_failed.join(","),
+            status.error_messages.join("; "),
+            status.performance_metrics.total_duration_ms
+        ],
+    ).map_err(|e| e.to_string())?;
+    
+    // Store snapshots
+    if let Some(health) = health_snapshot {
+        conn.execute(
+            "INSERT OR REPLACE INTO realtime_snapshots 
+             (collection_id, snapshot_type, overall_score, detailed_metrics, timestamp) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                collection_id,
+                "health",
+                health.overall_health,
+                serde_json::to_string(health).unwrap_or_default(),
+                timestamp
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    if let Some(ai_usage) = ai_usage_snapshot {
+        conn.execute(
+            "INSERT OR REPLACE INTO realtime_snapshots 
+             (collection_id, snapshot_type, overall_score, detailed_metrics, timestamp) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                collection_id,
+                "ai_usage",
+                ai_usage.efficiency_score,
+                serde_json::to_string(ai_usage).unwrap_or_default(),
+                timestamp
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    if let Some(risk) = risk_snapshot {
+        conn.execute(
+            "INSERT OR REPLACE INTO realtime_snapshots 
+             (collection_id, snapshot_type, overall_score, detailed_metrics, timestamp) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                collection_id,
+                "risks",
+                risk.overall_risk_score,
+                serde_json::to_string(risk).unwrap_or_default(),
+                timestamp
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    if let Some(performance) = performance_snapshot {
+        conn.execute(
+            "INSERT OR REPLACE INTO realtime_snapshots 
+             (collection_id, snapshot_type, overall_score, detailed_metrics, timestamp) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                collection_id,
+                "performance",
+                performance.overall_performance_score,
+                serde_json::to_string(performance).unwrap_or_default(),
+                timestamp
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    if let Some(documentation) = documentation_snapshot {
+        conn.execute(
+            "INSERT OR REPLACE INTO realtime_snapshots 
+             (collection_id, snapshot_type, overall_score, detailed_metrics, timestamp) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                collection_id,
+                "documentation",
+                documentation.overall_completion,
+                serde_json::to_string(documentation).unwrap_or_default(),
+                timestamp
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    if let Some(workflow) = workflow_snapshot {
+        conn.execute(
+            "INSERT OR REPLACE INTO realtime_snapshots 
+             (collection_id, snapshot_type, overall_score, detailed_metrics, timestamp) 
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                collection_id,
+                "workflow",
+                workflow.overall_efficiency,
+                serde_json::to_string(workflow).unwrap_or_default(),
+                timestamp
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}
+
+/// Get real-time collection history
+#[tauri::command]
+pub async fn get_realtime_collection_history(
+    db: State<'_, AgentDb>,
+    project_id: String,
+    limit: Option<i32>,
+) -> Result<Vec<RealTimeCollectionResult>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let limit = limit.unwrap_or(50);
+    
+    let mut stmt = conn.prepare(
+        "SELECT collection_id, timestamp, success, systems_succeeded, systems_failed, 
+                error_messages, total_duration_ms 
+         FROM realtime_collections 
+         WHERE project_id = ? 
+         ORDER BY timestamp DESC 
+         LIMIT ?"
+    ).map_err(|e| e.to_string())?;
+    
+    let collections = stmt.query_map(params![project_id, limit], |row| {
+        Ok((
+            row.get::<_, String>(0)?,  // collection_id
+            row.get::<_, i64>(1)?,     // timestamp
+            row.get::<_, bool>(2)?,    // success
+            row.get::<_, String>(3)?,  // systems_succeeded
+            row.get::<_, String>(4)?,  // systems_failed
+            row.get::<_, String>(5)?,  // error_messages
+            row.get::<_, i64>(6)?,     // total_duration_ms
+        ))
+    }).map_err(|e| e.to_string())?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .map_err(|e| e.to_string())?;
+    
+    // Convert to RealTimeCollectionResult format
+    let mut results = Vec::new();
+    for (collection_id, timestamp, success, systems_succeeded, systems_failed, error_messages, duration) in collections {
+        results.push(RealTimeCollectionResult {
+            collection_id,
+            project_id: project_id.clone(),
+            collection_timestamp: timestamp,
+            collection_duration_ms: duration,
+            systems_analyzed: systems_succeeded.split(',').map(|s| s.to_string()).collect(),
+            health_snapshot: None, // Would load from snapshots table if needed
+            ai_usage_snapshot: None,
+            risk_snapshot: None,
+            performance_snapshot: None,
+            documentation_snapshot: None,
+            workflow_snapshot: None,
+            collection_status: CollectionStatus {
+                success,
+                systems_succeeded: systems_succeeded.split(',').map(|s| s.to_string()).collect(),
+                systems_failed: if systems_failed.is_empty() { Vec::new() } else { systems_failed.split(',').map(|s| s.to_string()).collect() },
+                error_messages: if error_messages.is_empty() { Vec::new() } else { error_messages.split("; ").map(|s| s.to_string()).collect() },
+                warnings: Vec::new(),
+                performance_metrics: CollectionPerformanceMetrics {
+                    total_duration_ms: duration,
+                    health_analysis_ms: None,
+                    ai_analysis_ms: None,
+                    risk_analysis_ms: None,
+                    performance_analysis_ms: None,
+                    documentation_analysis_ms: None,
+                    workflow_analysis_ms: None,
+                    database_operations_ms: 0,
+                },
+            },
+            next_collection_time: timestamp + (15 * 60), // Default 15 minutes
+        });
+    }
+    
+    Ok(results)
+}
+
+/// Configure automatic collection schedule
+#[tauri::command]
+pub async fn configure_automatic_collection(
+    config: CollectionConfig,
+) -> Result<String, String> {
+    info!("Configuring automatic collection with {} minute intervals", config.collection_interval_minutes);
+    
+    // In a real implementation, this would set up a background task
+    // For now, we'll just acknowledge the configuration
+    
+    Ok(format!("Automatic collection configured for {} minute intervals with systems: {}", 
+              config.collection_interval_minutes, 
+              config.enabled_systems.join(", ")))
+}

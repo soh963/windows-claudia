@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use super::agents::AgentDb;
+use super::ai_usage_tracker::{get_ai_usage_stats, AIUsageStats};
 
 /// Project Health Metrics
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -174,11 +175,30 @@ pub async fn dashboard_analyze_project(
     project_path: String,
 ) -> Result<String, String> {
     use crate::analysis::ProjectAnalyzer;
+    use crate::commands::dashboard_utils::normalize_path;
+    use std::path::Path;
     
     info!("Starting comprehensive project analysis for project: {}", project_id);
     
-    // Create analyzer instance
-    let analyzer = ProjectAnalyzer::new(project_path.clone(), project_id.clone());
+    // Validate and normalize project path
+    let canonical_path = match normalize_path(&project_path) {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Invalid project path '{}': {}", project_path, e);
+            return Err(format!("Invalid project path '{}': {}", project_path, e));
+        }
+    };
+    
+    // Double-check that the path exists
+    if !Path::new(&canonical_path).exists() {
+        error!("Project path does not exist: {}", canonical_path);
+        return Err(format!("Project path does not exist: {}", canonical_path));
+    }
+    
+    info!("Analyzing project at normalized path: {}", canonical_path);
+    
+    // Create analyzer instance with normalized path
+    let analyzer = ProjectAnalyzer::new(canonical_path.clone(), project_id.clone());
     
     // Perform health analysis
     match analyzer.analyze_health().await {
@@ -701,4 +721,170 @@ fn get_dashboard_config(
         .map_err(|e| e.to_string())?;
 
     Ok(config)
+}
+
+/// Get comprehensive AI analytics for dashboard
+#[tauri::command]
+pub async fn dashboard_get_ai_analytics(
+    db: State<'_, AgentDb>,
+    project_id: String,
+    days_limit: Option<i64>,
+) -> Result<AIUsageStats, String> {
+    get_ai_usage_stats(db, project_id, days_limit).await
+}
+
+/// Get AI cost trends over time
+#[tauri::command]
+pub async fn dashboard_get_ai_cost_trends(
+    db: State<'_, AgentDb>,
+    project_id: String,
+    days_limit: Option<i64>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    
+    let time_filter = match days_limit {
+        Some(days) => format!("AND timestamp > (strftime('%s', 'now') - {} * 24 * 60 * 60)", days),
+        None => String::new(),
+    };
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT session_date, 
+                SUM(total_cost) as daily_cost,
+                SUM(token_count) as daily_tokens,
+                COUNT(DISTINCT model_name) as models_used,
+                AVG(success_rate) as avg_success_rate,
+                GROUP_CONCAT(DISTINCT model_name) as models_list
+         FROM ai_usage_metrics 
+         WHERE project_id = ?1 {} 
+         GROUP BY session_date 
+         ORDER BY session_date DESC 
+         LIMIT 30", 
+        time_filter
+    )).map_err(|e| e.to_string())?;
+
+    let trends = stmt.query_map(params![&project_id], |row| {
+        Ok(serde_json::json!({
+            "date": row.get::<_, String>(0)?,
+            "cost": row.get::<_, f64>(1)?,
+            "tokens": row.get::<_, i64>(2)?,
+            "models_used": row.get::<_, i64>(3)?,
+            "success_rate": row.get::<_, f64>(4)?,
+            "models_list": row.get::<_, String>(5)?.split(',').collect::<Vec<&str>>()
+        }))
+    }).map_err(|e| e.to_string())?;
+
+    let mut result = Vec::new();
+    for trend in trends {
+        result.push(trend.map_err(|e| e.to_string())?);
+    }
+
+    Ok(result)
+}
+
+/// Get AI model performance comparison
+#[tauri::command]
+pub async fn dashboard_get_model_performance(
+    db: State<'_, AgentDb>,
+    project_id: String,
+    days_limit: Option<i64>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    
+    let time_filter = match days_limit {
+        Some(days) => format!("AND timestamp > (strftime('%s', 'now') - {} * 24 * 60 * 60)", days),
+        None => String::new(),
+    };
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT model_name,
+                SUM(token_count) as total_tokens,
+                SUM(request_count) as total_requests,
+                AVG(success_rate) as avg_success_rate,
+                AVG(avg_response_time) as avg_response_time,
+                SUM(total_cost) as total_cost,
+                COUNT(DISTINCT session_date) as days_active,
+                AVG(token_count / request_count) as avg_tokens_per_request
+         FROM ai_usage_metrics 
+         WHERE project_id = ?1 {} 
+         GROUP BY model_name 
+         ORDER BY total_tokens DESC", 
+        time_filter
+    )).map_err(|e| e.to_string())?;
+
+    let performance = stmt.query_map(params![&project_id], |row| {
+        Ok(serde_json::json!({
+            "model_name": row.get::<_, String>(0)?,
+            "total_tokens": row.get::<_, i64>(1)?,
+            "total_requests": row.get::<_, i64>(2)?,
+            "success_rate": row.get::<_, f64>(3)?,
+            "avg_response_time": row.get::<_, Option<f64>>(4)?,
+            "total_cost": row.get::<_, f64>(5)?,
+            "days_active": row.get::<_, i64>(6)?,
+            "avg_tokens_per_request": row.get::<_, f64>(7)?,
+            "cost_efficiency": row.get::<_, f64>(5)? / (row.get::<_, i64>(1)? as f64 / 1000.0),
+            "performance_score": (row.get::<_, f64>(3)? / 100.0) * 
+                (1.0 / (1.0 + (row.get::<_, Option<f64>>(4)?.unwrap_or(200.0) / 1000.0)))
+        }))
+    }).map_err(|e| e.to_string())?;
+
+    let mut result = Vec::new();
+    for perf in performance {
+        result.push(perf.map_err(|e| e.to_string())?);
+    }
+
+    Ok(result)
+}
+
+/// Get MCP server usage analytics
+#[tauri::command]
+pub async fn dashboard_get_mcp_analytics(
+    db: State<'_, AgentDb>,
+    project_id: String,
+    days_limit: Option<i64>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    
+    let time_filter = match days_limit {
+        Some(days) => format!("AND timestamp > (strftime('%s', 'now') - {} * 24 * 60 * 60)", days),
+        None => String::new(),
+    };
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT mcp_server,
+                SUM(token_count) as total_tokens,
+                SUM(request_count) as total_requests,
+                AVG(success_rate) as avg_success_rate,
+                AVG(avg_response_time) as avg_response_time,
+                COUNT(DISTINCT model_name) as models_used,
+                COUNT(DISTINCT session_date) as days_active,
+                GROUP_CONCAT(DISTINCT model_name) as models_list
+         FROM ai_usage_metrics 
+         WHERE project_id = ?1 AND mcp_server IS NOT NULL {} 
+         GROUP BY mcp_server 
+         ORDER BY total_requests DESC", 
+        time_filter
+    )).map_err(|e| e.to_string())?;
+
+    let analytics = stmt.query_map(params![&project_id], |row| {
+        Ok(serde_json::json!({
+            "mcp_server": row.get::<_, String>(0)?,
+            "total_tokens": row.get::<_, i64>(1)?,
+            "total_requests": row.get::<_, i64>(2)?,
+            "success_rate": row.get::<_, f64>(3)?,
+            "avg_response_time": row.get::<_, Option<f64>>(4)?,
+            "models_used": row.get::<_, i64>(5)?,
+            "days_active": row.get::<_, i64>(6)?,
+            "models_list": row.get::<_, String>(7)?.split(',').collect::<Vec<&str>>(),
+            "requests_per_day": row.get::<_, i64>(2)? as f64 / row.get::<_, i64>(6)? as f64,
+            "efficiency_score": row.get::<_, f64>(3)? / 100.0 * 
+                (1.0 / (1.0 + (row.get::<_, Option<f64>>(4)?.unwrap_or(300.0) / 1000.0)))
+        }))
+    }).map_err(|e| e.to_string())?;
+
+    let mut result = Vec::new();
+    for analytic in analytics {
+        result.push(analytic.map_err(|e| e.to_string())?);
+    }
+
+    Ok(result)
 }

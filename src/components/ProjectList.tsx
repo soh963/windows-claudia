@@ -6,7 +6,8 @@ import {
   FileText, 
   ChevronRight, 
   Settings,
-  MoreVertical
+  MoreVertical,
+  Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,6 +36,10 @@ interface ProjectListProps {
    * Callback when hooks configuration is clicked
    */
   onProjectSettings?: (project: Project) => void;
+  /**
+   * Callback when dashboard is clicked for a project
+   */
+  onProjectDashboard?: (project: Project) => void;
   /**
    * Whether the list is currently loading
    */
@@ -68,6 +73,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   projects,
   onProjectClick,
   onProjectSettings,
+  onProjectDashboard,
   className,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -110,9 +116,9 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                         {getProjectName(project.path)}
                       </h3>
                     </div>
-                    {project.sessions.length > 0 && (
+                    {(project.sessions?.length || project.sessions_count) && (
                       <Badge variant="secondary" className="shrink-0 ml-2">
-                        {project.sessions.length}
+                        {project.sessions?.length || project.sessions_count || 0}
                       </Badge>
                     )}
                   </div>
@@ -126,16 +132,16 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      <span>{formatTimeAgo(project.created_at * 1000)}</span>
+                      <span>{formatTimeAgo(new Date(project.created_at).getTime())}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <FileText className="h-3 w-3" />
-                      <span>{project.sessions.length}</span>
+                      <span>{project.sessions?.length || project.sessions_count || 0}</span>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {onProjectSettings && (
+                    {(onProjectSettings || onProjectDashboard) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -143,15 +149,28 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onProjectSettings(project);
-                            }}
-                          >
-                            <Settings className="h-4 w-4 mr-2" />
-                            Hooks
-                          </DropdownMenuItem>
+                          {onProjectDashboard && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onProjectDashboard(project);
+                              }}
+                            >
+                              <Activity className="h-4 w-4 mr-2" />
+                              Dashboard
+                            </DropdownMenuItem>
+                          )}
+                          {onProjectSettings && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onProjectSettings(project);
+                              }}
+                            >
+                              <Settings className="h-4 w-4 mr-2" />
+                              Hooks
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}

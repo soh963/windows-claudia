@@ -176,7 +176,19 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 export const useThemeContext = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useThemeContext must be used within a ThemeProvider');
+    // Provide fallback to prevent React Error #130 in production
+    console.warn('useThemeContext called outside ThemeProvider, providing fallback');
+    return {
+      theme: 'dark' as ThemeMode,
+      customColors: DEFAULT_CUSTOM_COLORS,
+      setTheme: async (theme: ThemeMode) => {
+        console.warn(`[Theme Fallback] setTheme called with: ${theme}`);
+      },
+      setCustomColors: async (_colors: Partial<CustomThemeColors>) => {
+        console.warn('[Theme Fallback] setCustomColors called');
+      },
+      isLoading: false,
+    } as ThemeContextType;
   }
   return context;
 };

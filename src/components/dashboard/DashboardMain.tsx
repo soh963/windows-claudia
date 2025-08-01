@@ -1,657 +1,371 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Badge } from '../ui/badge';
-import { Progress } from '../ui/progress';
-import { Alert, AlertDescription } from '../ui/alert';
-import { 
-  Activity, 
-  AlertTriangle, 
-  TrendingUp,
-  Target
-} from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, RefreshCw, BarChart3, Database } from 'lucide-react';
+import { api } from '@/lib/api';
+import type { DashboardSummary } from '@/lib/api';
+import { SkeletonDashboard } from '@/components/ui/skeleton';
+import { dashboardVariants, pageVariants, pageTransition, buttonVariants } from '@/lib/animations';
+import { performanceMonitor, measureAsync } from '@/lib/performance';
 
-// Types matching the Rust backend
-interface ProjectHealthMetric {
-  id?: number;
-  project_id: string;
-  metric_type: string;
-  value: number;
-  timestamp: number;
-  details?: string;
-  trend?: string;
-}
-
-interface FeatureItem {
-  id?: number;
-  project_id: string;
-  name: string;
-  description?: string;
-  status: string;
-  independence_score?: number;
-  dependencies?: string;
-  file_paths?: string;
-  complexity_score?: number;
-  created_at: number;
-  updated_at: number;
-}
-
-interface RiskItem {
-  id?: number;
-  project_id: string;
-  category: string;
-  severity: string;
-  title: string;
-  description: string;
-  mitigation?: string;
-  status: string;
-  impact_score?: number;
-  probability?: number;
-  detected_at: number;
-  resolved_at?: number;
-  file_paths?: string;
-}
-
-interface DocumentationStatus {
-  id?: number;
-  project_id: string;
-  doc_type: string;
-  completion_percentage?: number;
-  total_sections?: number;
-  completed_sections?: number;
-  missing_sections?: string;
-  file_paths?: string;
-  last_updated: number;
-  quality_score?: number;
-}
-
-interface AIUsageMetric {
-  id?: number;
-  project_id: string;
-  model_name: string;
-  agent_type?: string;
-  mcp_server?: string;
-  token_count: number;
-  request_count: number;
-  success_count: number;
-  failure_count: number;
-  success_rate?: number;
-  avg_response_time?: number;
-  total_cost?: number;
-  session_date: string;
-  timestamp: number;
-}
-
-interface WorkflowStage {
-  id?: number;
-  project_id: string;
-  stage_name: string;
-  stage_order: number;
-  status: string;
-  start_date?: number;
-  end_date?: number;
-  duration_days?: number;
-  efficiency_score?: number;
-  bottlenecks?: string;
-  updated_at: number;
-}
-
-interface ProjectGoals {
-  id?: number;
-  project_id: string;
-  primary_goal?: string;
-  secondary_goals?: string;
-  overall_completion?: number;
-  features_completion?: number;
-  documentation_completion?: number;
-  tests_completion?: number;
-  deployment_readiness?: number;
-  created_at: number;
-  updated_at: number;
-}
-
-interface DashboardConfig {
-  id?: number;
-  project_id: string;
-  config_version?: string;
-  refresh_interval?: number;
-  cache_duration?: number;
-  enabled_widgets?: string;
-  custom_metrics?: string;
-  created_at: number;
-  updated_at: number;
-}
-
-interface DashboardSummary {
-  project_id: string;
-  health_metrics: ProjectHealthMetric[];
-  feature_status: FeatureItem[];
-  risk_items: RiskItem[];
-  documentation_status: DocumentationStatus[];
-  ai_usage: AIUsageMetric[];
-  workflow_stages: WorkflowStage[];
-  project_goals?: ProjectGoals;
-  config?: DashboardConfig;
-}
+// Import all dashboard components
+import { HealthMetrics } from './HealthMetrics';
+import CompletionStatus from './CompletionStatus';
+import FeatureIndependence from './FeatureIndependence';
+import AIAnalytics from './AIAnalytics';
+import RiskAssessment from './RiskAssessment';
+import DocumentationStatus from './DocumentationStatus';
+import WorkflowVisualization from './WorkflowVisualization';
+import ProjectGoals from './ProjectGoals';
 
 interface DashboardMainProps {
-  onBack?: () => void;
+  projectId: string;
+  projectPath: string;
+  onBack: () => void;
 }
 
-const DashboardMain = ({ onBack }: DashboardMainProps) => {
-  // onBack is available for future use (e.g., navigation)
-  console.log('Dashboard loaded, onBack available:', !!onBack);
-  const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null);
+function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
+  const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // 새로고침 상태 추가
-  const [analyzing, setAnalyzing] = useState(false); // 분석 상태 추가
-  const [seeding, setSeeding] = useState(false); // 시드 데이터 상태 추가
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('overview'); // 탭 상태 관리 추가
+  const [analyzing, setAnalyzing] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
 
-  const projectId = 'claudia-main'; // Default project ID
-
-  useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
-
-  const loadDashboardData = useCallback(async (isRefresh = false) => {
+  const fetchDashboardData = async () => {
     try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
-      const data = await invoke<DashboardSummary>('dashboard_get_summary', {
-        projectId
-      });
-      setDashboardData(data);
-    } catch (err) {
-      setError(err as string);
-      console.error('Failed to load dashboard data:', err);
+      const { result: summary } = await measureAsync(
+        'dashboard:fetchSummary',
+        () => api.dashboardGetSummary(projectId),
+        { projectId }
+      );
+      setData(summary);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+      // Set null to prevent errors
+      setData(null);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
+  };
+
+  useEffect(() => {
+    performanceMonitor.startTiming('dashboard:initialLoad');
+    fetchDashboardData().finally(() => {
+      performanceMonitor.endTiming('dashboard:initialLoad');
+    });
   }, [projectId]);
 
-  const getSeverityColor = useCallback((severity: string) => {
-    switch (severity) {
-      case 'critical': return 'bg-red-500';
-      case 'high': return 'bg-orange-500';
-      case 'medium': return 'bg-yellow-500';
-      case 'low': return 'bg-blue-500';
-      default: return 'bg-gray-500';
+  const handleRefresh = async () => {
+    setLoading(true);
+    await fetchDashboardData();
+  };
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    try {
+      const { result } = await measureAsync(
+        'dashboard:analyzeProject',
+        () => api.dashboardAnalyzeProject(projectId, projectPath),
+        { projectId, projectPath }
+      );
+      console.log(result);
+      // Refresh data after analysis
+      await fetchDashboardData();
+    } catch (error) {
+      console.error('Failed to analyze project:', error);
+    } finally {
+      setAnalyzing(false);
     }
-  }, []);
+  };
 
-  const getStatusColor = useCallback((status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-green-500';
-      case 'in_progress': return 'bg-blue-500';
-      case 'active': return 'bg-blue-500';
-      case 'pending': return 'bg-yellow-500';
-      case 'planned': return 'bg-gray-500';
-      case 'failed': return 'bg-red-500';
-      default: return 'bg-gray-500';
+  const handleSeedData = async () => {
+    setLoading(true);
+    try {
+      const { result: message } = await measureAsync(
+        'dashboard:seedData',
+        () => api.dashboardSeedData(projectId),
+        { projectId }
+      );
+      // Show success message (assuming you have a toast system)
+      console.log(message);
+      // Refresh the data
+      await fetchDashboardData();
+    } catch (error) {
+      console.error('Failed to seed data:', error);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
 
-  const getTrendIcon = useCallback((trend?: string) => {
-    switch (trend) {
-      case 'improving': return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case 'declining': return <TrendingUp className="h-4 w-4 text-red-500 transform rotate-180" />;
-      case 'stable': return <Activity className="h-4 w-4 text-blue-500" />;
-      default: return null;
-    }
-  }, []);
-
-  // 성능 최적화를 위한 계산된 값들
-  const summaryStats = useMemo(() => {
-    if (!dashboardData) return null;
-    
-    return {
-      avgHealthScore: dashboardData.health_metrics.length > 0 
-        ? Math.round(dashboardData.health_metrics.reduce((acc, m) => acc + m.value, 0) / dashboardData.health_metrics.length)
-        : 'N/A',
-      activeRisks: dashboardData.risk_items.filter(r => r.status === 'open').length,
-      criticalRisks: dashboardData.risk_items.filter(r => r.severity === 'critical').length,
-      completedFeatures: dashboardData.feature_status.filter(f => f.status === 'completed').length,
-      totalFeatures: dashboardData.feature_status.length,
-      completionPercentage: Math.round((dashboardData.feature_status.filter(f => f.status === 'completed').length / Math.max(dashboardData.feature_status.length, 1)) * 100)
-    };
-  }, [dashboardData]);
-
-  if (loading) {
+  if (loading && !data) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <Activity className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert className="m-4">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          Failed to load dashboard: {error}
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (!dashboardData) {
-    return (
-      <Alert className="m-4">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          No dashboard data available
-        </AlertDescription>
-      </Alert>
+      <motion.div 
+        className="h-full p-4"
+        initial="hidden"
+        animate="show"
+        variants={dashboardVariants.container}
+      >
+        <SkeletonDashboard />
+      </motion.div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <motion.div 
+      className="h-full flex flex-col"
+      variants={pageVariants}
+      initial="initial"
+      animate="in"
+      exit="out"
+      transition={pageTransition}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Project Dashboard</h1>
-          <p className="text-muted-foreground">
-            {dashboardData.project_goals?.primary_goal || 'Windows-optimized Claude Code UI'}
-          </p>
+      <motion.div 
+        className="flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <div className="flex items-center gap-4">
+          <motion.div
+            variants={buttonVariants}
+            whileHover="hover"
+            whileTap="tap"
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h1 className="text-2xl font-bold">Project Dashboard</h1>
+            <p className="text-sm text-muted-foreground">{projectPath}</p>
+          </motion.div>
         </div>
-        <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => loadDashboardData(true)}
-            disabled={refreshing}
-            className="flex items-center px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        <motion.div 
+          className="flex items-center gap-2"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <motion.div variants={buttonVariants} whileHover="hover" whileTap="tap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSeedData}
+              disabled={loading}
+            >
+              <Database className="h-4 w-4 mr-2" />
+              Seed Data
+            </Button>
+          </motion.div>
+          <motion.div variants={buttonVariants} whileHover="hover" whileTap="tap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAnalyze}
+              disabled={analyzing}
+            >
+              <AnimatePresence mode="sync">
+                {analyzing ? (
+                  <motion.div
+                    key="analyzing"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Analyzing...
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="analyze"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center"
+                  >
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Analyze
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </Button>
+          </motion.div>
+          <motion.div variants={buttonVariants} whileHover="hover" whileTap="tap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </motion.div>
+        </motion.div>
+      </motion.div>
+
+      {/* Main Content */}
+      <motion.div 
+        className="flex-1 overflow-y-auto p-4"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
           >
-            <Activity className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
-          <button 
-            onClick={async () => {
-              try {
-                setAnalyzing(true);
-                await invoke('dashboard_analyze_project', {
-                  projectId: projectId,
-                  projectPath: 'D:\\claudia' // TODO: Get actual project path
-                });
-                await loadDashboardData(true);
-              } catch (err) {
-                console.error('Failed to analyze project:', err);
-                setError('Failed to analyze project: ' + err);
-              } finally {
-                setAnalyzing(false);
-              }
-            }}
-            disabled={analyzing || refreshing}
-            className="flex items-center px-3 py-2 text-sm bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {analyzing ? (
-              <>
-                <Activity className="h-4 w-4 mr-2 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                🔍 Analyze Project
-              </>
-            )}
-          </button>
-          <button 
-            onClick={async () => {
-              try {
-                setSeeding(true);
-                await invoke('dashboard_seed_data');
-                await loadDashboardData(true);
-              } catch (err) {
-                console.error('Failed to seed data:', err);
-                setError('Failed to seed data: ' + err);
-              } finally {
-                setSeeding(false);
-              }
-            }}
-            disabled={seeding || refreshing}
-            className="flex items-center px-3 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {seeding ? (
-              <>
-                <Activity className="h-4 w-4 mr-2 animate-spin" />
-                Seeding...
-              </>
-            ) : (
-              'Seed Data'
-            )}
-          </button>
-        </div>
-      </div>
+            <TabsList className="grid w-full grid-cols-5 mb-6">
+              <TabsTrigger value="overview" className="relative">
+                Overview
+                {activeTab === 'overview' && (
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="features" className="relative">
+                Features
+                {activeTab === 'features' && (
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="quality" className="relative">
+                Quality
+                {activeTab === 'quality' && (
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="workflow" className="relative">
+                Workflow
+                {activeTab === 'workflow' && (
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="relative">
+                AI Usage
+                {activeTab === 'ai' && (
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </motion.div>
 
-      {/* Project Goals Overview */}
-      {dashboardData.project_goals && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Target className="h-5 w-5 mr-2" />
-              Project Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Overall</p>
-                <div className="flex items-center space-x-2">
-                  <Progress value={dashboardData.project_goals.overall_completion || 0} className="flex-1" />
-                  <span className="text-sm font-medium">
-                    {dashboardData.project_goals.overall_completion?.toFixed(1) || 0}%
-                  </span>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Features</p>
-                <div className="flex items-center space-x-2">
-                  <Progress value={dashboardData.project_goals.features_completion || 0} className="flex-1" />
-                  <span className="text-sm font-medium">
-                    {dashboardData.project_goals.features_completion?.toFixed(1) || 0}%
-                  </span>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Documentation</p>
-                <div className="flex items-center space-x-2">
-                  <Progress value={dashboardData.project_goals.documentation_completion || 0} className="flex-1" />
-                  <span className="text-sm font-medium">
-                    {dashboardData.project_goals.documentation_completion?.toFixed(1) || 0}%
-                  </span>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Deployment</p>
-                <div className="flex items-center space-x-2">
-                  <Progress value={dashboardData.project_goals.deployment_readiness || 0} className="flex-1" />
-                  <span className="text-sm font-medium">
-                    {dashboardData.project_goals.deployment_readiness?.toFixed(1) || 0}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          <AnimatePresence mode="sync">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <TabsContent value="overview" className="space-y-4">
+                <motion.div 
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                  variants={dashboardVariants.container}
+                  initial="hidden"
+                  animate="show"
+                >
+                  <motion.div variants={dashboardVariants.item}>
+                    <ProjectGoals goals={data?.project_goals} loading={loading} />
+                  </motion.div>
+                  <motion.div variants={dashboardVariants.item}>
+                    <CompletionStatus 
+                      goals={data?.project_goals} 
+                      workflowStages={data?.workflow_stages || []} 
+                      loading={loading} 
+                    />
+                  </motion.div>
+                </motion.div>
+                <motion.div variants={dashboardVariants.item}>
+                  <HealthMetrics metrics={data?.health_metrics || []} loading={loading} />
+                </motion.div>
+                <motion.div variants={dashboardVariants.item}>
+                  <RiskAssessment risks={data?.risk_items || []} loading={loading} />
+                </motion.div>
+              </TabsContent>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="health">Health</TabsTrigger>
-          <TabsTrigger value="features">Features</TabsTrigger>
-          <TabsTrigger value="risks">Risks</TabsTrigger>
-          <TabsTrigger value="documentation">Docs</TabsTrigger>
-          <TabsTrigger value="ai-usage">AI Usage</TabsTrigger>
-        </TabsList>
+              <TabsContent value="features" className="space-y-4">
+                <motion.div variants={dashboardVariants.item}>
+                  <FeatureIndependence features={data?.feature_status || []} loading={loading} />
+                </motion.div>
+              </TabsContent>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Health Metrics Summary */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Health Score</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {summaryStats?.avgHealthScore}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Average across {dashboardData.health_metrics.length} metrics
-                </p>
-              </CardContent>
-            </Card>
+              <TabsContent value="quality" className="space-y-4">
+                <motion.div 
+                  className="space-y-4"
+                  variants={dashboardVariants.container}
+                  initial="hidden"
+                  animate="show"
+                >
+                  <motion.div variants={dashboardVariants.item}>
+                    <HealthMetrics 
+                      metrics={data?.health_metrics || []} 
+                      loading={loading} 
+                    />
+                  </motion.div>
+                  <motion.div variants={dashboardVariants.item}>
+                    <DocumentationStatus 
+                      docs={data?.documentation_status || []} 
+                      loading={loading} 
+                    />
+                  </motion.div>
+                  <motion.div variants={dashboardVariants.item}>
+                    <RiskAssessment 
+                      risks={data?.risk_items || []} 
+                      loading={loading} 
+                    />
+                  </motion.div>
+                </motion.div>
+              </TabsContent>
 
-            {/* Active Risks */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Active Risks</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-500">
-                  {summaryStats?.activeRisks}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {summaryStats?.criticalRisks} critical
-                </p>
-              </CardContent>
-            </Card>
+              <TabsContent value="workflow" className="space-y-4">
+                <motion.div variants={dashboardVariants.item}>
+                  <WorkflowVisualization stages={data?.workflow_stages || []} loading={loading} />
+                </motion.div>
+              </TabsContent>
 
-            {/* Feature Progress */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Features</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {summaryStats?.completedFeatures}/{summaryStats?.totalFeatures}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {summaryStats?.completionPercentage}% complete
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Workflow Stages */}
-          {dashboardData.workflow_stages.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Workflow Progress</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {dashboardData.workflow_stages
-                    .sort((a, b) => a.stage_order - b.stage_order)
-                    .map((stage) => (
-                      <div key={stage.id} className="flex items-center space-x-3">
-                        <Badge className={getStatusColor(stage.status)}>
-                          {stage.status}
-                        </Badge>
-                        <span className="flex-1">{stage.stage_name}</span>
-                        {stage.efficiency_score && (
-                          <span className="text-sm text-muted-foreground">
-                            {stage.efficiency_score.toFixed(1)}% efficiency
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="health" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {dashboardData.health_metrics.map((metric) => (
-              <Card key={metric.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center justify-between">
-                    <span className="capitalize">{metric.metric_type.replace('_', ' ')}</span>
-                    {getTrendIcon(metric.trend)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center space-x-2">
-                    <div className="text-2xl font-bold">{metric.value.toFixed(1)}</div>
-                    <div className="text-sm text-muted-foreground">/ 100</div>
-                  </div>
-                  <Progress value={metric.value} className="mt-2" />
-                  {metric.details && (
-                    <p className="text-xs text-muted-foreground mt-2">{metric.details}</p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="features" className="space-y-4">
-          <div className="space-y-2">
-            {dashboardData.feature_status.map((feature) => (
-              <Card key={feature.id}>
-                <CardContent className="pt-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <h3 className="font-medium">{feature.name}</h3>
-                        <Badge className={getStatusColor(feature.status)}>
-                          {feature.status.replace('_', ' ')}
-                        </Badge>
-                        {feature.independence_score && (
-                          <Badge variant="outline">
-                            {feature.independence_score.toFixed(0)}% independent
-                          </Badge>
-                        )}
-                      </div>
-                      {feature.description && (
-                        <p className="text-sm text-muted-foreground">{feature.description}</p>
-                      )}
-                    </div>
-                    {feature.complexity_score && (
-                      <div className="text-right">
-                        <div className="text-sm text-muted-foreground">Complexity</div>
-                        <div className="font-medium">{feature.complexity_score.toFixed(1)}</div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="risks" className="space-y-4">
-          <div className="space-y-2">
-            {dashboardData.risk_items.map((risk) => (
-              <Card key={risk.id}>
-                <CardContent className="pt-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <h3 className="font-medium">{risk.title}</h3>
-                        <Badge className={getSeverityColor(risk.severity)}>
-                          {risk.severity}
-                        </Badge>
-                        <Badge variant="outline" className="capitalize">
-                          {risk.category.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">{risk.description}</p>
-                      {risk.mitigation && (
-                        <p className="text-xs text-blue-600">
-                          <strong>Mitigation:</strong> {risk.mitigation}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      {risk.impact_score && (
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">Impact:</span> {risk.impact_score}/10
-                        </div>
-                      )}
-                      {risk.probability && (
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">Probability:</span> {Math.round(risk.probability * 100)}%
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="documentation" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {dashboardData.documentation_status.map((doc) => (
-              <Card key={doc.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm capitalize">
-                    {doc.doc_type.replace('_', ' ')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Completion</span>
-                      <span className="text-sm font-medium">
-                        {doc.completion_percentage?.toFixed(1) || 0}%
-                      </span>
-                    </div>
-                    <Progress value={doc.completion_percentage || 0} />
-                    {doc.completed_sections && doc.total_sections && (
-                      <div className="text-xs text-muted-foreground">
-                        {doc.completed_sections} of {doc.total_sections} sections
-                      </div>
-                    )}
-                    {doc.quality_score && (
-                      <div className="text-xs text-muted-foreground">
-                        Quality score: {doc.quality_score.toFixed(1)}/100
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="ai-usage" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {dashboardData.ai_usage.slice(0, 6).map((usage) => (
-              <Card key={usage.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">{usage.model_name}</CardTitle>
-                  <CardDescription>
-                    {usage.agent_type && <span>{usage.agent_type} • </span>}
-                    {usage.session_date}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Tokens:</span>
-                      <span className="font-medium">{usage.token_count.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Requests:</span>
-                      <span className="font-medium">{usage.request_count}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Success Rate:</span>
-                      <span className="font-medium">
-                        {usage.success_rate ? `${Math.round(usage.success_rate * 100)}%` : 'N/A'}
-                      </span>
-                    </div>
-                    {usage.total_cost && (
-                      <div className="flex justify-between text-sm">
-                        <span>Cost:</span>
-                        <span className="font-medium">${usage.total_cost.toFixed(3)}</span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+              <TabsContent value="ai" className="space-y-4">
+                <motion.div variants={dashboardVariants.item}>
+                  <AIAnalytics usage={data?.ai_usage || []} loading={loading} />
+                </motion.div>
+              </TabsContent>
+            </motion.div>
+          </AnimatePresence>
+        </Tabs>
+      </motion.div>
+    </motion.div>
   );
-};
+}
 
 export default DashboardMain;

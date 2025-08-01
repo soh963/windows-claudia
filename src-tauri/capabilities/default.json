@@ -16,8 +16,28 @@
       "allow": [
         {
           "name": "claude",
-          "sidecar": false,
+          "cmd": "claude",
           "args": true
+        },
+        {
+          "name": "cmd",
+          "cmd": "cmd",
+          "args": ["/c", { "validator": ".*" }]
+        },
+        {
+          "name": "powershell", 
+          "cmd": "powershell",
+          "args": ["-Command", { "validator": ".*" }]
+        },
+        {
+          "name": "taskkill",
+          "cmd": "taskkill",
+          "args": ["/F", "/PID", { "validator": "\\d+" }]
+        },
+        {
+          "name": "bash",
+          "cmd": "bash",
+          "args": ["-n", "-c", { "validator": ".*" }]
         }
       ]
     },
@@ -26,8 +46,28 @@
       "allow": [
         {
           "name": "claude",
-          "sidecar": false,
+          "cmd": "claude",
           "args": true
+        },
+        {
+          "name": "cmd",
+          "cmd": "cmd",
+          "args": ["/c", { "validator": ".*" }]
+        },
+        {
+          "name": "powershell", 
+          "cmd": "powershell",
+          "args": ["-Command", { "validator": ".*" }]
+        },
+        {
+          "name": "taskkill",
+          "cmd": "taskkill",
+          "args": ["/F", "/PID", { "validator": "\\d+" }]
+        },
+        {
+          "name": "bash",
+          "cmd": "bash",
+          "args": ["-n", "-c", { "validator": ".*" }]
         }
       ]
     },

@@ -417,10 +417,11 @@ pub async fn mcp_get(app: AppHandle, name: String) -> Result<MCPServer, String> 
             let mut transport = "stdio".to_string();
             let mut command = None;
             let mut args = vec![];
-            let env = HashMap::new();
+            let mut env = HashMap::new();
             let mut url = None;
 
-            for line in output.lines() {
+            let lines: Vec<&str> = output.lines().collect();
+            for line in lines.iter() {
                 let line = line.trim();
 
                 if line.starts_with("Scope:") {
@@ -446,8 +447,24 @@ pub async fn mcp_get(app: AppHandle, name: String) -> Result<MCPServer, String> 
                 } else if line.starts_with("URL:") {
                     url = Some(line.replace("URL:", "").trim().to_string());
                 } else if line.starts_with("Environment:") {
-                    // TODO: Parse environment variables if they're listed
-                    // For now, we'll leave it empty
+                    // Parse environment variables if they're listed
+                    // Check if the next lines contain env var definitions
+                    let env_start_idx = lines.iter().position(|l| l.trim() == line).unwrap_or(0);
+                    if env_start_idx + 1 < lines.len() {
+                        for env_line in lines.iter().skip(env_start_idx + 1) {
+                            let trimmed_env = env_line.trim();
+                            // Stop if we hit another section or empty line
+                            if trimmed_env.is_empty() || trimmed_env.contains(':') {
+                                break;
+                            }
+                            // Parse KEY=value format
+                            if let Some(eq_pos) = trimmed_env.find('=') {
+                                let key = trimmed_env[..eq_pos].trim().to_string();
+                                let value = trimmed_env[eq_pos + 1..].trim().to_string();
+                                env.insert(key, value);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -792,12 +809,33 @@ pub async fn mcp_reset_project_choices(app: AppHandle) -> Result<String, String>
 
 /// Gets the status of MCP servers
 #[tauri::command]
-pub async fn mcp_get_server_status() -> Result<HashMap<String, ServerStatus>, String> {
+pub async fn mcp_get_server_status(app: AppHandle) -> Result<HashMap<String, ServerStatus>, String> {
     info!("Getting MCP server status");
 
-    // TODO: Implement actual status checking
-    // For now, return empty status
-    Ok(HashMap::new())
+    // Get list of configured servers
+    let servers = mcp_list(app.clone()).await?;
+    let mut status_map = HashMap::new();
+
+    for server in servers {
+        // Check if server process is running by testing connection
+        let status = if let Ok(_) = mcp_test_connection(app.clone(), server.name.clone()).await {
+            ServerStatus {
+                running: true,
+                error: None,
+                last_checked: Some(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()),
+            }
+        } else {
+            ServerStatus {
+                running: false,
+                error: Some("Connection test failed".to_string()),
+                last_checked: Some(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()),
+            }
+        };
+        
+        status_map.insert(server.name, status);
+    }
+
+    Ok(status_map)
 }
 
 /// Reads .mcp.json from the current project

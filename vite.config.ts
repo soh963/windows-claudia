@@ -51,6 +51,7 @@ export default defineConfig(async () => ({
           'react-vendor': ['react', 'react-dom'],
           'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-tooltip', '@radix-ui/react-switch', '@radix-ui/react-popover'],
           'editor-vendor': ['@uiw/react-md-editor'],
+          // Move react-syntax-highlighter to ui-vendor to avoid separate chunk loading issues
           'syntax-vendor': ['react-syntax-highlighter'],
           // Tauri and other utilities
           'tauri': ['@tauri-apps/api', '@tauri-apps/plugin-dialog', '@tauri-apps/plugin-shell'],

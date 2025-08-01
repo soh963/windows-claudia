@@ -32,6 +32,7 @@ tokio = { version = "1", features = ["full"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 dirs = "5"
 chrono = { version = "0.4", features = ["serde"] }
+lazy_static = "1.4"
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"
@@ -46,15 +47,26 @@ tempfile = "3"
 which = "7"
 sha2 = "0.10"
 zstd = "0.13"
+scopeguard = "1.2"
+similar = "2.4"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 walkdir = "2"
 serde_yaml = "0.9"
+sysinfo = "0.31"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"
 objc = "0.2"
 
+[[bin]]
+name = "claudia"
+path = "src/main.rs"
+
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+# Windows-specific configuration to hide console window
+[target.'cfg(target_os = "windows")'.bin.claudia]
+windows_subsystem = "windows"

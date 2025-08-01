@@ -1,5 +1,12 @@
 import * as React from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { cardVariants } from "@/lib/animations";
+
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  animated?: boolean;
+  hoverable?: boolean;
+}
 
 /**
  * Card component - A container with consistent styling and sections
@@ -17,25 +24,57 @@ import { cn } from "@/lib/utils";
  *     Footer content
  *   </CardFooter>
  * </Card>
+ * 
+ * @example
+ * <Card animated hoverable>
+ *   Interactive card with animations
+ * </Card>
  */
-const Card = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "rounded-lg border shadow-xs",
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, animated = false, hoverable = false, ...props }, ref) => {
+    const baseClasses = cn(
+      "rounded-lg border shadow-xs transition-all duration-200",
+      hoverable && "cursor-pointer",
       className
-    )}
-    style={{
+    );
+
+    const baseStyle = {
       borderColor: "var(--color-border)",
       backgroundColor: "var(--color-card)",
       color: "var(--color-card-foreground)"
-    }}
-    {...props}
-  />
-));
+    };
+
+    if (animated || hoverable) {
+      // Separate HTML props from motion props to avoid conflicts
+      const { 
+        onDrag, onDragEnd, onDragStart, onDragEnter, onDragExit, onDragLeave, onDragOver, onDrop,
+        onAnimationStart, onAnimationEnd, onAnimationIteration,
+        ...htmlProps 
+      } = props;
+      return (
+        <motion.div
+          ref={ref}
+          className={baseClasses}
+          style={baseStyle}
+          variants={cardVariants}
+          initial="rest"
+          whileHover={hoverable ? "hover" : undefined}
+          whileTap={hoverable ? "tap" : undefined}
+          {...htmlProps}
+        />
+      );
+    }
+
+    return (
+      <div
+        ref={ref}
+        className={baseClasses}
+        style={baseStyle}
+        {...props}
+      />
+    );
+  }
+);
 Card.displayName = "Card";
 
 /**

@@ -8,8 +8,10 @@ mod analysis;
 mod process;
 mod sidecar_wrapper;
 mod windows_command;
+mod runtime_utils;
 
 use checkpoint::state::CheckpointState;
+use std::sync::Arc;
 use commands::agents::{
     cleanup_finished_processes, create_agent, delete_agent, execute_agent, export_agent,
     export_agent_to_file, fetch_github_agent_content, fetch_github_agents, get_agent,
@@ -41,6 +43,12 @@ use commands::mcp::{
 use commands::usage::{
     get_session_stats, get_usage_by_date_range, get_usage_details, get_usage_stats,
 };
+use commands::ai_usage_tracker::{
+    track_ai_usage, get_ai_usage_stats, get_session_ai_usage, estimate_ai_cost, get_ai_model_info,
+};
+use commands::ai_session_integrator::{
+    ai_session_start, ai_session_track_message, ai_session_end, ai_session_get_active, ai_session_cleanup_expired,
+};
 use commands::storage::{
     storage_list_tables, storage_read_table, storage_update_row, storage_delete_row,
     storage_insert_row, storage_execute_sql, storage_reset_database,
@@ -48,15 +56,17 @@ use commands::storage::{
 use commands::proxy::{get_proxy_settings, save_proxy_settings, apply_proxy_settings};
 use commands::claude_sync::{
     sync_claude_commands, get_claude_sync_state, set_claude_sync_enabled,
-    get_synced_claude_commands, check_claude_availability,
+    get_synced_claude_commands, check_claude_availability, set_claude_sync_interval,
+    force_refresh_claude_commands, get_next_sync_time, start_auto_sync, GlobalSyncState,
 };
 use process::ProcessRegistryState;
 use std::sync::Mutex;
 use tauri::Manager;
 
 fn main() {
-    // Initialize logger
-    env_logger::init();
+    // Initialize cross-mode runtime environment
+    runtime_utils::setup_environment();
+    runtime_utils::setup_logging();
 
 
     tauri::Builder::default()
@@ -144,6 +154,23 @@ fn main() {
             // Initialize Claude process state
             app.manage(ClaudeProcessState::default());
 
+            // Initialize Claude sync state
+            let sync_state = std::sync::Arc::new(GlobalSyncState::default());
+            app.manage(sync_state.clone());
+
+            // Start automatic Claude sync background task after setup is complete
+            let app_handle = app.handle().clone();
+            let sync_state_clone = sync_state.clone();
+            
+            // Spawn the background task in a separate thread to avoid borrow issues
+            std::thread::spawn(move || {
+                tauri::async_runtime::spawn(async move {
+                    // Wait a bit for the app to be fully initialized
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    start_auto_sync(app_handle, sync_state_clone).await;
+                });
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -226,6 +253,20 @@ fn main() {
             get_usage_details,
             get_session_stats,
             
+            // AI Usage Tracking
+            track_ai_usage,
+            get_ai_usage_stats,
+            get_session_ai_usage,
+            estimate_ai_cost,
+            get_ai_model_info,
+            
+            // AI Session Integration
+            ai_session_start,
+            ai_session_track_message,
+            ai_session_end,
+            ai_session_get_active,
+            ai_session_cleanup_expired,
+            
             // MCP (Model Context Protocol)
             mcp_add,
             mcp_list,
@@ -266,6 +307,9 @@ fn main() {
             set_claude_sync_enabled,
             get_synced_claude_commands,
             check_claude_availability,
+            set_claude_sync_interval,
+            force_refresh_claude_commands,
+            get_next_sync_time,
             
             // Intelligent Routing
             commands::intelligent_routing::analyze_chat_input,
@@ -281,7 +325,14 @@ fn main() {
             commands::dashboard::dashboard_update_health_metric,
             commands::dashboard::dashboard_update_feature,
             commands::dashboard::dashboard_analyze_project,
+            commands::dashboard::dashboard_get_ai_analytics,
+            commands::dashboard::dashboard_get_ai_cost_trends,
+            commands::dashboard::dashboard_get_model_performance,
+            commands::dashboard::dashboard_get_mcp_analytics,
             commands::dashboard_seed::dashboard_seed_data,
+            commands::dashboard_utils::get_current_working_project,
+            commands::dashboard_utils::get_recent_projects,
+            commands::dashboard_utils::create_project_if_not_exists,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

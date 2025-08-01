@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { X, Plus, MessageSquare, Bot, AlertCircle, Loader2, Folder, BarChart, Server, Settings, FileText, Activity } from 'lucide-react';
+import { X, Plus, MessageSquare, Bot, AlertCircle, Loader2, Folder, BarChart, Server, Settings, FileText, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTabState } from '@/hooks/useTabState';
 import { Tab } from '@/contexts/TabContext';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/lib/responsive';
+import { buttonVariants } from '@/lib/animations';
 
 interface TabItemProps {
   tab: Tab;
@@ -14,6 +16,7 @@ interface TabItemProps {
 
 const TabItem: React.FC<TabItemProps> = ({ tab, isActive, onClose, onClick }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const isMobile = useIsMobile();
   
   const getIcon = () => {
     switch (tab.type) {
@@ -48,9 +51,9 @@ const TabItem: React.FC<TabItemProps> = ({ tab, isActive, onClose, onClick }) =>
   const getStatusIcon = () => {
     switch (tab.status) {
       case 'running':
-        return <Loader2 className="w-3 h-3 animate-spin" />;
+        return <Loader2 className={cn("animate-spin", isMobile ? "w-4 h-4" : "w-3 h-3")} />;
       case 'error':
-        return <AlertCircle className="w-3 h-3 text-red-500" />;
+        return <AlertCircle className={cn("text-red-500", isMobile ? "w-4 h-4" : "w-3 h-3")} />;
       default:
         return null;
     }
@@ -64,22 +67,25 @@ const TabItem: React.FC<TabItemProps> = ({ tab, isActive, onClose, onClick }) =>
       value={tab}
       id={tab.id}
       className={cn(
-        "relative flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer select-none",
+        "relative flex items-center gap-2 text-sm cursor-pointer select-none",
         "border-b-2 transition-all duration-200",
         isActive
           ? "border-blue-500 bg-background text-foreground"
           : "border-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
-        "min-w-[120px] max-w-[200px]"
+        // Responsive sizing
+        isMobile ? "px-2 py-2 min-w-[100px] max-w-[150px]" : "px-3 py-1.5 min-w-[120px] max-w-[200px]",
+        // Enhanced touch targets on mobile
+        isMobile && "min-h-12"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => onClick(tab.id)}
-      whileHover={{ y: -1 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ y: isMobile ? 0 : -1 }}
+      whileTap={{ scale: isMobile ? 0.95 : 0.98 }}
     >
-      <Icon className="w-4 h-4 flex-shrink-0" />
+      <Icon className={cn("flex-shrink-0", isMobile ? "w-5 h-5" : "w-4 h-4")} />
       
-      <span className="flex-1 truncate">
+      <span className={cn("flex-1 truncate", isMobile ? "text-sm" : "text-sm")}>
         {tab.title}
       </span>
 
@@ -90,11 +96,11 @@ const TabItem: React.FC<TabItemProps> = ({ tab, isActive, onClose, onClick }) =>
       )}
 
       {tab.hasUnsavedChanges && (
-        <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+        <span className={cn("bg-blue-500 rounded-full flex-shrink-0", isMobile ? "w-3 h-3" : "w-2 h-2")} />
       )}
 
       <AnimatePresence>
-        {(isHovered || isActive) && (
+        {(isHovered || isActive || isMobile) && (
           <motion.button
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -105,11 +111,13 @@ const TabItem: React.FC<TabItemProps> = ({ tab, isActive, onClose, onClick }) =>
               onClose(tab.id);
             }}
             className={cn(
-              "flex-shrink-0 p-0.5 rounded hover:bg-muted-foreground/20",
-              "transition-colors duration-150"
+              "flex-shrink-0 rounded hover:bg-muted-foreground/20",
+              "transition-colors duration-150",
+              isMobile ? "p-1" : "p-0.5",
+              isMobile && "min-w-8 min-h-8"
             )}
           >
-            <X className="w-3 h-3" />
+            <X className={cn(isMobile ? "w-4 h-4" : "w-3 h-3")} />
           </motion.button>
         )}
       </AnimatePresence>
@@ -132,6 +140,8 @@ export const TabManager: React.FC<TabManagerProps> = ({ className }) => {
     canAddTab
   } = useTabState();
 
+  const isMobile = useIsMobile();
+  
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
@@ -254,20 +264,33 @@ export const TabManager: React.FC<TabManagerProps> = ({ className }) => {
   };
 
   return (
-    <div className={cn("flex items-center bg-muted/30 border-b", className)}>
+    <motion.div 
+      className={cn(
+        "flex items-center bg-muted/30 border-b backdrop-blur-sm",
+        isMobile ? "px-2 py-1" : "px-0 py-0",
+        className
+      )}
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
       {/* Left scroll button */}
       <AnimatePresence>
         {showLeftScroll && (
           <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
             onClick={() => scrollTabs('left')}
-            className="p-1 hover:bg-muted rounded-sm"
+            className={cn(
+              "hover:bg-muted rounded-sm transition-colors",
+              isMobile ? "p-2" : "p-1"
+            )}
+            variants={buttonVariants}
+            whileHover="hover"
+            whileTap="tap"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M15 18l-6-6 6-6" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ChevronLeft className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
           </motion.button>
         )}
       </AnimatePresence>
@@ -275,7 +298,10 @@ export const TabManager: React.FC<TabManagerProps> = ({ className }) => {
       {/* Tabs container */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 flex overflow-x-auto scrollbar-hide"
+        className={cn(
+          "flex-1 flex overflow-x-auto scrollbar-hide",
+          isMobile ? "mx-1" : "mx-0"
+        )}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         <Reorder.Group
@@ -286,13 +312,21 @@ export const TabManager: React.FC<TabManagerProps> = ({ className }) => {
         >
           <AnimatePresence initial={false}>
             {tabs.map((tab) => (
-              <TabItem
+              <motion.div
                 key={tab.id}
-                tab={tab}
-                isActive={tab.id === activeTabId}
-                onClose={handleCloseTab}
-                onClick={switchToTab}
-              />
+                layout
+                initial={{ opacity: 0, scale: 0.8, x: -20 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: 20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <TabItem
+                  tab={tab}
+                  isActive={tab.id === activeTabId}
+                  onClose={handleCloseTab}
+                  onClick={switchToTab}
+                />
+              </motion.div>
             ))}
           </AnimatePresence>
         </Reorder.Group>
@@ -302,36 +336,43 @@ export const TabManager: React.FC<TabManagerProps> = ({ className }) => {
       <AnimatePresence>
         {showRightScroll && (
           <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
             onClick={() => scrollTabs('right')}
-            className="p-1 hover:bg-muted rounded-sm"
+            className={cn(
+              "hover:bg-muted rounded-sm transition-colors",
+              isMobile ? "p-2" : "p-1"
+            )}
+            variants={buttonVariants}
+            whileHover="hover"
+            whileTap="tap"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M9 18l6-6-6-6" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ChevronRight className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
           </motion.button>
         )}
       </AnimatePresence>
 
       {/* New tab button */}
       <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        variants={buttonVariants}
+        whileHover="hover"
+        whileTap="tap"
         onClick={handleNewTab}
         disabled={!canAddTab()}
         className={cn(
-          "p-1.5 mx-2 rounded-sm transition-colors",
+          "rounded-sm transition-all duration-200",
           canAddTab()
             ? "hover:bg-muted text-muted-foreground hover:text-foreground"
-            : "opacity-50 cursor-not-allowed"
+            : "opacity-50 cursor-not-allowed",
+          isMobile ? "p-2 mx-1" : "p-1.5 mx-2",
+          isMobile && "min-w-10 min-h-10"
         )}
         title={canAddTab() ? "Browse projects" : "Maximum tabs reached"}
       >
-        <Plus className="w-4 h-4" />
+        <Plus className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
       </motion.button>
-    </div>
+    </motion.div>
   );
 };
 

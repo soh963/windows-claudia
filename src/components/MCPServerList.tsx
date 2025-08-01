@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Network, 
@@ -43,7 +43,7 @@ interface MCPServerListProps {
  * Component for displaying a list of MCP servers
  * Shows servers grouped by scope with status indicators
  */
-export const MCPServerList: React.FC<MCPServerListProps> = ({
+export const MCPServerList: React.FC<MCPServerListProps> = React.memo(({
   servers,
   loading,
   onServerRemoved,
@@ -54,18 +54,20 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
   const [copiedServer, setCopiedServer] = useState<string | null>(null);
 
-  // Group servers by scope
-  const serversByScope = servers.reduce((acc, server) => {
-    const scope = server.scope || "local";
-    if (!acc[scope]) acc[scope] = [];
-    acc[scope].push(server);
-    return acc;
-  }, {} as Record<string, MCPServer[]>);
+  // Memoize server grouping by scope
+  const serversByScope = useMemo(() => {
+    return servers.reduce((acc, server) => {
+      const scope = server.scope || "local";
+      if (!acc[scope]) acc[scope] = [];
+      acc[scope].push(server);
+      return acc;
+    }, {} as Record<string, MCPServer[]>);
+  }, [servers]);
 
   /**
    * Toggles expanded state for a server
    */
-  const toggleExpanded = (serverName: string) => {
+  const toggleExpanded = useCallback((serverName: string) => {
     setExpandedServers(prev => {
       const next = new Set(prev);
       if (next.has(serverName)) {
@@ -75,12 +77,12 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
       }
       return next;
     });
-  };
+  }, []);
 
   /**
    * Copies command to clipboard
    */
-  const copyCommand = async (command: string, serverName: string) => {
+  const copyCommand = useCallback(async (command: string, serverName: string) => {
     try {
       await navigator.clipboard.writeText(command);
       setCopiedServer(serverName);
@@ -88,12 +90,12 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
     } catch (error) {
       console.error("Failed to copy command:", error);
     }
-  };
+  }, []);
 
   /**
    * Removes a server
    */
-  const handleRemoveServer = async (name: string) => {
+  const handleRemoveServer = useCallback(async (name: string) => {
     try {
       setRemovingServer(name);
       await api.mcpRemove(name);
@@ -103,12 +105,12 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
     } finally {
       setRemovingServer(null);
     }
-  };
+  }, [onServerRemoved]);
 
   /**
    * Tests connection to a server
    */
-  const handleTestConnection = async (name: string) => {
+  const handleTestConnection = useCallback(async (name: string) => {
     try {
       setTestingServer(name);
       const result = await api.mcpTestConnection(name);
@@ -119,7 +121,7 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
     } finally {
       setTestingServer(null);
     }
-  };
+  }, []);
 
   /**
    * Gets icon for transport type
@@ -170,7 +172,7 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
   /**
    * Renders a single server item
    */
-  const renderServerItem = (server: MCPServer) => {
+  const renderServerItem = useCallback((server: MCPServer) => {
     const isExpanded = expandedServers.has(server.name);
     const isCopied = copiedServer === server.name;
     
@@ -342,7 +344,7 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
         </div>
       </motion.div>
     );
-  };
+  }, [expandedServers, copiedServer, removingServer, testingServer, toggleExpanded, copyCommand, handleRemoveServer, handleTestConnection]);
 
   if (loading) {
     return (
@@ -404,4 +406,6 @@ export const MCPServerList: React.FC<MCPServerListProps> = ({
       )}
     </div>
   );
-}; 
+});
+
+MCPServerList.displayName = 'MCPServerList'; 

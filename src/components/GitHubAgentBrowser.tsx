@@ -314,7 +314,7 @@ export const GitHubAgentBrowser: React.FC<GitHubAgentBrowserProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
-                <AnimatePresence mode="popLayout">
+                <AnimatePresence mode="wait">
                   {filteredAgents.map((agent, index) => (
                     <motion.div
                       key={agent.sha}

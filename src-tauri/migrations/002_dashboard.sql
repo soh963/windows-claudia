@@ -83,6 +83,26 @@ CREATE TABLE IF NOT EXISTS ai_usage_metrics (
     UNIQUE(project_id, model_name, agent_type, mcp_server, session_date)
 );
 
+-- AI Usage Events Table (detailed tracking)
+CREATE TABLE IF NOT EXISTS ai_usage_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    agent_type TEXT,
+    mcp_server TEXT,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    request_type TEXT NOT NULL DEFAULT 'completion', -- completion, analysis, generation, etc.
+    response_time_ms INTEGER, -- milliseconds
+    success BOOLEAN NOT NULL DEFAULT 1,
+    error_message TEXT,
+    session_id TEXT, -- For tracking within sessions
+    user_prompt_tokens INTEGER,
+    assistant_response_tokens INTEGER,
+    cost REAL NOT NULL DEFAULT 0.0,
+    session_date TEXT NOT NULL, -- YYYY-MM-DD format
+    timestamp INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
 -- Workflow Stages Table
 CREATE TABLE IF NOT EXISTS workflow_stages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,6 +159,12 @@ CREATE INDEX IF NOT EXISTS idx_risks_category ON risk_items(project_id, category
 
 CREATE INDEX IF NOT EXISTS idx_ai_usage_project_model ON ai_usage_metrics(project_id, model_name, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_date ON ai_usage_metrics(project_id, session_date DESC);
+
+-- Indexes for AI usage events
+CREATE INDEX IF NOT EXISTS idx_ai_events_project_session ON ai_usage_events(project_id, session_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_events_project_date ON ai_usage_events(project_id, session_date DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_events_model ON ai_usage_events(project_id, model_name, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_events_agent_mcp ON ai_usage_events(project_id, agent_type, mcp_server, timestamp DESC);
 
 CREATE INDEX IF NOT EXISTS idx_workflow_project_order ON workflow_stages(project_id, stage_order);
 

@@ -103,7 +103,7 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
           position: 'relative',
         }}
       >
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="wait">
           {virtualizer.getVirtualItems().map((virtualItem) => {
             const message = messages[virtualItem.index];
             const key = `msg-${virtualItem.index}-${message.type}`;

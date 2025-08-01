@@ -99,7 +99,7 @@ export const AgentRunsList: React.FC<AgentRunsListProps> = ({
   return (
     <>
       <div className={cn("space-y-2", className)}>
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="wait">
           {currentRuns.map((run, index) => (
             <motion.div
               key={run.id}

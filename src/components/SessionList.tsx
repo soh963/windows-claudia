@@ -108,7 +108,7 @@ export const SessionList: React.FC<SessionListProps> = ({
         </motion.div>
       )}
 
-      <AnimatePresence mode="popLayout">
+      <AnimatePresence mode="wait">
         <div className="space-y-2">
           {currentSessions.map((session, index) => (
             <motion.div

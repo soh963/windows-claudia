@@ -1,0 +1,1345 @@
+use anyhow::Result;
+use log::{info, warn};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::State;
+
+use super::agents::AgentDb;
+use super::dashboard::WorkflowStage;
+
+/// Workflow Visualization Data
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkflowVisualization {
+    pub project_id: String,
+    pub workflow_stages: Vec<WorkflowStageVisualization>,
+    pub stage_connections: Vec<StageConnection>,
+    pub critical_path: Vec<String>,
+    pub bottlenecks: Vec<WorkflowBottleneck>,
+    pub parallel_opportunities: Vec<ParallelOpportunity>,
+    pub timeline_analysis: TimelineAnalysis,
+    pub efficiency_metrics: WorkflowEfficiencyMetrics,
+    pub automation_opportunities: Vec<AutomationOpportunity>,
+    pub process_improvements: Vec<ProcessImprovement>,
+    pub visualization_timestamp: i64,
+}
+
+/// Enhanced Workflow Stage for Visualization
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkflowStageVisualization {
+    pub stage_id: String,
+    pub stage_name: String,
+    pub stage_type: String,          // development, testing, deployment, documentation
+    pub status: String,              // completed, active, pending, blocked, skipped
+    pub completion_percentage: f64,
+    pub start_date: Option<i64>,
+    pub end_date: Option<i64>,
+    pub duration_days: Option<i64>,
+    pub estimated_duration: i64,     // days
+    pub efficiency_score: f64,       // 0-100
+    pub resource_allocation: ResourceAllocation,
+    pub dependencies: Vec<String>,   // stage IDs this depends on
+    pub dependents: Vec<String>,     // stage IDs that depend on this
+    pub bottlenecks: Vec<String>,
+    pub automation_level: f64,       // 0-100 percentage automated
+    pub risk_level: String,          // low, medium, high, critical
+    pub stage_metadata: StageMetadata,
+}
+
+/// Resource Allocation for Workflow Stage
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceAllocation {
+    pub assigned_team_members: i32,
+    pub estimated_effort_hours: i32,
+    pub actual_effort_hours: Option<i32>,
+    pub tools_required: Vec<String>,
+    pub skills_required: Vec<String>,
+    pub resource_utilization: f64,   // 0-100 percentage
+}
+
+/// Stage Metadata
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StageMetadata {
+    pub deliverables: Vec<String>,
+    pub quality_gates: Vec<String>,
+    pub success_criteria: Vec<String>,
+    pub common_issues: Vec<String>,
+    pub best_practices: Vec<String>,
+}
+
+/// Connection Between Workflow Stages
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StageConnection {
+    pub from_stage: String,
+    pub to_stage: String,
+    pub connection_type: String,     // sequential, parallel, conditional, feedback
+    pub transition_time: i64,        // hours
+    pub transition_efficiency: f64,  // 0-100
+    pub handoff_quality: f64,        // 0-100
+    pub common_delays: Vec<String>,
+}
+
+/// Workflow Bottleneck Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkflowBottleneck {
+    pub bottleneck_id: String,
+    pub stage_name: String,
+    pub bottleneck_type: String,     // resource, process, dependency, external
+    pub severity: String,            // low, medium, high, critical
+    pub description: String,
+    pub impact_analysis: BottleneckImpact,
+    pub root_causes: Vec<String>,
+    pub mitigation_strategies: Vec<String>,
+    pub estimated_resolution_time: i32, // hours
+}
+
+/// Bottleneck Impact Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BottleneckImpact {
+    pub delay_impact_days: f64,
+    pub cost_impact: f64,
+    pub quality_impact: f64,        // 0-100 quality reduction
+    pub team_morale_impact: f64,    // 0-100 morale impact
+    pub customer_impact: String,     // none, low, medium, high
+}
+
+/// Parallel Processing Opportunity
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ParallelOpportunity {
+    pub opportunity_id: String,
+    pub stages_involved: Vec<String>,
+    pub potential_time_savings: i64, // days
+    pub implementation_effort: i32,   // hours
+    pub risk_assessment: String,      // low, medium, high
+    pub prerequisites: Vec<String>,
+    pub expected_benefits: Vec<String>,
+}
+
+/// Timeline Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TimelineAnalysis {
+    pub total_project_duration: i64,     // days
+    pub critical_path_duration: i64,     // days
+    pub estimated_completion_date: i64,   // timestamp
+    pub schedule_variance: f64,           // percentage ahead/behind
+    pub milestone_analysis: Vec<MilestoneAnalysis>,
+    pub timeline_risks: Vec<TimelineRisk>,
+}
+
+/// Milestone Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MilestoneAnalysis {
+    pub milestone_name: String,
+    pub target_date: i64,
+    pub estimated_date: i64,
+    pub confidence_level: f64,     // 0-100
+    pub risk_factors: Vec<String>,
+    pub dependencies: Vec<String>,
+}
+
+/// Timeline Risk
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TimelineRisk {
+    pub risk_name: String,
+    pub probability: f64,          // 0-1
+    pub impact_days: i64,
+    pub mitigation_plan: String,
+    pub contingency_plan: String,
+}
+
+/// Workflow Efficiency Metrics
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WorkflowEfficiencyMetrics {
+    pub overall_efficiency: f64,        // 0-100
+    pub cycle_time: f64,                // average days per stage
+    pub lead_time: f64,                 // total project duration
+    pub throughput: f64,                // deliverables per time unit
+    pub work_in_progress: i32,          // active stages
+    pub handoff_efficiency: f64,        // 0-100
+    pub rework_percentage: f64,         // 0-100
+    pub automation_percentage: f64,     // 0-100
+    pub resource_utilization: f64,      // 0-100
+}
+
+/// Automation Opportunity
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AutomationOpportunity {
+    pub opportunity_id: String,
+    pub stage_name: String,
+    pub automation_type: String,        // ci_cd, testing, deployment, monitoring
+    pub description: String,
+    pub implementation_effort: i32,     // hours
+    pub time_savings_per_cycle: i32,    // hours
+    pub error_reduction_percentage: f64, // 0-100
+    pub recommended_tools: Vec<String>,
+    pub roi_analysis: ROIAnalysis,
+}
+
+/// ROI Analysis for Automation
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ROIAnalysis {
+    pub implementation_cost: f64,
+    pub annual_savings: f64,
+    pub payback_period_months: f64,
+    pub roi_percentage: f64,
+}
+
+/// Process Improvement Suggestion
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProcessImprovement {
+    pub improvement_id: String,
+    pub improvement_type: String,       // efficiency, quality, communication, tooling
+    pub title: String,
+    pub description: String,
+    pub affected_stages: Vec<String>,
+    pub implementation_effort: i32,     // hours
+    pub expected_benefits: Vec<String>,
+    pub success_metrics: Vec<String>,
+    pub priority: String,               // low, medium, high, critical
+}
+
+/// Generate comprehensive workflow visualization
+#[tauri::command]
+pub async fn generate_workflow_visualization(
+    db: State<'_, AgentDb>,
+    project_path: String,
+) -> Result<WorkflowVisualization, String> {
+    info!("Generating comprehensive workflow visualization for: {}", project_path);
+    
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    // Analyze current workflow stages
+    let workflow_stages = analyze_workflow_stages(&project_path).await?;
+    
+    // Map stage connections and dependencies
+    let stage_connections = map_stage_connections(&workflow_stages);
+    
+    // Identify critical path
+    let critical_path = identify_critical_path(&workflow_stages, &stage_connections);
+    
+    // Detect workflow bottlenecks
+    let bottlenecks = detect_workflow_bottlenecks(&workflow_stages, &project_path).await?;
+    
+    // Identify parallel processing opportunities
+    let parallel_opportunities = identify_parallel_opportunities(&workflow_stages, &stage_connections);
+    
+    // Analyze project timeline
+    let timeline_analysis = analyze_project_timeline(&workflow_stages, &critical_path);
+    
+    // Calculate efficiency metrics
+    let efficiency_metrics = calculate_workflow_efficiency(&workflow_stages, &bottlenecks);
+    
+    // Identify automation opportunities
+    let automation_opportunities = identify_automation_opportunities(&workflow_stages, &project_path).await?;
+    
+    // Generate process improvements
+    let process_improvements = generate_process_improvements(&workflow_stages, &bottlenecks, &efficiency_metrics);
+    
+    // Store workflow data in database
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    store_workflow_visualization(
+        &conn,
+        "claudia-main",
+        &workflow_stages,
+        current_timestamp,
+    )?;
+    
+    Ok(WorkflowVisualization {
+        project_id: "claudia-main".to_string(),
+        workflow_stages,
+        stage_connections,
+        critical_path,
+        bottlenecks,
+        parallel_opportunities,
+        timeline_analysis,
+        efficiency_metrics,
+        automation_opportunities,
+        process_improvements,
+        visualization_timestamp: current_timestamp,
+    })
+}
+
+/// Analyze workflow stages from project structure
+async fn analyze_workflow_stages(project_path: &str) -> Result<Vec<WorkflowStageVisualization>, String> {
+    info!("Analyzing workflow stages...");
+    
+    let mut stages = Vec::new();
+    
+    // Define standard software development workflow stages
+    let stage_definitions = vec![
+        ("planning", "Project Planning & Requirements", "planning"),
+        ("analysis", "Analysis & Design", "development"),
+        ("backend_dev", "Backend Development", "development"),
+        ("frontend_dev", "Frontend Development", "development"),
+        ("integration", "System Integration", "development"),
+        ("testing", "Testing & QA", "testing"),
+        ("documentation", "Documentation", "documentation"),
+        ("deployment", "Deployment & Release", "deployment"),
+        ("monitoring", "Monitoring & Maintenance", "deployment"),
+    ];
+    
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    for (i, (stage_id, stage_name, stage_type)) in stage_definitions.iter().enumerate() {
+        let stage_analysis = analyze_individual_stage(project_path, stage_id, stage_name, stage_type, i).await?;
+        stages.push(stage_analysis);
+    }
+    
+    Ok(stages)
+}
+
+/// Analyze individual workflow stage
+async fn analyze_individual_stage(
+    project_path: &str,
+    stage_id: &str,
+    stage_name: &str,
+    stage_type: &str,
+    stage_order: usize,
+) -> Result<WorkflowStageVisualization, String> {
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    // Analyze stage completion based on project artifacts
+    let (status, completion_percentage, efficiency_score) = match stage_id {
+        "planning" => analyze_planning_stage(project_path),
+        "analysis" => analyze_analysis_stage(project_path),
+        "backend_dev" => analyze_backend_development_stage(project_path),
+        "frontend_dev" => analyze_frontend_development_stage(project_path),
+        "integration" => analyze_integration_stage(project_path),
+        "testing" => analyze_testing_stage(project_path),
+        "documentation" => analyze_documentation_stage(project_path),
+        "deployment" => analyze_deployment_stage(project_path),
+        "monitoring" => analyze_monitoring_stage(project_path),
+        _ => ("pending".to_string(), 0.0, 0.0),
+    };
+    
+    // Estimate stage duration and dates
+    let estimated_duration = estimate_stage_duration(stage_id, &completion_percentage);
+    let (start_date, end_date, duration_days) = estimate_stage_timeline(stage_order, estimated_duration, &status);
+    
+    // Define stage dependencies
+    let dependencies = define_stage_dependencies(stage_id);
+    let dependents = define_stage_dependents(stage_id);
+    
+    // Analyze resource allocation
+    let resource_allocation = analyze_stage_resources(stage_id, project_path);
+    
+    // Identify stage-specific bottlenecks
+    let bottlenecks = identify_stage_bottlenecks(stage_id, project_path);
+    
+    // Calculate automation level
+    let automation_level = calculate_automation_level(stage_id, project_path);
+    
+    // Assess risk level
+    let risk_level = assess_stage_risk(stage_id, &completion_percentage, &bottlenecks);
+    
+    // Generate stage metadata
+    let stage_metadata = generate_stage_metadata(stage_id);
+    
+    Ok(WorkflowStageVisualization {
+        stage_id: stage_id.to_string(),
+        stage_name: stage_name.to_string(),
+        stage_type: stage_type.to_string(),
+        status,
+        completion_percentage,
+        start_date,
+        end_date,
+        duration_days,
+        estimated_duration,
+        efficiency_score,
+        resource_allocation,
+        dependencies,
+        dependents,
+        bottlenecks,
+        automation_level,
+        risk_level,
+        stage_metadata,
+    })
+}
+
+/// Stage analysis functions
+
+fn analyze_planning_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut artifacts_found = 0;
+    let total_artifacts = 5;
+    
+    // Check for planning artifacts
+    let planning_files = vec![
+        "README.md", "PRD*.md", "REQUIREMENTS.md", "ROADMAP.md", "MILESTONES.md"
+    ];
+    
+    for file_pattern in planning_files {
+        if file_pattern.contains('*') {
+            // Check doc directory for PRD files
+            let doc_path = format!("{}/doc", project_path);
+            if Path::new(&doc_path).exists() {
+                if let Ok(entries) = fs::read_dir(&doc_path) {
+                    for entry in entries.flatten() {
+                        let file_name = entry.file_name().to_string_lossy().to_lowercase();
+                        if file_name.contains("prd") {
+                            artifacts_found += 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            let file_path = format!("{}/{}", project_path, file_pattern);
+            if Path::new(&file_path).exists() {
+                artifacts_found += 1;
+            }
+        }
+    }
+    
+    completion = (artifacts_found as f64 / total_artifacts as f64) * 100.0;
+    
+    let status = if completion >= 80.0 {
+        "completed"
+    } else if completion >= 40.0 {
+        "active"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 70.0 { 85.0 } else { 60.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_analysis_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut artifacts_found = 0;
+    let total_artifacts = 4;
+    
+    // Check for analysis and design artifacts
+    let analysis_files = vec![
+        "ARCHITECTURE.md", "DESIGN.md", "DATABASE.md", "API.md"
+    ];
+    
+    for file_pattern in analysis_files {
+        let file_path = format!("{}/{}", project_path, file_pattern);
+        if Path::new(&file_path).exists() {
+            artifacts_found += 1;
+        }
+    }
+    
+    // Check doc directory
+    let doc_path = format!("{}/doc", project_path);
+    if Path::new(&doc_path).exists() {
+        if let Ok(entries) = fs::read_dir(&doc_path) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name().to_string_lossy().to_lowercase();
+                if file_name.contains("arch") || file_name.contains("design") {
+                    artifacts_found += 1;
+                    break;
+                }
+            }
+        }
+    }
+    
+    completion = (artifacts_found as f64 / total_artifacts as f64) * 100.0;
+    
+    let status = if completion >= 75.0 {
+        "completed"
+    } else if completion >= 25.0 {
+        "active"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 60.0 { 80.0 } else { 55.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_backend_development_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut components_found = 0;
+    let total_components = 6;
+    
+    // Check for backend components
+    let backend_path = format!("{}/src-tauri/src", project_path);
+    if Path::new(&backend_path).exists() {
+        // Check for main.rs
+        if Path::new(&format!("{}/main.rs", backend_path)).exists() {
+            components_found += 1;
+        }
+        
+        // Check for commands
+        let commands_path = format!("{}/commands", backend_path);
+        if Path::new(&commands_path).exists() {
+            if let Ok(entries) = fs::read_dir(&commands_path) {
+                let command_files = entries.flatten().count();
+                components_found += (command_files / 2).min(2); // Max 2 points for commands
+            }
+        }
+        
+        // Check for database/models
+        if Path::new(&format!("{}/models", backend_path)).exists() ||
+           Path::new(&format!("{}/database", backend_path)).exists() {
+            components_found += 1;
+        }
+        
+        // Check for configuration
+        let tauri_config = format!("{}/src-tauri/tauri.conf.json", project_path);
+        if Path::new(&tauri_config).exists() {
+            components_found += 1;
+        }
+        
+        // Check for migrations
+        let migrations_path = format!("{}/src-tauri/migrations", project_path);
+        if Path::new(&migrations_path).exists() {
+            components_found += 1;
+        }
+    }
+    
+    completion = (components_found as f64 / total_components as f64) * 100.0;
+    
+    let status = if completion >= 80.0 {
+        "completed"
+    } else if completion >= 30.0 {
+        "active"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 70.0 { 88.0 } else { 65.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_frontend_development_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut components_found = 0;
+    let total_components = 7;
+    
+    // Check for frontend components
+    let src_path = format!("{}/src", project_path);
+    if Path::new(&src_path).exists() {
+        // Check for main App component
+        if Path::new(&format!("{}/App.tsx", src_path)).exists() {
+            components_found += 1;
+        }
+        
+        // Check for components directory
+        let components_path = format!("{}/components", src_path);
+        if Path::new(&components_path).exists() {
+            if let Ok(entries) = fs::read_dir(&components_path) {
+                let component_files = entries.flatten().count();
+                components_found += (component_files / 3).min(2); // Max 2 points for components
+            }
+        }
+        
+        // Check for hooks
+        let hooks_path = format!("{}/hooks", src_path);
+        if Path::new(&hooks_path).exists() {
+            components_found += 1;
+        }
+        
+        // Check for utilities
+        let utils_path = format!("{}/lib", src_path);
+        if Path::new(&utils_path).exists() {
+            components_found += 1;
+        }
+        
+        // Check for styling
+        if Path::new(&format!("{}/index.css", src_path)).exists() ||
+           Path::new(&format!("{}/globals.css", src_path)).exists() {
+            components_found += 1;
+        }
+        
+        // Check for TypeScript configuration
+        let tsconfig = format!("{}/tsconfig.json", project_path);
+        if Path::new(&tsconfig).exists() {
+            components_found += 1;
+        }
+    }
+    
+    completion = (components_found as f64 / total_components as f64) * 100.0;
+    
+    let status = if completion >= 85.0 {
+        "completed"
+    } else if completion >= 40.0 {
+        "active"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 75.0 { 90.0 } else { 70.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_integration_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut integration_points = 0;
+    let total_points = 4;
+    
+    // Check for integration indicators
+    
+    // 1. Frontend-Backend integration (Tauri commands)
+    let commands_path = format!("{}/src-tauri/src/commands", project_path);
+    if Path::new(&commands_path).exists() {
+        if let Ok(entries) = fs::read_dir(&commands_path) {
+            if entries.flatten().count() > 0 {
+                integration_points += 1;
+            }
+        }
+    }
+    
+    // 2. Database integration
+    let migrations_path = format!("{}/src-tauri/migrations", project_path);
+    if Path::new(&migrations_path).exists() {
+        integration_points += 1;
+    }
+    
+    // 3. API integration patterns
+    let api_file = format!("{}/src/lib/api.ts", project_path);
+    if Path::new(&api_file).exists() {
+        integration_points += 1;
+    }
+    
+    // 4. Build system integration
+    let vite_config = format!("{}/vite.config.ts", project_path);
+    if Path::new(&vite_config).exists() {
+        integration_points += 1;
+    }
+    
+    completion = (integration_points as f64 / total_points as f64) * 100.0;
+    
+    let status = if completion >= 75.0 {
+        "completed"
+    } else if completion >= 50.0 {
+        "active"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 60.0 { 75.0 } else { 50.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_testing_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut test_indicators = 0;
+    let total_indicators = 5;
+    
+    // Check for testing infrastructure
+    let test_directories = vec!["tests", "__tests__", "test", "e2e"];
+    for test_dir in test_directories {
+        let test_path = format!("{}/{}", project_path, test_dir);
+        if Path::new(&test_path).exists() {
+            test_indicators += 1;
+            break;
+        }
+    }
+    
+    // Check for test configuration files
+    let test_configs = vec!["jest.config.js", "vitest.config.ts", "playwright.config.ts"];
+    for config in test_configs {
+        let config_path = format!("{}/{}", project_path, config);
+        if Path::new(&config_path).exists() {
+            test_indicators += 1;
+        }
+    }
+    
+    // Check package.json for test scripts
+    let package_json = format!("{}/package.json", project_path);
+    if let Ok(content) = fs::read_to_string(&package_json) {
+        if content.contains("\"test\"") || content.contains("\"jest\"") {
+            test_indicators += 1;
+        }
+    }
+    
+    completion = (test_indicators as f64 / total_indicators as f64) * 100.0;
+    
+    let status = if completion >= 60.0 {
+        "active"
+    } else if completion >= 20.0 {
+        "pending"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 40.0 { 65.0 } else { 30.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_documentation_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut doc_files = 0;
+    let total_expected = 6;
+    
+    // Check for documentation files
+    let doc_files_to_check = vec![
+        "README.md", "CONTRIBUTING.md", "API.md", "ARCHITECTURE.md", "CHANGELOG.md"
+    ];
+    
+    for doc_file in doc_files_to_check {
+        let file_path = format!("{}/{}", project_path, doc_file);
+        if Path::new(&file_path).exists() {
+            doc_files += 1;
+        }
+    }
+    
+    // Check doc directory
+    let doc_path = format!("{}/doc", project_path);
+    if Path::new(&doc_path).exists() {
+        if let Ok(entries) = fs::read_dir(&doc_path) {
+            if entries.flatten().count() > 0 {
+                doc_files += 1;
+            }
+        }
+    }
+    
+    completion = (doc_files as f64 / total_expected as f64) * 100.0;
+    
+    let status = if completion >= 70.0 {
+        "active"
+    } else if completion >= 30.0 {
+        "active"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 60.0 { 80.0 } else { 55.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_deployment_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut deployment_indicators = 0;
+    let total_indicators = 4;
+    
+    // Check for deployment configuration
+    let deployment_files = vec![
+        "Dockerfile", "docker-compose.yml", ".github/workflows", "deploy.yml"
+    ];
+    
+    for deploy_file in deployment_files {
+        let file_path = format!("{}/{}", project_path, deploy_file);
+        if Path::new(&file_path).exists() {
+            deployment_indicators += 1;
+        }
+    }
+    
+    completion = (deployment_indicators as f64 / total_indicators as f64) * 100.0;
+    
+    let status = if completion >= 50.0 {
+        "active"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = if completion > 25.0 { 60.0 } else { 20.0 };
+    
+    (status, completion, efficiency)
+}
+
+fn analyze_monitoring_stage(project_path: &str) -> (String, f64, f64) {
+    let mut completion = 0.0;
+    let mut monitoring_indicators = 0;
+    let total_indicators = 3;
+    
+    // Check for monitoring and logging setup
+    let monitoring_files = vec![
+        "logs", "monitoring.yml", "health-check.yml"
+    ];
+    
+    for monitor_file in monitoring_files {
+        let file_path = format!("{}/{}", project_path, monitor_file);
+        if Path::new(&file_path).exists() {
+            monitoring_indicators += 1;
+        }
+    }
+    
+    // Basic monitoring is assumed if deployment is configured
+    if Path::new(&format!("{}/Dockerfile", project_path)).exists() {
+        monitoring_indicators += 1;
+    }
+    
+    completion = (monitoring_indicators as f64 / total_indicators as f64) * 100.0;
+    
+    let status = if completion >= 30.0 {
+        "pending"
+    } else {
+        "pending"
+    }.to_string();
+    
+    let efficiency = 40.0; // Monitoring typically not fully implemented in early stages
+    
+    (status, completion, efficiency)
+}
+
+/// Helper functions for stage analysis
+
+fn estimate_stage_duration(stage_id: &str, completion_percentage: &f64) -> i64 {
+    let base_duration = match stage_id {
+        "planning" => 5,
+        "analysis" => 7,
+        "backend_dev" => 14,
+        "frontend_dev" => 12,
+        "integration" => 5,
+        "testing" => 8,
+        "documentation" => 4,
+        "deployment" => 3,
+        "monitoring" => 2,
+        _ => 5,
+    };
+    
+    // Adjust based on completion
+    if *completion_percentage > 80.0 {
+        base_duration - 2
+    } else if *completion_percentage > 50.0 {
+        base_duration
+    } else {
+        base_duration + 2
+    }.max(1)
+}
+
+fn estimate_stage_timeline(stage_order: usize, estimated_duration: i64, status: &str) -> (Option<i64>, Option<i64>, Option<i64>) {
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    let days_offset = (stage_order as i64) * 7; // Assume 1 week per stage on average
+    
+    match status {
+        "completed" => {
+            let end_date = current_time - (86400 * days_offset);
+            let start_date = end_date - (86400 * estimated_duration);
+            (Some(start_date), Some(end_date), Some(estimated_duration))
+        },
+        "active" => {
+            let start_date = current_time - (86400 * 3); // Started 3 days ago
+            (Some(start_date), None, None)
+        },
+        _ => (None, None, None),
+    }
+}
+
+fn define_stage_dependencies(stage_id: &str) -> Vec<String> {
+    match stage_id {
+        "analysis" => vec!["planning".to_string()],
+        "backend_dev" => vec!["analysis".to_string()],
+        "frontend_dev" => vec!["analysis".to_string()],
+        "integration" => vec!["backend_dev".to_string(), "frontend_dev".to_string()],
+        "testing" => vec!["integration".to_string()],
+        "documentation" => vec!["backend_dev".to_string(), "frontend_dev".to_string()],
+        "deployment" => vec!["testing".to_string()],
+        "monitoring" => vec!["deployment".to_string()],
+        _ => Vec::new(),
+    }
+}
+
+fn define_stage_dependents(stage_id: &str) -> Vec<String> {
+    match stage_id {
+        "planning" => vec!["analysis".to_string()],
+        "analysis" => vec!["backend_dev".to_string(), "frontend_dev".to_string()],
+        "backend_dev" => vec!["integration".to_string(), "documentation".to_string()],
+        "frontend_dev" => vec!["integration".to_string(), "documentation".to_string()],
+        "integration" => vec!["testing".to_string()],
+        "testing" => vec!["deployment".to_string()],
+        "documentation" => Vec::new(),
+        "deployment" => vec!["monitoring".to_string()],
+        _ => Vec::new(),
+    }
+}
+
+fn analyze_stage_resources(stage_id: &str, project_path: &str) -> ResourceAllocation {
+    let (team_members, effort_hours, tools, skills) = match stage_id {
+        "planning" => (2, 40, vec!["Documentation tools".to_string()], vec!["Requirements analysis".to_string()]),
+        "analysis" => (1, 56, vec!["Design tools".to_string()], vec!["System design".to_string()]),
+        "backend_dev" => (1, 112, vec!["Rust".to_string(), "Tauri".to_string()], vec!["Backend development".to_string()]),
+        "frontend_dev" => (1, 96, vec!["React".to_string(), "TypeScript".to_string()], vec!["Frontend development".to_string()]),
+        "integration" => (1, 40, vec!["Testing tools".to_string()], vec!["System integration".to_string()]),
+        "testing" => (1, 64, vec!["Test frameworks".to_string()], vec!["Quality assurance".to_string()]),
+        "documentation" => (1, 32, vec!["Documentation tools".to_string()], vec!["Technical writing".to_string()]),
+        "deployment" => (1, 24, vec!["Deployment tools".to_string()], vec!["DevOps".to_string()]),
+        "monitoring" => (1, 16, vec!["Monitoring tools".to_string()], vec!["System monitoring".to_string()]),
+        _ => (1, 40, Vec::new(), Vec::new()),
+    };
+    
+    ResourceAllocation {
+        assigned_team_members: team_members,
+        estimated_effort_hours: effort_hours,
+        actual_effort_hours: None, // Would be tracked in real implementation
+        tools_required: tools,
+        skills_required: skills,
+        resource_utilization: 75.0, // Assume good utilization
+    }
+}
+
+fn identify_stage_bottlenecks(stage_id: &str, project_path: &str) -> Vec<String> {
+    match stage_id {
+        "backend_dev" => vec!["Database design complexity".to_string()],
+        "frontend_dev" => vec!["UI/UX requirements clarity".to_string()],
+        "integration" => vec!["API compatibility".to_string()],
+        "testing" => vec!["Test environment setup".to_string()],
+        _ => Vec::new(),
+    }
+}
+
+fn calculate_automation_level(stage_id: &str, project_path: &str) -> f64 {
+    match stage_id {
+        "backend_dev" => {
+            // Check for automated build/CI
+            if Path::new(&format!("{}/.github/workflows", project_path)).exists() {
+                70.0
+            } else {
+                30.0
+            }
+        },
+        "frontend_dev" => {
+            // Check for build automation
+            if Path::new(&format!("{}/vite.config.ts", project_path)).exists() {
+                80.0
+            } else {
+                40.0
+            }
+        },
+        "testing" => {
+            // Check for automated testing
+            if Path::new(&format!("{}/jest.config.js", project_path)).exists() ||
+               Path::new(&format!("{}/vitest.config.ts", project_path)).exists() {
+                85.0
+            } else {
+                20.0
+            }
+        },
+        "deployment" => {
+            // Check for deployment automation
+            if Path::new(&format!("{}/Dockerfile", project_path)).exists() {
+                75.0
+            } else {
+                25.0
+            }
+        },
+        _ => 50.0, // Default moderate automation
+    }
+}
+
+fn assess_stage_risk(stage_id: &str, completion_percentage: &f64, bottlenecks: &[String]) -> String {
+    let mut risk_score = 0;
+    
+    // Risk based on completion
+    if *completion_percentage < 30.0 {
+        risk_score += 2;
+    } else if *completion_percentage < 60.0 {
+        risk_score += 1;
+    }
+    
+    // Risk based on bottlenecks
+    risk_score += bottlenecks.len();
+    
+    // Stage-specific risks
+    match stage_id {
+        "integration" => risk_score += 1, // Integration is inherently risky
+        "deployment" => risk_score += 1,  // Deployment has many variables
+        _ => {}
+    }
+    
+    match risk_score {
+        0..=1 => "low",
+        2..=3 => "medium",
+        4..=5 => "high",
+        _ => "critical",
+    }.to_string()
+}
+
+fn generate_stage_metadata(stage_id: &str) -> StageMetadata {
+    let (deliverables, quality_gates, success_criteria, common_issues, best_practices) = match stage_id {
+        "planning" => (
+            vec!["PRD".to_string(), "Requirements".to_string(), "Timeline".to_string()],
+            vec!["Requirements review".to_string(), "Stakeholder approval".to_string()],
+            vec!["All requirements documented".to_string(), "Timeline approved".to_string()],
+            vec!["Unclear requirements".to_string(), "Scope creep".to_string()],
+            vec!["Involve stakeholders early".to_string(), "Document assumptions".to_string()],
+        ),
+        "backend_dev" => (
+            vec!["API endpoints".to_string(), "Database schema".to_string(), "Business logic".to_string()],
+            vec!["Code review".to_string(), "Unit tests".to_string()],
+            vec!["All APIs functional".to_string(), "Database integrated".to_string()],
+            vec!["Performance issues".to_string(), "Security vulnerabilities".to_string()],
+            vec!["Write tests first".to_string(), "Regular code reviews".to_string()],
+        ),
+        _ => (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+    };
+    
+    StageMetadata {
+        deliverables,
+        quality_gates,
+        success_criteria,
+        common_issues,
+        best_practices,
+    }
+}
+
+/// Additional workflow analysis functions
+
+fn map_stage_connections(stages: &[WorkflowStageVisualization]) -> Vec<StageConnection> {
+    let mut connections = Vec::new();
+    
+    for stage in stages {
+        for dependency in &stage.dependencies {
+            connections.push(StageConnection {
+                from_stage: dependency.clone(),
+                to_stage: stage.stage_id.clone(),
+                connection_type: "sequential".to_string(),
+                transition_time: 4, // 4 hours typical handoff time
+                transition_efficiency: 80.0,
+                handoff_quality: 85.0,
+                common_delays: vec!["Communication gaps".to_string(), "Documentation review".to_string()],
+            });
+        }
+    }
+    
+    connections
+}
+
+fn identify_critical_path(stages: &[WorkflowStageVisualization], connections: &[StageConnection]) -> Vec<String> {
+    // Simplified critical path - longest sequential path
+    vec![
+        "planning".to_string(),
+        "analysis".to_string(),
+        "backend_dev".to_string(),
+        "integration".to_string(),
+        "testing".to_string(),
+        "deployment".to_string(),
+    ]
+}
+
+async fn detect_workflow_bottlenecks(
+    stages: &[WorkflowStageVisualization], 
+    project_path: &str
+) -> Result<Vec<WorkflowBottleneck>, String> {
+    let mut bottlenecks = Vec::new();
+    
+    for stage in stages {
+        if stage.efficiency_score < 60.0 || !stage.bottlenecks.is_empty() {
+            bottlenecks.push(WorkflowBottleneck {
+                bottleneck_id: format!("bottleneck_{}", stage.stage_id),
+                stage_name: stage.stage_name.clone(),
+                bottleneck_type: "process".to_string(),
+                severity: if stage.efficiency_score < 40.0 { "high" } else { "medium" }.to_string(),
+                description: format!("Stage efficiency is {}%", stage.efficiency_score as i32),
+                impact_analysis: BottleneckImpact {
+                    delay_impact_days: if stage.efficiency_score < 40.0 { 3.0 } else { 1.0 },
+                    cost_impact: 500.0,
+                    quality_impact: 20.0,
+                    team_morale_impact: 15.0,
+                    customer_impact: "medium".to_string(),
+                },
+                root_causes: stage.bottlenecks.clone(),
+                mitigation_strategies: vec![
+                    "Process optimization".to_string(),
+                    "Additional resources".to_string(),
+                    "Tool improvements".to_string(),
+                ],
+                estimated_resolution_time: 16,
+            });
+        }
+    }
+    
+    Ok(bottlenecks)
+}
+
+fn identify_parallel_opportunities(
+    stages: &[WorkflowStageVisualization], 
+    connections: &[StageConnection]
+) -> Vec<ParallelOpportunity> {
+    let mut opportunities = Vec::new();
+    
+    // Frontend and backend development can be parallel
+    opportunities.push(ParallelOpportunity {
+        opportunity_id: "parallel_development".to_string(),
+        stages_involved: vec!["frontend_dev".to_string(), "backend_dev".to_string()],
+        potential_time_savings: 7, // days
+        implementation_effort: 8,  // hours
+        risk_assessment: "medium".to_string(),
+        prerequisites: vec!["Clear API specification".to_string()],
+        expected_benefits: vec![
+            "Faster delivery".to_string(),
+            "Better resource utilization".to_string(),
+        ],
+    });
+    
+    // Testing and documentation can be parallel
+    opportunities.push(ParallelOpportunity {
+        opportunity_id: "parallel_qa_docs".to_string(),
+        stages_involved: vec!["testing".to_string(), "documentation".to_string()],
+        potential_time_savings: 3, // days
+        implementation_effort: 4,  // hours
+        risk_assessment: "low".to_string(),
+        prerequisites: vec!["Stable feature set".to_string()],
+        expected_benefits: vec![
+            "Reduced overall timeline".to_string(),
+            "Early documentation feedback".to_string(),
+        ],
+    });
+    
+    opportunities
+}
+
+fn analyze_project_timeline(
+    stages: &[WorkflowStageVisualization], 
+    critical_path: &[String]
+) -> TimelineAnalysis {
+    let total_duration: i64 = stages.iter().map(|s| s.estimated_duration).sum();
+    let critical_path_duration: i64 = stages.iter()
+        .filter(|s| critical_path.contains(&s.stage_id))
+        .map(|s| s.estimated_duration)
+        .sum();
+    
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    let estimated_completion_date = current_time + (critical_path_duration * 86400);
+    
+    // Calculate schedule variance
+    let completed_stages = stages.iter().filter(|s| s.status == "completed").count();
+    let total_stages = stages.len();
+    let expected_completion = completed_stages as f64 / total_stages as f64;
+    let schedule_variance = (expected_completion - 0.5) * 100.0; // Assume 50% expected at this point
+    
+    TimelineAnalysis {
+        total_project_duration: total_duration,
+        critical_path_duration,
+        estimated_completion_date,
+        schedule_variance,
+        milestone_analysis: generate_milestone_analysis(stages),
+        timeline_risks: generate_timeline_risks(),
+    }
+}
+
+fn generate_milestone_analysis(stages: &[WorkflowStageVisualization]) -> Vec<MilestoneAnalysis> {
+    let mut milestones = Vec::new();
+    
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    
+    // MVP milestone
+    milestones.push(MilestoneAnalysis {
+        milestone_name: "MVP Release".to_string(),
+        target_date: current_time + (30 * 86400), // 30 days
+        estimated_date: current_time + (35 * 86400), // 35 days
+        confidence_level: 75.0,
+        risk_factors: vec![
+            "Integration complexity".to_string(),
+            "Testing coverage".to_string(),
+        ],
+        dependencies: vec!["backend_dev".to_string(), "frontend_dev".to_string(), "integration".to_string()],
+    });
+    
+    // Production milestone
+    milestones.push(MilestoneAnalysis {
+        milestone_name: "Production Release".to_string(),
+        target_date: current_time + (60 * 86400), // 60 days
+        estimated_date: current_time + (70 * 86400), // 70 days
+        confidence_level: 65.0,
+        risk_factors: vec![
+            "Deployment complexity".to_string(),
+            "Performance optimization".to_string(),
+        ],
+        dependencies: vec!["testing".to_string(), "documentation".to_string(), "deployment".to_string()],
+    });
+    
+    milestones
+}
+
+fn generate_timeline_risks() -> Vec<TimelineRisk> {
+    vec![
+        TimelineRisk {
+            risk_name: "Integration Issues".to_string(),
+            probability: 0.3,
+            impact_days: 5,
+            mitigation_plan: "Early integration testing".to_string(),
+            contingency_plan: "Additional development resources".to_string(),
+        },
+        TimelineRisk {
+            risk_name: "Scope Creep".to_string(),
+            probability: 0.4,
+            impact_days: 7,
+            mitigation_plan: "Strict change control process".to_string(),
+            contingency_plan: "Phase 2 planning for additional features".to_string(),
+        },
+    ]
+}
+
+fn calculate_workflow_efficiency(
+    stages: &[WorkflowStageVisualization], 
+    bottlenecks: &[WorkflowBottleneck]
+) -> WorkflowEfficiencyMetrics {
+    let overall_efficiency = stages.iter().map(|s| s.efficiency_score).sum::<f64>() / stages.len() as f64;
+    
+    let cycle_time = stages.iter().map(|s| s.estimated_duration as f64).sum::<f64>() / stages.len() as f64;
+    
+    let lead_time: f64 = stages.iter().map(|s| s.estimated_duration as f64).sum();
+    
+    let active_stages = stages.iter().filter(|s| s.status == "active").count() as i32;
+    
+    let handoff_efficiency = 85.0 - (bottlenecks.len() as f64 * 5.0); // Reduce by 5% per bottleneck
+    
+    let automation_percentage = stages.iter().map(|s| s.automation_level).sum::<f64>() / stages.len() as f64;
+    
+    WorkflowEfficiencyMetrics {
+        overall_efficiency,
+        cycle_time,
+        lead_time,
+        throughput: 1.0 / cycle_time, // Simplified throughput calculation
+        work_in_progress: active_stages,
+        handoff_efficiency,
+        rework_percentage: 10.0, // Assume 10% rework rate
+        automation_percentage,
+        resource_utilization: 75.0, // Assume good resource utilization
+    }
+}
+
+async fn identify_automation_opportunities(
+    stages: &[WorkflowStageVisualization], 
+    project_path: &str
+) -> Result<Vec<AutomationOpportunity>, String> {
+    let mut opportunities = Vec::new();
+    
+    // CI/CD automation
+    if !Path::new(&format!("{}/.github/workflows", project_path)).exists() {
+        opportunities.push(AutomationOpportunity {
+            opportunity_id: "ci_cd_automation".to_string(),
+            stage_name: "Integration".to_string(),
+            automation_type: "ci_cd".to_string(),
+            description: "Implement continuous integration and deployment".to_string(),
+            implementation_effort: 16,
+            time_savings_per_cycle: 4,
+            error_reduction_percentage: 60.0,
+            recommended_tools: vec!["GitHub Actions".to_string(), "Docker".to_string()],
+            roi_analysis: ROIAnalysis {
+                implementation_cost: 2000.0,
+                annual_savings: 8000.0,
+                payback_period_months: 3.0,
+                roi_percentage: 300.0,
+            },
+        });
+    }
+    
+    // Testing automation
+    for stage in stages {
+        if stage.stage_id == "testing" && stage.automation_level < 70.0 {
+            opportunities.push(AutomationOpportunity {
+                opportunity_id: "test_automation".to_string(),
+                stage_name: "Testing".to_string(),
+                automation_type: "testing".to_string(),
+                description: "Implement automated testing suite".to_string(),
+                implementation_effort: 24,
+                time_savings_per_cycle: 8,
+                error_reduction_percentage: 80.0,
+                recommended_tools: vec!["Jest".to_string(), "Playwright".to_string()],
+                roi_analysis: ROIAnalysis {
+                    implementation_cost: 3000.0,
+                    annual_savings: 12000.0,
+                    payback_period_months: 3.0,
+                    roi_percentage: 300.0,
+                },
+            });
+        }
+    }
+    
+    Ok(opportunities)
+}
+
+fn generate_process_improvements(
+    stages: &[WorkflowStageVisualization], 
+    bottlenecks: &[WorkflowBottleneck], 
+    efficiency: &WorkflowEfficiencyMetrics
+) -> Vec<ProcessImprovement> {
+    let mut improvements = Vec::new();
+    
+    // Improve communication if handoff efficiency is low
+    if efficiency.handoff_efficiency < 80.0 {
+        improvements.push(ProcessImprovement {
+            improvement_id: "improve_communication".to_string(),
+            improvement_type: "communication".to_string(),
+            title: "Improve Inter-Stage Communication".to_string(),
+            description: "Implement better handoff processes between stages".to_string(),
+            affected_stages: vec!["all".to_string()],
+            implementation_effort: 8,
+            expected_benefits: vec![
+                "Reduced transition time".to_string(),
+                "Better quality handoffs".to_string(),
+            ],
+            success_metrics: vec!["Handoff efficiency >90%".to_string()],
+            priority: "high".to_string(),
+        });
+    }
+    
+    // Improve automation if percentage is low
+    if efficiency.automation_percentage < 60.0 {
+        improvements.push(ProcessImprovement {
+            improvement_id: "increase_automation".to_string(),
+            improvement_type: "tooling".to_string(),
+            title: "Increase Process Automation".to_string(),
+            description: "Automate manual tasks to improve efficiency".to_string(),
+            affected_stages: vec!["backend_dev".to_string(), "frontend_dev".to_string(), "testing".to_string()],
+            implementation_effort: 32,
+            expected_benefits: vec![
+                "Reduced manual effort".to_string(),
+                "Fewer errors".to_string(),
+                "Faster delivery".to_string(),
+            ],
+            success_metrics: vec!["Automation >80%".to_string()],
+            priority: "medium".to_string(),
+        });
+    }
+    
+    improvements
+}
+
+/// Store workflow visualization data
+fn store_workflow_visualization(
+    conn: &Connection,
+    project_id: &str,
+    stages: &[WorkflowStageVisualization],
+    timestamp: i64,
+) -> Result<(), String> {
+    for stage in stages {
+        conn.execute(
+            "INSERT OR REPLACE INTO workflow_stages 
+             (project_id, stage_name, stage_order, status, start_date, end_date, 
+              duration_days, efficiency_score, bottlenecks, updated_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                project_id,
+                stage.stage_name,
+                0, // Would need to calculate proper order
+                stage.status,
+                stage.start_date,
+                stage.end_date,
+                stage.duration_days,
+                stage.efficiency_score,
+                stage.bottlenecks.join(","),
+                timestamp
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}

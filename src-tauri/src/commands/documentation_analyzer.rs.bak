@@ -1,0 +1,1321 @@
+use anyhow::Result;
+use log::{info, warn};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::State;
+
+use super::agents::AgentDb;
+use super::dashboard::DocumentationStatus;
+
+/// Documentation Analysis Result
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DocumentationAnalysis {
+    pub project_id: String,
+    pub overall_completion: f64,
+    pub overall_quality_score: f64,
+    pub documentation_categories: Vec<DocumentationCategory>,
+    pub missing_documentation: Vec<MissingDocumentation>,
+    pub quality_assessment: QualityAssessment,
+    pub coverage_analysis: CoverageAnalysis,
+    pub recommendations: Vec<String>,
+    pub priority_actions: Vec<PriorityAction>,
+    pub analysis_timestamp: i64,
+}
+
+/// Documentation Category Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DocumentationCategory {
+    pub category: String,
+    pub completion_percentage: f64,
+    pub quality_score: f64,
+    pub total_sections: i32,
+    pub completed_sections: i32,
+    pub missing_sections: Vec<String>,
+    pub files_analyzed: Vec<String>,
+    pub last_updated: i64,
+    pub urgency_level: String,
+}
+
+/// Missing Documentation Item
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MissingDocumentation {
+    pub doc_type: String,
+    pub title: String,
+    pub description: String,
+    pub importance: String,    // critical, high, medium, low
+    pub estimated_effort: i32, // hours
+    pub dependencies: Vec<String>,
+    pub suggested_location: String,
+}
+
+/// Quality Assessment
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct QualityAssessment {
+    pub clarity_score: f64,          // 0-100
+    pub completeness_score: f64,     // 0-100
+    pub accuracy_score: f64,         // 0-100
+    pub consistency_score: f64,      // 0-100
+    pub accessibility_score: f64,    // 0-100
+    pub maintainability_score: f64,  // 0-100
+    pub quality_issues: Vec<QualityIssue>,
+}
+
+/// Documentation Quality Issue
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct QualityIssue {
+    pub issue_type: String,
+    pub severity: String,
+    pub description: String,
+    pub file_path: String,
+    pub line_number: Option<i32>,
+    pub suggestion: String,
+}
+
+/// Coverage Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CoverageAnalysis {
+    pub code_coverage: f64,          // Percentage of code with documentation
+    pub api_coverage: f64,           // Percentage of API endpoints documented
+    pub component_coverage: f64,     // Percentage of components documented
+    pub function_coverage: f64,      // Percentage of functions documented
+    pub configuration_coverage: f64, // Percentage of config options documented
+    pub coverage_gaps: Vec<CoverageGap>,
+}
+
+/// Coverage Gap
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CoverageGap {
+    pub gap_type: String,
+    pub location: String,
+    pub description: String,
+    pub impact: String,
+    pub suggested_action: String,
+}
+
+/// Priority Action for Documentation
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PriorityAction {
+    pub action_type: String,
+    pub priority: String,
+    pub title: String,
+    pub description: String,
+    pub estimated_effort: i32,
+    pub expected_impact: String,
+    pub deadline_suggestion: String,
+}
+
+/// Comprehensive documentation analysis
+#[tauri::command]
+pub async fn analyze_documentation_status(
+    db: State<'_, AgentDb>,
+    project_path: String,
+) -> Result<DocumentationAnalysis, String> {
+    info!("Starting comprehensive documentation analysis for: {}", project_path);
+    
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    // Analyze different documentation categories
+    let documentation_categories = analyze_documentation_categories(&project_path).await?;
+    
+    // Identify missing documentation
+    let missing_documentation = identify_missing_documentation(&project_path).await?;
+    
+    // Assess documentation quality
+    let quality_assessment = assess_documentation_quality(&project_path).await?;
+    
+    // Analyze documentation coverage
+    let coverage_analysis = analyze_documentation_coverage(&project_path).await?;
+    
+    // Calculate overall metrics
+    let overall_completion = calculate_overall_completion(&documentation_categories);
+    let overall_quality_score = calculate_overall_quality(&quality_assessment);
+    
+    // Generate recommendations and priority actions
+    let recommendations = generate_documentation_recommendations(
+        &documentation_categories,
+        &missing_documentation,
+        &quality_assessment,
+        &coverage_analysis,
+    );
+    
+    let priority_actions = generate_priority_actions(
+        &missing_documentation,
+        &quality_assessment.quality_issues,
+    );
+    
+    // Store results in database
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    store_documentation_analysis(
+        &conn,
+        "claudia-main",
+        &documentation_categories,
+        current_timestamp,
+    )?;
+    
+    Ok(DocumentationAnalysis {
+        project_id: "claudia-main".to_string(),
+        overall_completion,
+        overall_quality_score,
+        documentation_categories,
+        missing_documentation,
+        quality_assessment,
+        coverage_analysis,
+        recommendations,
+        priority_actions,
+        analysis_timestamp: current_timestamp,
+    })
+}
+
+/// Analyze documentation categories
+async fn analyze_documentation_categories(project_path: &str) -> Result<Vec<DocumentationCategory>, String> {
+    info!("Analyzing documentation categories...");
+    
+    let mut categories = Vec::new();
+    
+    // 1. Project Requirements Documentation (PRD)
+    let prd_analysis = analyze_prd_documentation(project_path).await?;
+    categories.push(prd_analysis);
+    
+    // 2. Technical Documentation
+    let tech_analysis = analyze_technical_documentation(project_path).await?;
+    categories.push(tech_analysis);
+    
+    // 3. API Documentation
+    let api_analysis = analyze_api_documentation(project_path).await?;
+    categories.push(api_analysis);
+    
+    // 4. User Documentation
+    let user_analysis = analyze_user_documentation(project_path).await?;
+    categories.push(user_analysis);
+    
+    // 5. Development Documentation
+    let dev_analysis = analyze_development_documentation(project_path).await?;
+    categories.push(dev_analysis);
+    
+    // 6. Deployment Documentation
+    let deploy_analysis = analyze_deployment_documentation(project_path).await?;
+    categories.push(deploy_analysis);
+    
+    Ok(categories)
+}
+
+/// Analyze PRD documentation
+async fn analyze_prd_documentation(project_path: &str) -> Result<DocumentationCategory, String> {
+    let mut files_analyzed = Vec::new();
+    let mut completed_sections = 0;
+    let total_sections = 8; // Expected PRD sections
+    let mut missing_sections = Vec::new();
+    let mut last_updated = 0;
+    
+    // Check for PRD files
+    let prd_patterns = vec![
+        "PRD*.md", "prd*.md", "requirements*.md", "product*.md"
+    ];
+    
+    let doc_path = format!("{}/doc", project_path);
+    if Path::new(&doc_path).exists() {
+        if let Ok(entries) = fs::read_dir(&doc_path) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name().to_string_lossy().to_lowercase();
+                
+                for pattern in &prd_patterns {
+                    let pattern_lower = pattern.to_lowercase().replace("*", "");
+                    if file_name.contains(&pattern_lower) {
+                        files_analyzed.push(entry.path().to_string_lossy().to_string());
+                        
+                        if let Ok(metadata) = entry.metadata() {
+                            if let Ok(modified) = metadata.modified() {
+                                if let Ok(duration) = modified.duration_since(SystemTime::UNIX_EPOCH) {
+                                    last_updated = last_updated.max(duration.as_secs() as i64);
+                                }
+                            }
+                        }
+                        
+                        // Analyze PRD content
+                        if let Ok(content) = fs::read_to_string(entry.path()) {
+                            completed_sections += analyze_prd_content(&content, &mut missing_sections);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check root directory for README/PRD files
+    let root_patterns = vec!["README.md", "REQUIREMENTS.md", "PRODUCT.md"];
+    for pattern in root_patterns {
+        let file_path = format!("{}/{}", project_path, pattern);
+        if Path::new(&file_path).exists() {
+            files_analyzed.push(file_path.clone());
+            
+            if let Ok(content) = fs::read_to_string(&file_path) {
+                completed_sections += analyze_prd_content(&content, &mut missing_sections);
+            }
+        }
+    }
+    
+    if missing_sections.is_empty() && completed_sections < total_sections {
+        missing_sections = vec![
+            "Project Overview".to_string(),
+            "User Stories".to_string(),
+            "Functional Requirements".to_string(),
+            "Non-functional Requirements".to_string(),
+            "Success Criteria".to_string(),
+            "Risk Assessment".to_string(),
+            "Timeline".to_string(),
+            "Dependencies".to_string(),
+        ];
+        missing_sections.truncate((total_sections - completed_sections) as usize);
+    }
+    
+    let completion_percentage = (completed_sections as f64 / total_sections as f64) * 100.0;
+    let quality_score = calculate_category_quality_score(completion_percentage, &files_analyzed);
+    
+    Ok(DocumentationCategory {
+        category: "prd".to_string(),
+        completion_percentage,
+        quality_score,
+        total_sections,
+        completed_sections,
+        missing_sections,
+        files_analyzed,
+        last_updated,
+        urgency_level: if completion_percentage < 50.0 { "high" } else { "medium" }.to_string(),
+    })
+}
+
+/// Analyze technical documentation
+async fn analyze_technical_documentation(project_path: &str) -> Result<DocumentationCategory, String> {
+    let mut files_analyzed = Vec::new();
+    let mut completed_sections = 0;
+    let total_sections = 6;
+    let mut missing_sections = Vec::new();
+    let mut last_updated = 0;
+    
+    // Check for technical documentation files
+    let tech_patterns = vec![
+        "ARCHITECTURE.md", "TECHNICAL.md", "DESIGN.md", "SYSTEM.md"
+    ];
+    
+    for pattern in &tech_patterns {
+        let file_path = format!("{}/{}", project_path, pattern);
+        if Path::new(&file_path).exists() {
+            files_analyzed.push(file_path.clone());
+            completed_sections += 1;
+            
+            if let Ok(metadata) = fs::metadata(&file_path) {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(duration) = modified.duration_since(SystemTime::UNIX_EPOCH) {
+                        last_updated = last_updated.max(duration.as_secs() as i64);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check doc directory
+    let doc_path = format!("{}/doc", project_path);
+    if Path::new(&doc_path).exists() {
+        if let Ok(entries) = fs::read_dir(&doc_path) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name().to_string_lossy().to_lowercase();
+                
+                if file_name.contains("tech") || file_name.contains("arch") || 
+                   file_name.contains("design") || file_name.contains("system") {
+                    files_analyzed.push(entry.path().to_string_lossy().to_string());
+                    completed_sections += 1;
+                }
+            }
+        }
+    }
+    
+    // Define expected technical documentation sections
+    let expected_sections = vec![
+        "System Architecture",
+        "Technology Stack",
+        "Database Design",
+        "API Design",
+        "Security Architecture",
+        "Performance Considerations",
+    ];
+    
+    for (i, section) in expected_sections.iter().enumerate() {
+        if i >= completed_sections as usize {
+            missing_sections.push(section.clone());
+        }
+    }
+    
+    let completion_percentage = (completed_sections as f64 / total_sections as f64) * 100.0;
+    let quality_score = calculate_category_quality_score(completion_percentage, &files_analyzed);
+    
+    Ok(DocumentationCategory {
+        category: "tech_stack".to_string(),
+        completion_percentage,
+        quality_score,
+        total_sections,
+        completed_sections,
+        missing_sections,
+        files_analyzed,
+        last_updated,
+        urgency_level: if completion_percentage < 60.0 { "high" } else { "medium" }.to_string(),
+    })
+}
+
+/// Analyze API documentation
+async fn analyze_api_documentation(project_path: &str) -> Result<DocumentationCategory, String> {
+    let mut files_analyzed = Vec::new();
+    let mut completed_sections = 0;
+    let total_sections = 5;
+    let mut missing_sections = Vec::new();
+    let mut last_updated = 0;
+    
+    // Check for API documentation
+    let api_patterns = vec![
+        "API.md", "api.md", "ENDPOINTS.md", "endpoints.md"
+    ];
+    
+    for pattern in &api_patterns {
+        let file_path = format!("{}/{}", project_path, pattern);
+        if Path::new(&file_path).exists() {
+            files_analyzed.push(file_path.clone());
+            completed_sections += 1;
+        }
+    }
+    
+    // Check src-tauri/src/commands for API implementations
+    let commands_path = format!("{}/src-tauri/src/commands", project_path);
+    if Path::new(&commands_path).exists() {
+        if let Ok(entries) = fs::read_dir(&commands_path) {
+            let mut command_files = 0;
+            let mut documented_commands = 0;
+            
+            for entry in entries.flatten() {
+                if let Some(extension) = entry.path().extension() {
+                    if extension == "rs" {
+                        command_files += 1;
+                        files_analyzed.push(entry.path().to_string_lossy().to_string());
+                        
+                        // Check if command file has documentation comments
+                        if let Ok(content) = fs::read_to_string(entry.path()) {
+                            if content.contains("///") || content.contains("/**") {
+                                documented_commands += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if command_files > 0 {
+                let api_doc_ratio = documented_commands as f64 / command_files as f64;
+                completed_sections += (api_doc_ratio * 2.0) as i32; // Max 2 sections for API docs
+            }
+        }
+    }
+    
+    // Define expected API documentation sections
+    let expected_sections = vec![
+        "API Overview",
+        "Authentication",
+        "Endpoints Documentation",
+        "Request/Response Examples",
+        "Error Handling",
+    ];
+    
+    for (i, section) in expected_sections.iter().enumerate() {
+        if i >= completed_sections as usize {
+            missing_sections.push(section.clone());
+        }
+    }
+    
+    let completion_percentage = (completed_sections as f64 / total_sections as f64) * 100.0;
+    let quality_score = calculate_category_quality_score(completion_percentage, &files_analyzed);
+    
+    Ok(DocumentationCategory {
+        category: "api".to_string(),
+        completion_percentage,
+        quality_score,
+        total_sections,
+        completed_sections,
+        missing_sections,
+        files_analyzed,
+        last_updated,
+        urgency_level: if completion_percentage < 70.0 { "medium" } else { "low" }.to_string(),
+    })
+}
+
+/// Analyze user documentation
+async fn analyze_user_documentation(project_path: &str) -> Result<DocumentationCategory, String> {
+    let mut files_analyzed = Vec::new();
+    let mut completed_sections = 0;
+    let total_sections = 4;
+    let mut missing_sections = Vec::new();
+    let mut last_updated = 0;
+    
+    // Check for user documentation files
+    let user_patterns = vec![
+        "README.md", "USER_GUIDE.md", "USAGE.md", "MANUAL.md", "TUTORIAL.md"
+    ];
+    
+    for pattern in &user_patterns {
+        let file_path = format!("{}/{}", project_path, pattern);
+        if Path::new(&file_path).exists() {
+            files_analyzed.push(file_path.clone());
+            
+            if let Ok(content) = fs::read_to_string(&file_path) {
+                completed_sections += analyze_user_doc_content(&content);
+            }
+            
+            if let Ok(metadata) = fs::metadata(&file_path) {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(duration) = modified.duration_since(SystemTime::UNIX_EPOCH) {
+                        last_updated = last_updated.max(duration.as_secs() as i64);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Define expected user documentation sections
+    let expected_sections = vec![
+        "Installation Guide",
+        "Getting Started",
+        "Feature Overview",
+        "Troubleshooting",
+    ];
+    
+    for (i, section) in expected_sections.iter().enumerate() {
+        if i >= completed_sections as usize {
+            missing_sections.push(section.clone());
+        }
+    }
+    
+    let completion_percentage = (completed_sections as f64 / total_sections as f64) * 100.0;
+    let quality_score = calculate_category_quality_score(completion_percentage, &files_analyzed);
+    
+    Ok(DocumentationCategory {
+        category: "usage_guides".to_string(),
+        completion_percentage,
+        quality_score,
+        total_sections,
+        completed_sections,
+        missing_sections,
+        files_analyzed,
+        last_updated,
+        urgency_level: if completion_percentage < 80.0 { "high" } else { "low" }.to_string(),
+    })
+}
+
+/// Analyze development documentation
+async fn analyze_development_documentation(project_path: &str) -> Result<DocumentationCategory, String> {
+    let mut files_analyzed = Vec::new();
+    let mut completed_sections = 0;
+    let total_sections = 5;
+    let mut missing_sections = Vec::new();
+    let mut last_updated = 0;
+    
+    // Check for development documentation files
+    let dev_patterns = vec![
+        "CONTRIBUTING.md", "DEVELOPMENT.md", "SETUP.md", "BUILD.md", "DEV_GUIDE.md"
+    ];
+    
+    for pattern in &dev_patterns {
+        let file_path = format!("{}/{}", project_path, pattern);
+        if Path::new(&file_path).exists() {
+            files_analyzed.push(file_path.clone());
+            completed_sections += 1;
+        }
+    }
+    
+    // Check for package.json scripts documentation
+    let package_json_path = format!("{}/package.json", project_path);
+    if Path::new(&package_json_path).exists() {
+        if let Ok(content) = fs::read_to_string(&package_json_path) {
+            if content.contains("\"scripts\"") {
+                completed_sections += 1; // Has build scripts
+            }
+        }
+    }
+    
+    // Define expected development documentation sections
+    let expected_sections = vec![
+        "Development Setup",
+        "Build Process",
+        "Testing Guidelines",
+        "Code Style Guide",
+        "Contributing Guidelines",
+    ];
+    
+    for (i, section) in expected_sections.iter().enumerate() {
+        if i >= completed_sections as usize {
+            missing_sections.push(section.clone());
+        }
+    }
+    
+    let completion_percentage = (completed_sections as f64 / total_sections as f64) * 100.0;
+    let quality_score = calculate_category_quality_score(completion_percentage, &files_analyzed);
+    
+    Ok(DocumentationCategory {
+        category: "workflows".to_string(),
+        completion_percentage,
+        quality_score,
+        total_sections,
+        completed_sections,
+        missing_sections,
+        files_analyzed,
+        last_updated,
+        urgency_level: "medium".to_string(),
+    })
+}
+
+/// Analyze deployment documentation
+async fn analyze_deployment_documentation(project_path: &str) -> Result<DocumentationCategory, String> {
+    let mut files_analyzed = Vec::new();
+    let mut completed_sections = 0;
+    let total_sections = 4;
+    let mut missing_sections = Vec::new();
+    let mut last_updated = 0;
+    
+    // Check for deployment documentation files
+    let deploy_patterns = vec![
+        "DEPLOYMENT.md", "DEPLOY.md", "RELEASE.md", "DOCKER.md"
+    ];
+    
+    for pattern in &deploy_patterns {
+        let file_path = format!("{}/{}", project_path, pattern);
+        if Path::new(&file_path).exists() {
+            files_analyzed.push(file_path.clone());
+            completed_sections += 1;
+        }
+    }
+    
+    // Check for deployment configuration files
+    let deploy_configs = vec![
+        "Dockerfile", "docker-compose.yml", ".github/workflows", "deploy.yml"
+    ];
+    
+    for config in &deploy_configs {
+        let file_path = format!("{}/{}", project_path, config);
+        if Path::new(&file_path).exists() {
+            files_analyzed.push(file_path.clone());
+            completed_sections += 1;
+        }
+    }
+    
+    // Define expected deployment documentation sections
+    let expected_sections = vec![
+        "Deployment Guide",
+        "Environment Configuration",
+        "Release Process",
+        "Monitoring & Maintenance",
+    ];
+    
+    for (i, section) in expected_sections.iter().enumerate() {
+        if i >= completed_sections as usize {
+            missing_sections.push(section.clone());
+        }
+    }
+    
+    let completion_percentage = (completed_sections as f64 / total_sections as f64) * 100.0;
+    let quality_score = calculate_category_quality_score(completion_percentage, &files_analyzed);
+    
+    Ok(DocumentationCategory {
+        category: "reports".to_string(),
+        completion_percentage,
+        quality_score,
+        total_sections,
+        completed_sections,
+        missing_sections,
+        files_analyzed,
+        last_updated,
+        urgency_level: "low".to_string(),
+    })
+}
+
+/// Identify missing documentation
+async fn identify_missing_documentation(project_path: &str) -> Result<Vec<MissingDocumentation>, String> {
+    let mut missing_docs = Vec::new();
+    
+    // Critical missing documentation
+    let critical_docs = vec![
+        ("README.md", "Project Overview", "Main project documentation and getting started guide", 4),
+        ("API.md", "API Documentation", "Complete API endpoint documentation", 8),
+        ("ARCHITECTURE.md", "System Architecture", "Technical architecture and design decisions", 12),
+    ];
+    
+    for (file_name, title, description, effort) in critical_docs {
+        let file_path = format!("{}/{}", project_path, file_name);
+        if !Path::new(&file_path).exists() {
+            missing_docs.push(MissingDocumentation {
+                doc_type: "critical".to_string(),
+                title: title.to_string(),
+                description: description.to_string(),
+                importance: "critical".to_string(),
+                estimated_effort: effort,
+                dependencies: Vec::new(),
+                suggested_location: file_path,
+            });
+        }
+    }
+    
+    // High priority missing documentation
+    let high_priority_docs = vec![
+        ("CONTRIBUTING.md", "Contributing Guidelines", "Guidelines for contributors and developers", 6),
+        ("SECURITY.md", "Security Policy", "Security guidelines and vulnerability reporting", 4),
+        ("CHANGELOG.md", "Change History", "Version history and release notes", 2),
+    ];
+    
+    for (file_name, title, description, effort) in high_priority_docs {
+        let file_path = format!("{}/{}", project_path, file_name);
+        if !Path::new(&file_path).exists() {
+            missing_docs.push(MissingDocumentation {
+                doc_type: "high_priority".to_string(),
+                title: title.to_string(),
+                description: description.to_string(),
+                importance: "high".to_string(),
+                estimated_effort: effort,
+                dependencies: Vec::new(),
+                suggested_location: file_path,
+            });
+        }
+    }
+    
+    // Check for missing inline documentation
+    if let Ok(entries) = fs::read_dir(format!("{}/src", project_path)) {
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if matches!(extension.to_str(), Some("ts" | "tsx" | "js" | "jsx")) {
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        // Check for functions without documentation
+                        let function_count = content.matches("function ").count() + 
+                                           content.matches("const ").count() + 
+                                           content.matches("export ").count();
+                        let doc_count = content.matches("/**").count() + content.matches("//").count();
+                        
+                        if function_count > 5 && doc_count < function_count / 2 {
+                            missing_docs.push(MissingDocumentation {
+                                doc_type: "inline".to_string(),
+                                title: format!("Inline Documentation for {}", entry.file_name().to_string_lossy()),
+                                description: "Add JSDoc comments for functions and components".to_string(),
+                                importance: "medium".to_string(),
+                                estimated_effort: 3,
+                                dependencies: Vec::new(),
+                                suggested_location: entry.path().to_string_lossy().to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(missing_docs)
+}
+
+/// Assess documentation quality
+async fn assess_documentation_quality(project_path: &str) -> Result<QualityAssessment, String> {
+    let mut quality_issues = Vec::new();
+    let mut clarity_score = 90.0;
+    let mut completeness_score = 80.0;
+    let mut accuracy_score = 85.0;
+    let mut consistency_score = 75.0;
+    let mut accessibility_score = 70.0;
+    let mut maintainability_score = 80.0;
+    
+    // Analyze existing documentation files
+    let doc_patterns = vec![
+        "*.md", "*.txt", "*.rst"
+    ];
+    
+    // Check README quality
+    let readme_path = format!("{}/README.md", project_path);
+    if Path::new(&readme_path).exists() {
+        if let Ok(content) = fs::read_to_string(&readme_path) {
+            let readme_issues = analyze_readme_quality(&content, &readme_path);
+            quality_issues.extend(readme_issues);
+            
+            // Adjust scores based on README quality
+            if content.len() < 500 {
+                completeness_score -= 15.0;
+                quality_issues.push(QualityIssue {
+                    issue_type: "completeness".to_string(),
+                    severity: "medium".to_string(),
+                    description: "README is too short, lacks comprehensive information".to_string(),
+                    file_path: readme_path.clone(),
+                    line_number: None,
+                    suggestion: "Expand README with more detailed project information".to_string(),
+                });
+            }
+            
+            if !content.contains("## Installation") {
+                accessibility_score -= 10.0;
+                quality_issues.push(QualityIssue {
+                    issue_type: "accessibility".to_string(),
+                    severity: "high".to_string(),
+                    description: "Missing installation instructions".to_string(),
+                    file_path: readme_path.clone(),
+                    line_number: None,
+                    suggestion: "Add clear installation instructions".to_string(),
+                });
+            }
+        }
+    } else {
+        completeness_score -= 30.0;
+        accessibility_score -= 20.0;
+        quality_issues.push(QualityIssue {
+            issue_type: "completeness".to_string(),
+            severity: "critical".to_string(),
+            description: "Missing README.md file".to_string(),
+            file_path: readme_path,
+            line_number: None,
+            suggestion: "Create comprehensive README.md file".to_string(),
+        });
+    }
+    
+    // Analyze documentation in doc directory
+    let doc_path = format!("{}/doc", project_path);
+    if Path::new(&doc_path).exists() {
+        if let Ok(entries) = fs::read_dir(&doc_path) {
+            for entry in entries.flatten() {
+                if let Some(extension) = entry.path().extension() {
+                    if extension == "md" {
+                        if let Ok(content) = fs::read_to_string(entry.path()) {
+                            let file_issues = analyze_document_quality(&content, &entry.path().to_string_lossy());
+                            quality_issues.extend(file_issues);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Check code documentation
+    analyze_code_documentation_quality(project_path, &mut quality_issues, &mut consistency_score);
+    
+    Ok(QualityAssessment {
+        clarity_score,
+        completeness_score,
+        accuracy_score,
+        consistency_score,
+        accessibility_score,
+        maintainability_score,
+        quality_issues,
+    })
+}
+
+/// Analyze documentation coverage
+async fn analyze_documentation_coverage(project_path: &str) -> Result<CoverageAnalysis, String> {
+    let mut coverage_gaps = Vec::new();
+    
+    // Analyze code documentation coverage
+    let code_coverage = analyze_code_documentation_coverage(project_path, &mut coverage_gaps).await?;
+    
+    // Analyze API documentation coverage
+    let api_coverage = analyze_api_documentation_coverage(project_path, &mut coverage_gaps).await?;
+    
+    // Analyze component documentation coverage
+    let component_coverage = analyze_component_documentation_coverage(project_path, &mut coverage_gaps).await?;
+    
+    // Analyze function documentation coverage
+    let function_coverage = analyze_function_documentation_coverage(project_path, &mut coverage_gaps).await?;
+    
+    // Analyze configuration documentation coverage
+    let configuration_coverage = analyze_configuration_documentation_coverage(project_path, &mut coverage_gaps).await?;
+    
+    Ok(CoverageAnalysis {
+        code_coverage,
+        api_coverage,
+        component_coverage,
+        function_coverage,
+        configuration_coverage,
+        coverage_gaps,
+    })
+}
+
+/// Helper functions for content analysis
+
+fn analyze_prd_content(content: &str, missing_sections: &mut Vec<String>) -> i32 {
+    let mut sections_found = 0;
+    let expected_sections = vec![
+        "overview", "requirements", "goals", "features", "timeline", "risks", "success", "dependencies"
+    ];
+    
+    let content_lower = content.to_lowercase();
+    for section in expected_sections {
+        if content_lower.contains(section) {
+            sections_found += 1;
+        } else {
+            missing_sections.push(section.to_string());
+        }
+    }
+    
+    sections_found
+}
+
+fn analyze_user_doc_content(content: &str) -> i32 {
+    let mut sections_found = 0;
+    let user_sections = vec!["install", "getting started", "usage", "troubleshoot"];
+    
+    let content_lower = content.to_lowercase();
+    for section in user_sections {
+        if content_lower.contains(section) {
+            sections_found += 1;
+        }
+    }
+    
+    sections_found
+}
+
+fn analyze_readme_quality(content: &str, file_path: &str) -> Vec<QualityIssue> {
+    let mut issues = Vec::new();
+    
+    // Check for essential sections
+    let essential_sections = vec![
+        ("# ", "Missing main title"),
+        ("## Installation", "Missing installation section"),
+        ("## Usage", "Missing usage section"),
+        ("## License", "Missing license section"),
+    ];
+    
+    for (pattern, issue_desc) in essential_sections {
+        if !content.contains(pattern) {
+            issues.push(QualityIssue {
+                issue_type: "structure".to_string(),
+                severity: "medium".to_string(),
+                description: issue_desc.to_string(),
+                file_path: file_path.to_string(),
+                line_number: None,
+                suggestion: format!("Add {} section", pattern),
+            });
+        }
+    }
+    
+    // Check for broken links (simplified)
+    if content.contains("](") {
+        let link_count = content.matches("](").count();
+        if link_count > 0 {
+            // Would normally validate links, for now just note potential issue
+            issues.push(QualityIssue {
+                issue_type: "accuracy".to_string(),
+                severity: "low".to_string(),
+                description: format!("Found {} links - verify they are working", link_count),
+                file_path: file_path.to_string(),
+                line_number: None,
+                suggestion: "Validate all external links are accessible".to_string(),
+            });
+        }
+    }
+    
+    issues
+}
+
+fn analyze_document_quality(content: &str, file_path: &str) -> Vec<QualityIssue> {
+    let mut issues = Vec::new();
+    
+    // Check for very short documents
+    if content.len() < 200 {
+        issues.push(QualityIssue {
+            issue_type: "completeness".to_string(),
+            severity: "medium".to_string(),
+            description: "Document appears incomplete or too brief".to_string(),
+            file_path: file_path.to_string(),
+            line_number: None,
+            suggestion: "Expand document with more detailed information".to_string(),
+        });
+    }
+    
+    // Check for missing table of contents in long documents
+    if content.len() > 2000 && !content.contains("## Table of Contents") {
+        issues.push(QualityIssue {
+            issue_type: "accessibility".to_string(),
+            severity: "low".to_string(),
+            description: "Long document missing table of contents".to_string(),
+            file_path: file_path.to_string(),
+            line_number: None,
+            suggestion: "Add table of contents for better navigation".to_string(),
+        });
+    }
+    
+    issues
+}
+
+fn analyze_code_documentation_quality(project_path: &str, quality_issues: &mut Vec<QualityIssue>, consistency_score: &mut f64) {
+    let src_path = format!("{}/src", project_path);
+    if let Ok(entries) = fs::read_dir(&src_path) {
+        let mut total_functions = 0;
+        let mut documented_functions = 0;
+        
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if matches!(extension.to_str(), Some("ts" | "tsx" | "js" | "jsx")) {
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        // Count functions and documentation
+                        let function_count = content.matches("function ").count() + 
+                                           content.matches("const ").count() + 
+                                           content.matches("export const").count();
+                        let doc_count = content.matches("/**").count() + content.matches("* @").count();
+                        
+                        total_functions += function_count;
+                        documented_functions += doc_count;
+                        
+                        if function_count > 3 && doc_count == 0 {
+                            quality_issues.push(QualityIssue {
+                                issue_type: "completeness".to_string(),
+                                severity: "medium".to_string(),
+                                description: "File has functions but no JSDoc documentation".to_string(),
+                                file_path: entry.path().to_string_lossy().to_string(),
+                                line_number: None,
+                                suggestion: "Add JSDoc comments for functions and exports".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        if total_functions > 0 {
+            let doc_ratio = documented_functions as f64 / total_functions as f64;
+            *consistency_score = doc_ratio * 100.0;
+        }
+    }
+}
+
+/// Coverage analysis helper functions
+
+async fn analyze_code_documentation_coverage(project_path: &str, coverage_gaps: &mut Vec<CoverageGap>) -> Result<f64, String> {
+    let src_path = format!("{}/src", project_path);
+    let mut total_files = 0;
+    let mut documented_files = 0;
+    
+    if let Ok(entries) = fs::read_dir(&src_path) {
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if matches!(extension.to_str(), Some("ts" | "tsx" | "js" | "jsx")) {
+                    total_files += 1;
+                    
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        if content.contains("/**") || content.contains("//") {
+                            documented_files += 1;
+                        } else {
+                            coverage_gaps.push(CoverageGap {
+                                gap_type: "code_documentation".to_string(),
+                                location: entry.path().to_string_lossy().to_string(),
+                                description: "File lacks inline documentation".to_string(),
+                                impact: "medium".to_string(),
+                                suggested_action: "Add JSDoc comments and inline documentation".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if total_files > 0 {
+        Ok((documented_files as f64 / total_files as f64) * 100.0)
+    } else {
+        Ok(0.0)
+    }
+}
+
+async fn analyze_api_documentation_coverage(project_path: &str, coverage_gaps: &mut Vec<CoverageGap>) -> Result<f64, String> {
+    let commands_path = format!("{}/src-tauri/src/commands", project_path);
+    let mut total_commands = 0;
+    let mut documented_commands = 0;
+    
+    if let Ok(entries) = fs::read_dir(&commands_path) {
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if extension == "rs" {
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        let command_count = content.matches("#[tauri::command]").count();
+                        total_commands += command_count;
+                        
+                        // Check for documentation comments before commands
+                        let doc_count = content.matches("/// ").count();
+                        documented_commands += doc_count.min(command_count);
+                        
+                        if command_count > doc_count {
+                            coverage_gaps.push(CoverageGap {
+                                gap_type: "api_documentation".to_string(),
+                                location: entry.path().to_string_lossy().to_string(),
+                                description: "Tauri commands lack documentation".to_string(),
+                                impact: "high".to_string(),
+                                suggested_action: "Add documentation comments for all Tauri commands".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if total_commands > 0 {
+        Ok((documented_commands as f64 / total_commands as f64) * 100.0)
+    } else {
+        Ok(100.0) // No API commands found
+    }
+}
+
+async fn analyze_component_documentation_coverage(project_path: &str, coverage_gaps: &mut Vec<CoverageGap>) -> Result<f64, String> {
+    let components_path = format!("{}/src/components", project_path);
+    let mut total_components = 0;
+    let mut documented_components = 0;
+    
+    if let Ok(entries) = fs::read_dir(&components_path) {
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if matches!(extension.to_str(), Some("tsx" | "jsx")) {
+                    total_components += 1;
+                    
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        if content.contains("/**") && (content.contains("@component") || content.contains("@returns")) {
+                            documented_components += 1;
+                        } else {
+                            coverage_gaps.push(CoverageGap {
+                                gap_type: "component_documentation".to_string(),
+                                location: entry.path().to_string_lossy().to_string(),
+                                description: "React component lacks proper documentation".to_string(),
+                                impact: "medium".to_string(),
+                                suggested_action: "Add JSDoc with @component and @returns tags".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if total_components > 0 {
+        Ok((documented_components as f64 / total_components as f64) * 100.0)
+    } else {
+        Ok(100.0) // No components found
+    }
+}
+
+async fn analyze_function_documentation_coverage(project_path: &str, coverage_gaps: &mut Vec<CoverageGap>) -> Result<f64, String> {
+    let src_path = format!("{}/src", project_path);
+    let mut total_functions = 0;
+    let mut documented_functions = 0;
+    
+    if let Ok(entries) = fs::read_dir(&src_path) {
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if matches!(extension.to_str(), Some("ts" | "tsx" | "js" | "jsx")) {
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        // Count exported functions
+                        let export_functions = content.matches("export function").count() + 
+                                             content.matches("export const").count();
+                        total_functions += export_functions;
+                        
+                        // Count JSDoc comments
+                        let jsdoc_count = content.matches("/**").count();
+                        documented_functions += jsdoc_count.min(export_functions);
+                    }
+                }
+            }
+        }
+    }
+    
+    if total_functions > 0 {
+        Ok((documented_functions as f64 / total_functions as f64) * 100.0)
+    } else {
+        Ok(100.0)
+    }
+}
+
+async fn analyze_configuration_documentation_coverage(project_path: &str, coverage_gaps: &mut Vec<CoverageGap>) -> Result<f64, String> {
+    let config_files = vec![
+        "package.json", "tsconfig.json", "vite.config.ts", "tailwind.config.js"
+    ];
+    
+    let mut total_configs = 0;
+    let mut documented_configs = 0;
+    
+    for config_file in config_files {
+        let config_path = format!("{}/{}", project_path, config_file);
+        if Path::new(&config_path).exists() {
+            total_configs += 1;
+            
+            // Check if there's a corresponding documentation
+            let doc_path = format!("{}/docs/{}.md", project_path, config_file);
+            if Path::new(&doc_path).exists() {
+                documented_configs += 1;
+            } else {
+                coverage_gaps.push(CoverageGap {
+                    gap_type: "configuration_documentation".to_string(),
+                    location: config_path,
+                    description: format!("Configuration file {} lacks documentation", config_file),
+                    impact: "low".to_string(),
+                    suggested_action: format!("Create documentation explaining {} configuration", config_file),
+                });
+            }
+        }
+    }
+    
+    if total_configs > 0 {
+        Ok((documented_configs as f64 / total_configs as f64) * 100.0)
+    } else {
+        Ok(100.0)
+    }
+}
+
+/// Calculation helper functions
+
+fn calculate_overall_completion(categories: &[DocumentationCategory]) -> f64 {
+    if categories.is_empty() {
+        return 0.0;
+    }
+    
+    let total_completion: f64 = categories.iter().map(|c| c.completion_percentage).sum();
+    total_completion / categories.len() as f64
+}
+
+fn calculate_overall_quality(quality: &QualityAssessment) -> f64 {
+    (quality.clarity_score + 
+     quality.completeness_score + 
+     quality.accuracy_score + 
+     quality.consistency_score + 
+     quality.accessibility_score + 
+     quality.maintainability_score) / 6.0
+}
+
+fn calculate_category_quality_score(completion_percentage: f64, files_analyzed: &[String]) -> f64 {
+    let mut score = completion_percentage;
+    
+    // Bonus for having multiple documentation files
+    if files_analyzed.len() > 1 {
+        score += 10.0;
+    }
+    
+    // Penalty for very low completion
+    if completion_percentage < 30.0 {
+        score -= 20.0;
+    }
+    
+    score.min(100.0).max(0.0)
+}
+
+/// Recommendation generation
+
+fn generate_documentation_recommendations(
+    categories: &[DocumentationCategory],
+    missing_docs: &[MissingDocumentation],
+    quality: &QualityAssessment,
+    coverage: &CoverageAnalysis,
+) -> Vec<String> {
+    let mut recommendations = Vec::new();
+    
+    // Critical missing documentation
+    let critical_missing: Vec<&MissingDocumentation> = missing_docs.iter()
+        .filter(|d| d.importance == "critical")
+        .collect();
+    
+    if !critical_missing.is_empty() {
+        recommendations.push(format!("CRITICAL: Create {} missing critical documentation files immediately", critical_missing.len()));
+    }
+    
+    // Low completion categories
+    for category in categories {
+        if category.completion_percentage < 50.0 {
+            recommendations.push(format!("Priority: Improve {} documentation ({}% complete)", 
+                                        category.category, category.completion_percentage as i32));
+        }
+    }
+    
+    // Quality issues
+    let critical_quality_issues = quality.quality_issues.iter()
+        .filter(|q| q.severity == "critical")
+        .count();
+    
+    if critical_quality_issues > 0 {
+        recommendations.push(format!("Address {} critical documentation quality issues", critical_quality_issues));
+    }
+    
+    // Coverage improvements
+    if coverage.code_coverage < 60.0 {
+        recommendations.push("Improve code documentation coverage with inline comments".to_string());
+    }
+    
+    if coverage.api_coverage < 80.0 {
+        recommendations.push("Document all API endpoints and commands".to_string());
+    }
+    
+    // General recommendations
+    if recommendations.is_empty() {
+        recommendations.push("Documentation analysis complete - maintain current quality standards".to_string());
+    }
+    
+    recommendations
+}
+
+fn generate_priority_actions(
+    missing_docs: &[MissingDocumentation],
+    quality_issues: &[QualityIssue],
+) -> Vec<PriorityAction> {
+    let mut actions = Vec::new();
+    
+    // Actions for missing critical documentation
+    for missing in missing_docs.iter().filter(|d| d.importance == "critical") {
+        actions.push(PriorityAction {
+            action_type: "create_documentation".to_string(),
+            priority: "high".to_string(),
+            title: format!("Create {}", missing.title),
+            description: missing.description.clone(),
+            estimated_effort: missing.estimated_effort,
+            expected_impact: "high".to_string(),
+            deadline_suggestion: "1 week".to_string(),
+        });
+    }
+    
+    // Actions for critical quality issues
+    for issue in quality_issues.iter().filter(|q| q.severity == "critical") {
+        actions.push(PriorityAction {
+            action_type: "fix_quality_issue".to_string(),
+            priority: "high".to_string(),
+            title: format!("Fix: {}", issue.description),
+            description: issue.suggestion.clone(),
+            estimated_effort: 2,
+            expected_impact: "medium".to_string(),
+            deadline_suggestion: "3 days".to_string(),
+        });
+    }
+    
+    actions
+}
+
+/// Store documentation analysis results
+fn store_documentation_analysis(
+    conn: &Connection,
+    project_id: &str,
+    categories: &[DocumentationCategory],
+    timestamp: i64,
+) -> Result<(), String> {
+    for category in categories {
+        conn.execute(
+            "INSERT OR REPLACE INTO documentation_status 
+             (project_id, doc_type, completion_percentage, total_sections, completed_sections, 
+              missing_sections, file_paths, last_updated, quality_score) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                project_id,
+                category.category,
+                category.completion_percentage,
+                category.total_sections,
+                category.completed_sections,
+                category.missing_sections.join(","),
+                category.files_analyzed.join(","),
+                timestamp,
+                category.quality_score
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}

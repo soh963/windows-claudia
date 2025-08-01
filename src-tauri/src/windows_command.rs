@@ -17,8 +17,9 @@ pub fn create_hidden_std_command(program: &str) -> std::process::Command {
     
     #[cfg(target_os = "windows")]
     {
-        // Combine CREATE_NO_WINDOW with CREATE_NEW_PROCESS_GROUP for better window suppression
-        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
+        // Use runtime strategy to determine appropriate flags
+        let strategy = crate::runtime_utils::get_command_strategy();
+        cmd.creation_flags(strategy.get_creation_flags());
     }
     
     cmd
@@ -30,8 +31,9 @@ pub fn create_hidden_tokio_command(program: &str) -> tokio::process::Command {
     
     #[cfg(target_os = "windows")]
     {
-        // Combine CREATE_NO_WINDOW with CREATE_NEW_PROCESS_GROUP for better window suppression
-        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
+        // Use runtime strategy to determine appropriate flags
+        let strategy = crate::runtime_utils::get_command_strategy();
+        cmd.creation_flags(strategy.get_creation_flags());
     }
     
     cmd
@@ -40,8 +42,9 @@ pub fn create_hidden_tokio_command(program: &str) -> tokio::process::Command {
 /// Executes a .cmd file on Windows without showing a console window
 #[cfg(target_os = "windows")]
 pub fn execute_cmd_file_hidden(cmd_path: &str, args: Vec<String>) -> std::process::Command {
-    let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-    let mut cmd = std::process::Command::new(&comspec);
+    // Force use of system cmd.exe to avoid MSYS2/Git Bash path issues
+    let comspec = "C:\\Windows\\System32\\cmd.exe";
+    let mut cmd = std::process::Command::new(comspec);
     
     // Use /c to execute and close
     cmd.arg("/c");
@@ -52,8 +55,9 @@ pub fn execute_cmd_file_hidden(cmd_path: &str, args: Vec<String>) -> std::proces
         cmd.arg(arg);
     }
     
-    // Apply all flags to ensure no window appears
-    cmd.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+    // Use runtime strategy to determine appropriate flags
+    let strategy = crate::runtime_utils::get_command_strategy();
+    cmd.creation_flags(strategy.get_creation_flags());
     
     cmd
 }
@@ -61,20 +65,39 @@ pub fn execute_cmd_file_hidden(cmd_path: &str, args: Vec<String>) -> std::proces
 /// Executes a .cmd file on Windows without showing a console window (tokio version)
 #[cfg(target_os = "windows")]
 pub fn execute_cmd_file_hidden_tokio(cmd_path: &str, args: Vec<String>) -> tokio::process::Command {
-    let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
-    let mut cmd = tokio::process::Command::new(&comspec);
+    use crate::runtime_utils::get_command_strategy;
+    
+    // Force use of system cmd.exe to avoid MSYS2/Git Bash path issues
+    let comspec = "C:\\Windows\\System32\\cmd.exe";
+    let mut cmd = tokio::process::Command::new(comspec);
     
     // Use /c to execute and close
     cmd.arg("/c");
+    
+    // Add the cmd file path WITHOUT quotes here - cmd.exe handles it
     cmd.arg(cmd_path);
     
-    // Add all arguments
+    // Add all arguments individually
     for arg in args {
         cmd.arg(arg);
     }
     
-    // Apply all flags to ensure no window appears
-    cmd.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
+    // Apply runtime-aware environment configuration
+    let strategy = get_command_strategy();
+    
+    // Clear problematic environment variables
+    for env_var in strategy.get_env_vars_to_remove() {
+        cmd.env_remove(env_var);
+    }
+    
+    // Set appropriate environment variables
+    for (key, value) in strategy.get_env_vars() {
+        cmd.env(key, value);
+    }
+    cmd.env("COMSPEC", comspec);
+    
+    // Apply runtime-appropriate creation flags
+    cmd.creation_flags(strategy.get_creation_flags());
     
     cmd
 }

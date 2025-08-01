@@ -381,7 +381,7 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
 
         {/* Main Content */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="sync">
             <motion.div
               key="agents"
               initial={{ opacity: 0, y: 20 }}
@@ -410,7 +410,7 @@ export const CCAgents: React.FC<CCAgentsProps> = ({ onBack, className }) => {
                   </div>
                 ) : (
                   <div className="h-full overflow-y-auto">
-                    <AnimatePresence mode="popLayout">
+                    <AnimatePresence mode="sync">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                         {agents.map((agent, index) => (
                           <motion.div

@@ -220,6 +220,75 @@ pub async fn get_agent_run_with_metrics(run: AgentRun) -> AgentRunWithMetrics {
     }
 }
 
+/// Apply core tables database migration
+pub fn apply_core_tables_migration(conn: &Connection) -> SqliteResult<()> {
+    info!("Applying core tables database migration...");
+
+    // Read and execute the migration file content as a batch
+    let migration_sql = include_str!("../../migrations/001_core_tables.sql");
+    
+    // Execute the entire migration as a batch to preserve transaction boundaries
+    match conn.execute_batch(migration_sql) {
+        Ok(_) => {
+            info!("Core tables migration completed successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to execute core tables migration: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// Seed the current working project into the database
+pub fn seed_current_project(conn: &Connection) -> SqliteResult<()> {
+    info!("Seeding current working project...");
+
+    // Get current working directory
+    let current_dir = std::env::current_dir()
+        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    
+    let current_path = current_dir.to_string_lossy().to_string();
+    
+    // Check if this project already exists
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM projects WHERE path = ?1)",
+        params![&current_path],
+        |row| row.get(0),
+    )?;
+
+    if !exists {
+        // Generate project ID and name
+        let project_id = "claudia-main".to_string();
+        let project_name = current_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("Claudia Project")
+            .to_string();
+
+        // Insert the current project
+        conn.execute(
+            "INSERT INTO projects (id, path, name, description, project_type, tech_stack, status, created_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, CURRENT_TIMESTAMP)",
+            params![
+                project_id,
+                current_path,
+                project_name,
+                "Windows-optimized Claude Code UI with multi-agent orchestration and dashboard functionality",
+                "desktop",
+                r#"["Tauri", "Rust", "TypeScript", "React", "SQLite", "Claude AI"]"#,
+                "active"
+            ],
+        )?;
+
+        info!("Created project '{}' at path: {}", project_name, current_path);
+    } else {
+        info!("Project already exists at path: {}", current_path);
+    }
+
+    Ok(())
+}
+
 /// Initialize the agents database
 pub fn init_database(app: &AppHandle) -> SqliteResult<Connection> {
     let app_dir = app
@@ -350,10 +419,23 @@ pub fn init_database(app: &AppHandle) -> SqliteResult<Connection> {
         [],
     )?;
 
+    // Apply core tables migration first (projects, sessions, etc.)
+    if let Err(e) = apply_core_tables_migration(&conn) {
+        error!("Failed to apply core tables migration: {}", e);
+        // This is critical - core tables are required for basic functionality
+        return Err(e);
+    }
+
     // Apply dashboard database migration
     if let Err(e) = super::dashboard::apply_dashboard_migration(&conn) {
         error!("Failed to apply dashboard migration: {}", e);
         // Continue anyway - dashboard migration is not critical for basic app functionality
+    }
+
+    // Seed the current working project
+    if let Err(e) = seed_current_project(&conn) {
+        warn!("Failed to seed current project: {}", e);
+        // This is not critical - project can be created later
     }
 
     Ok(conn)

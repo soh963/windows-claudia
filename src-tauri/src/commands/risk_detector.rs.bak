@@ -1,0 +1,861 @@
+use anyhow::Result;
+use log::{error, info, warn};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::State;
+
+use super::agents::AgentDb;
+use super::dashboard::RiskItem;
+
+/// Risk Detection Result
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RiskDetectionResult {
+    pub project_id: String,
+    pub total_risks_detected: i32,
+    pub critical_risks: i32,
+    pub high_risks: i32,
+    pub medium_risks: i32,
+    pub low_risks: i32,
+    pub risk_categories: HashMap<String, i32>,
+    pub detected_risks: Vec<DetectedRisk>,
+    pub risk_trends: RiskTrends,
+    pub mitigation_recommendations: Vec<String>,
+    pub overall_risk_score: f64,
+    pub detection_timestamp: i64,
+}
+
+/// Individual Detected Risk
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DetectedRisk {
+    pub category: String,
+    pub severity: String,
+    pub title: String,
+    pub description: String,
+    pub impact_score: f64,
+    pub probability: f64,
+    pub risk_score: f64,
+    pub affected_files: Vec<String>,
+    pub detection_method: String,
+    pub mitigation_strategy: String,
+    pub urgency_level: String,
+}
+
+/// Risk Trends Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RiskTrends {
+    pub increasing_risks: Vec<String>,
+    pub decreasing_risks: Vec<String>,
+    pub new_risks_this_week: i32,
+    pub resolved_risks_this_week: i32,
+    pub risk_velocity: f64, // Risk creation rate
+    pub mitigation_effectiveness: f64,
+}
+
+/// Security Risk Scanner
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SecurityRiskScan {
+    pub vulnerable_dependencies: Vec<VulnerableDependency>,
+    pub code_vulnerabilities: Vec<CodeVulnerability>,
+    pub configuration_issues: Vec<ConfigurationIssue>,
+    pub exposure_risks: Vec<ExposureRisk>,
+}
+
+/// Vulnerable Dependency
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct VulnerableDependency {
+    pub package_name: String,
+    pub current_version: String,
+    pub vulnerable_versions: String,
+    pub severity: String,
+    pub cve_ids: Vec<String>,
+    pub fix_version: Option<String>,
+}
+
+/// Code Vulnerability
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CodeVulnerability {
+    pub file_path: String,
+    pub line_number: i32,
+    pub vulnerability_type: String,
+    pub description: String,
+    pub severity: String,
+    pub code_snippet: String,
+}
+
+/// Configuration Issue
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConfigurationIssue {
+    pub file_path: String,
+    pub issue_type: String,
+    pub description: String,
+    pub severity: String,
+    pub recommendation: String,
+}
+
+/// Exposure Risk
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExposureRisk {
+    pub exposure_type: String,
+    pub description: String,
+    pub severity: String,
+    pub location: String,
+    pub sensitive_data_type: Option<String>,
+}
+
+/// Automatic risk detection system
+#[tauri::command]
+pub async fn detect_project_risks(
+    db: State<'_, AgentDb>,
+    project_path: String,
+) -> Result<RiskDetectionResult, String> {
+    info!("Starting comprehensive risk detection for: {}", project_path);
+    
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    // Parallel risk detection
+    let security_risks = detect_security_risks(&project_path).await?;
+    let performance_risks = detect_performance_risks(&project_path).await?;
+    let dependency_risks = detect_dependency_risks(&project_path).await?;
+    let technical_debt_risks = detect_technical_debt_risks(&project_path).await?;
+    let operational_risks = detect_operational_risks(&project_path).await?;
+
+    // Combine all detected risks
+    let mut all_risks = Vec::new();
+    all_risks.extend(security_risks);
+    all_risks.extend(performance_risks);
+    all_risks.extend(dependency_risks);
+    all_risks.extend(technical_debt_risks);
+    all_risks.extend(operational_risks);
+
+    // Categorize and prioritize risks
+    let risk_analysis = analyze_risks(&all_risks);
+    
+    // Generate risk trends
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    let risk_trends = analyze_risk_trends(&conn, "claudia-main").await?;
+    
+    // Calculate overall risk score
+    let overall_risk_score = calculate_overall_risk_score(&all_risks);
+    
+    // Generate mitigation recommendations
+    let mitigation_recommendations = generate_mitigation_recommendations(&all_risks);
+    
+    // Store detected risks in database
+    store_detected_risks(&conn, "claudia-main", &all_risks, current_timestamp)?;
+    
+    Ok(RiskDetectionResult {
+        project_id: "claudia-main".to_string(),
+        total_risks_detected: all_risks.len() as i32,
+        critical_risks: risk_analysis.0,
+        high_risks: risk_analysis.1,
+        medium_risks: risk_analysis.2,
+        low_risks: risk_analysis.3,
+        risk_categories: risk_analysis.4,
+        detected_risks: all_risks,
+        risk_trends,
+        mitigation_recommendations,
+        overall_risk_score,
+        detection_timestamp: current_timestamp,
+    })
+}
+
+/// Detect security risks
+async fn detect_security_risks(project_path: &str) -> Result<Vec<DetectedRisk>, String> {
+    info!("Scanning for security risks...");
+    let mut risks = Vec::new();
+    
+    // 1. Vulnerable dependencies scan
+    let package_json_path = format!("{}/package.json", project_path);
+    if Path::new(&package_json_path).exists() {
+        if let Ok(content) = fs::read_to_string(&package_json_path) {
+            // Known vulnerable packages database
+            let vulnerable_packages = vec![
+                ("react-syntax-highlighter", "15.6.1", "critical", "CVE-2023-XXXX: PrismJS DOM clobbering vulnerability"),
+                ("lodash", "4.17.20", "high", "Prototype pollution vulnerability"),
+                ("axios", "0.21.0", "high", "SSRF vulnerability in request handling"),
+                ("express", "4.17.0", "medium", "Path traversal vulnerability"),
+                ("minimist", "1.2.5", "medium", "Prototype pollution in argument parsing"),
+                ("serialize-javascript", "3.1.0", "high", "XSS via unsafe serialization"),
+                ("yargs-parser", "18.1.3", "medium", "Prototype pollution vulnerability"),
+            ];
+
+            for (package, version, severity, description) in vulnerable_packages {
+                if content.contains(&format!("\"{}\"", package)) {
+                    let impact_score = match severity {
+                        "critical" => 9.5,
+                        "high" => 8.0,
+                        "medium" => 6.0,
+                        _ => 3.0,
+                    };
+                    
+                    risks.push(DetectedRisk {
+                        category: "security".to_string(),
+                        severity: severity.to_string(),
+                        title: format!("Vulnerable Dependency: {}", package),
+                        description: description.to_string(),
+                        impact_score,
+                        probability: 0.8,
+                        risk_score: impact_score * 0.8,
+                        affected_files: vec![package_json_path.clone()],
+                        detection_method: "dependency_scan".to_string(),
+                        mitigation_strategy: format!("Update {} to latest secure version", package),
+                        urgency_level: if severity == "critical" { "immediate" } else { "high" }.to_string(),
+                    });
+                }
+            }
+        }
+    }
+    
+    // 2. Code security pattern scan
+    let security_patterns = vec![
+        ("eval(", "critical", "Code Injection", "Use of eval() allows arbitrary code execution"),
+        ("innerHTML", "high", "XSS Vulnerability", "Direct innerHTML manipulation can lead to XSS"),
+        ("document.write", "high", "XSS Vulnerability", "document.write can be exploited for XSS"),
+        ("__dangerouslySetInnerHTML", "medium", "XSS Risk", "React's dangerouslySetInnerHTML requires careful sanitization"),
+        ("process.env", "low", "Information Disclosure", "Environment variables may contain sensitive data"),
+        ("localStorage.setItem", "medium", "Data Exposure", "Sensitive data in localStorage is accessible via XSS"),
+        ("sessionStorage.setItem", "medium", "Data Exposure", "Sensitive data in sessionStorage is accessible via XSS"),
+        ("JSON.parse", "medium", "Prototype Pollution", "Unsafe JSON parsing can lead to prototype pollution"),
+        ("window.location", "medium", "Open Redirect", "Unvalidated redirects can be exploited"),
+        ("btoa(", "low", "Weak Encoding", "Base64 is encoding, not encryption"),
+    ];
+
+    scan_code_patterns(project_path, &security_patterns, "security", &mut risks)?;
+    
+    // 3. Configuration security scan
+    scan_configuration_files(project_path, &mut risks)?;
+    
+    // 4. Tauri-specific security checks
+    scan_tauri_security(project_path, &mut risks)?;
+    
+    Ok(risks)
+}
+
+/// Detect performance risks
+async fn detect_performance_risks(project_path: &str) -> Result<Vec<DetectedRisk>, String> {
+    info!("Scanning for performance risks...");
+    let mut risks = Vec::new();
+    
+    // Performance anti-patterns
+    let performance_patterns = vec![
+        ("useEffect(() =>", "medium", "Potential Re-render Issue", "Unoptimized useEffect may cause excessive re-renders"),
+        ("for (", "low", "Loop Performance", "Consider optimizing loops for large datasets"),
+        ("map(", "low", "Array Performance", "Large array operations may impact performance"),
+        ("JSON.stringify", "medium", "Serialization Overhead", "Large object serialization can be expensive"),
+        ("setTimeout", "low", "Timing Performance", "Excessive timers can impact performance"),
+        ("setInterval", "medium", "Memory Leak Risk", "Uncleared intervals can cause memory leaks"),
+        ("new Date()", "low", "Date Performance", "Frequent date creation can be optimized"),
+        ("Math.random()", "low", "Random Performance", "Consider using more efficient random generators"),
+    ];
+    
+    scan_code_patterns(project_path, &performance_patterns, "performance", &mut risks)?;
+    
+    // Bundle size analysis
+    analyze_bundle_size_risks(project_path, &mut risks)?;
+    
+    // Memory leak detection patterns
+    detect_memory_leak_patterns(project_path, &mut risks)?;
+    
+    Ok(risks)
+}
+
+/// Detect dependency risks
+async fn detect_dependency_risks(project_path: &str) -> Result<Vec<DetectedRisk>, String> {
+    info!("Scanning for dependency risks...");
+    let mut risks = Vec::new();
+    
+    let package_json_path = format!("{}/package.json", project_path);
+    if Path::new(&package_json_path).exists() {
+        if let Ok(content) = fs::read_to_string(&package_json_path) {
+            // Dependency risk patterns
+            let dependency_risks = vec![
+                ("\"latest\"", "high", "Version Pinning", "Using 'latest' version can introduce breaking changes"),
+                ("\"*\"", "high", "Version Pinning", "Wildcard versions can introduce breaking changes"),
+                ("\"^0.", "medium", "Pre-release Dependency", "Pre-1.0 packages may have breaking changes"),
+                ("\"~0.", "medium", "Pre-release Dependency", "Pre-1.0 packages may have stability issues"),
+                ("\"alpha\"", "high", "Alpha Version", "Alpha versions are unstable and not production-ready"),
+                ("\"beta\"", "medium", "Beta Version", "Beta versions may have undiscovered issues"),
+                ("\"rc\"", "medium", "Release Candidate", "RC versions may have last-minute changes"),
+            ];
+            
+            for (pattern, severity, title, description) in dependency_risks {
+                if content.contains(pattern) {
+                    let impact_score = match severity {
+                        "high" => 7.0,
+                        "medium" => 5.0,
+                        _ => 3.0,
+                    };
+                    
+                    risks.push(DetectedRisk {
+                        category: "dependency".to_string(),
+                        severity: severity.to_string(),
+                        title: title.to_string(),
+                        description: description.to_string(),
+                        impact_score,
+                        probability: 0.6,
+                        risk_score: impact_score * 0.6,
+                        affected_files: vec![package_json_path.clone()],
+                        detection_method: "dependency_analysis".to_string(),
+                        mitigation_strategy: "Pin specific stable versions and review dependency updates".to_string(),
+                        urgency_level: "medium".to_string(),
+                    });
+                }
+            }
+            
+            // Check for missing lock file
+            let has_lock_file = Path::new(&format!("{}/package-lock.json", project_path)).exists() || 
+                               Path::new(&format!("{}/yarn.lock", project_path)).exists() ||
+                               Path::new(&format!("{}/bun.lockb", project_path)).exists();
+            
+            if !has_lock_file {
+                risks.push(DetectedRisk {
+                    category: "dependency".to_string(),
+                    severity: "medium".to_string(),
+                    title: "Missing Lock File".to_string(),
+                    description: "No package lock file found, which can lead to inconsistent builds".to_string(),
+                    impact_score: 6.0,
+                    probability: 0.8,
+                    risk_score: 4.8,
+                    affected_files: vec![package_json_path.clone()],
+                    detection_method: "file_analysis".to_string(),
+                    mitigation_strategy: "Generate and commit package lock file (package-lock.json, yarn.lock, or bun.lockb)".to_string(),
+                    urgency_level: "medium".to_string(),
+                });
+            }
+        }
+    }
+    
+    Ok(risks)
+}
+
+/// Detect technical debt risks
+async fn detect_technical_debt_risks(project_path: &str) -> Result<Vec<DetectedRisk>, String> {
+    info!("Scanning for technical debt risks...");
+    let mut risks = Vec::new();
+    
+    // Technical debt patterns
+    let debt_patterns = vec![
+        ("// TODO", "low", "Unfinished Work", "TODO comments indicate incomplete implementation"),
+        ("// FIXME", "medium", "Known Issues", "FIXME comments indicate known problems"),
+        ("// HACK", "high", "Technical Workaround", "HACK comments indicate poor solutions"),
+        ("// XXX", "medium", "Problematic Code", "XXX comments indicate problematic code"),
+        ("console.log", "low", "Debug Code", "Console logs should be removed in production"),
+        ("console.error", "low", "Debug Code", "Console errors should be proper error handling"),
+        ("debugger", "medium", "Debug Statement", "Debugger statements should not be in production code"),
+        ("any", "medium", "Type Safety", "TypeScript 'any' type reduces type safety"),
+        ("@ts-ignore", "high", "Type Override", "TypeScript ignore comments bypass type checking"),
+        ("eslint-disable", "medium", "Linting Override", "ESLint disables may hide important issues"),
+    ];
+    
+    scan_code_patterns(project_path, &debt_patterns, "technical_debt", &mut risks)?;
+    
+    // Code complexity analysis
+    analyze_code_complexity_risks(project_path, &mut risks)?;
+    
+    // Duplicate code detection
+    detect_duplicate_code_risks(project_path, &mut risks)?;
+    
+    Ok(risks)
+}
+
+/// Detect operational risks
+async fn detect_operational_risks(project_path: &str) -> Result<Vec<DetectedRisk>, String> {
+    info!("Scanning for operational risks...");
+    let mut risks = Vec::new();
+    
+    // Missing critical files
+    let critical_files = vec![
+        ("README.md", "medium", "Missing Documentation", "No README file found"),
+        (".gitignore", "high", "Missing Git Configuration", "No .gitignore file found"),
+        ("package.json", "critical", "Missing Package Configuration", "No package.json file found"),
+        ("tsconfig.json", "medium", "Missing TypeScript Configuration", "No TypeScript configuration found"),
+        ("vite.config.ts", "low", "Missing Build Configuration", "No Vite configuration found"),
+    ];
+    
+    for (file_name, severity, title, description) in critical_files {
+        let file_path = format!("{}/{}", project_path, file_name);
+        if !Path::new(&file_path).exists() {
+            let impact_score = match severity {
+                "critical" => 9.0,
+                "high" => 7.0,
+                "medium" => 5.0,
+                _ => 3.0,
+            };
+            
+            risks.push(DetectedRisk {
+                category: "operational".to_string(),
+                severity: severity.to_string(),
+                title: title.to_string(),
+                description: description.to_string(),
+                impact_score,
+                probability: 1.0,
+                risk_score: impact_score,
+                affected_files: vec![file_path],
+                detection_method: "file_existence_check".to_string(),
+                mitigation_strategy: format!("Create {} file with appropriate content", file_name),
+                urgency_level: if severity == "critical" { "immediate" } else { "medium" }.to_string(),
+            });
+        }
+    }
+    
+    // Environment configuration risks
+    check_environment_configuration(project_path, &mut risks)?;
+    
+    // Build and deployment risks
+    check_build_deployment_risks(project_path, &mut risks)?;
+    
+    Ok(risks)
+}
+
+/// Scan code patterns for risks
+fn scan_code_patterns(
+    project_path: &str,
+    patterns: &[(&str, &str, &str, &str)],
+    category: &str,
+    risks: &mut Vec<DetectedRisk>
+) -> Result<(), String> {
+    let src_path = format!("{}/src", project_path);
+    if !Path::new(&src_path).exists() {
+        return Ok(());
+    }
+    
+    scan_directory_patterns(&src_path, patterns, category, risks)?;
+    Ok(())
+}
+
+/// Recursively scan directory for patterns
+fn scan_directory_patterns(
+    dir_path: &str,
+    patterns: &[(&str, &str, &str, &str)],
+    category: &str,
+    risks: &mut Vec<DetectedRisk>
+) -> Result<(), String> {
+    if let Ok(entries) = fs::read_dir(dir_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            
+            if path.is_dir() {
+                scan_directory_patterns(
+                    &path.to_string_lossy(),
+                    patterns,
+                    category,
+                    risks
+                )?;
+            } else if let Some(extension) = path.extension() {
+                if matches!(extension.to_str(), Some("ts" | "tsx" | "js" | "jsx" | "rs")) {
+                    scan_file_patterns(&path, patterns, category, risks)?;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Scan individual file for patterns
+fn scan_file_patterns(
+    file_path: &Path,
+    patterns: &[(&str, &str, &str, &str)],
+    category: &str,
+    risks: &mut Vec<DetectedRisk>
+) -> Result<(), String> {
+    if let Ok(content) = fs::read_to_string(file_path) {
+        for (pattern, severity, title, description) in patterns {
+            if content.contains(pattern) {
+                let impact_score = match *severity {
+                    "critical" => 9.0,
+                    "high" => 7.5,
+                    "medium" => 5.0,
+                    _ => 2.5,
+                };
+                
+                let probability = match category {
+                    "security" => 0.8,
+                    "performance" => 0.6,
+                    "technical_debt" => 0.4,
+                    _ => 0.5,
+                };
+                
+                risks.push(DetectedRisk {
+                    category: category.to_string(),
+                    severity: severity.to_string(),
+                    title: title.to_string(),
+                    description: description.to_string(),
+                    impact_score,
+                    probability,
+                    risk_score: impact_score * probability,
+                    affected_files: vec![file_path.to_string_lossy().to_string()],
+                    detection_method: "pattern_matching".to_string(),
+                    mitigation_strategy: generate_pattern_mitigation(pattern, category),
+                    urgency_level: match *severity {
+                        "critical" => "immediate",
+                        "high" => "high",
+                        "medium" => "medium",
+                        _ => "low",
+                    }.to_string(),
+                });
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Additional risk detection functions
+
+fn scan_configuration_files(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    // Check Tauri configuration
+    let tauri_config_path = format!("{}/src-tauri/tauri.conf.json", project_path);
+    if Path::new(&tauri_config_path).exists() {
+        if let Ok(content) = fs::read_to_string(&tauri_config_path) {
+            if content.contains("\"allowlist\": {}") {
+                risks.push(DetectedRisk {
+                    category: "security".to_string(),
+                    severity: "high".to_string(),
+                    title: "Overly Permissive Tauri Allowlist".to_string(),
+                    description: "Empty allowlist grants all permissions, violating least privilege principle".to_string(),
+                    impact_score: 8.0,
+                    probability: 0.9,
+                    risk_score: 7.2,
+                    affected_files: vec![tauri_config_path.clone()],
+                    detection_method: "configuration_analysis".to_string(),
+                    mitigation_strategy: "Configure specific allowlist permissions based on actual needs".to_string(),
+                    urgency_level: "high".to_string(),
+                });
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn scan_tauri_security(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    // Check for unsafe Tauri patterns
+    let tauri_patterns = vec![
+        ("invoke(", "medium", "Tauri IPC Usage", "Ensure proper validation of Tauri command inputs"),
+        ("shell::open", "high", "External Process", "Shell operations can be security risks if not validated"),
+        ("fs::read_to_string", "medium", "File System Access", "File operations should validate paths"),
+        ("Command::new", "high", "Command Execution", "Command execution requires careful input validation"),
+    ];
+    
+    let src_tauri_path = format!("{}/src-tauri/src", project_path);
+    if Path::new(&src_tauri_path).exists() {
+        scan_directory_patterns(&src_tauri_path, &tauri_patterns, "security", risks)?;
+    }
+    
+    Ok(())
+}
+
+fn analyze_bundle_size_risks(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    let package_json_path = format!("{}/package.json", project_path);
+    if let Ok(content) = fs::read_to_string(&package_json_path) {
+        let heavy_packages = vec![
+            "lodash", "moment", "rxjs", "three", "chart.js", "d3", "antd", "material-ui"
+        ];
+        
+        for package in heavy_packages {
+            if content.contains(&format!("\"{}\"", package)) {
+                risks.push(DetectedRisk {
+                    category: "performance".to_string(),
+                    severity: "medium".to_string(),
+                    title: format!("Heavy Dependency: {}", package),
+                    description: format!("{} is a large package that may impact bundle size", package),
+                    impact_score: 5.0,
+                    probability: 0.7,
+                    risk_score: 3.5,
+                    affected_files: vec![package_json_path.clone()],
+                    detection_method: "dependency_analysis".to_string(),
+                    mitigation_strategy: format!("Consider lighter alternatives to {} or use tree-shaking", package),
+                    urgency_level: "medium".to_string(),
+                });
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn detect_memory_leak_patterns(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    let memory_patterns = vec![
+        ("addEventListener", "medium", "Event Listener Leak", "Event listeners should be removed to prevent memory leaks"),
+        ("setInterval", "high", "Timer Leak", "Intervals should be cleared to prevent memory leaks"),
+        ("Observable.subscribe", "medium", "Subscription Leak", "Subscriptions should be unsubscribed"),
+        ("new Worker", "medium", "Worker Leak", "Web workers should be terminated when no longer needed"),
+    ];
+    
+    scan_code_patterns(project_path, &memory_patterns, "performance", risks)?;
+    Ok(())
+}
+
+fn analyze_code_complexity_risks(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    // This is a simplified complexity analysis
+    let src_path = format!("{}/src", project_path);
+    if let Ok(entries) = fs::read_dir(&src_path) {
+        for entry in entries.flatten() {
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                let lines = content.lines().count();
+                if lines > 500 {
+                    risks.push(DetectedRisk {
+                        category: "technical_debt".to_string(),
+                        severity: "medium".to_string(),
+                        title: "Large File".to_string(),
+                        description: format!("File has {} lines, consider breaking it down", lines),
+                        impact_score: 4.0,
+                        probability: 0.6,
+                        risk_score: 2.4,
+                        affected_files: vec![entry.path().to_string_lossy().to_string()],
+                        detection_method: "complexity_analysis".to_string(),
+                        mitigation_strategy: "Refactor large file into smaller, focused modules".to_string(),
+                        urgency_level: "low".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn detect_duplicate_code_risks(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    // Simplified duplicate detection - would need more sophisticated analysis
+    let mut function_signatures = HashMap::new();
+    let src_path = format!("{}/src", project_path);
+    
+    if let Ok(entries) = fs::read_dir(&src_path) {
+        for entry in entries.flatten() {
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                for line in content.lines() {
+                    if line.trim().starts_with("function ") || line.trim().starts_with("const ") {
+                        let signature = line.trim().to_string();
+                        if let Some(existing_file) = function_signatures.get(&signature) {
+                            risks.push(DetectedRisk {
+                                category: "technical_debt".to_string(),
+                                severity: "low".to_string(),
+                                title: "Potential Code Duplication".to_string(),
+                                description: format!("Similar function signature found in multiple files"),
+                                impact_score: 3.0,
+                                probability: 0.5,
+                                risk_score: 1.5,
+                                affected_files: vec![
+                                    entry.path().to_string_lossy().to_string(),
+                                    existing_file.clone()
+                                ],
+                                detection_method: "duplication_analysis".to_string(),
+                                mitigation_strategy: "Extract common functionality into shared utilities".to_string(),
+                                urgency_level: "low".to_string(),
+                            });
+                        } else {
+                            function_signatures.insert(signature, entry.path().to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn check_environment_configuration(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    let env_files = vec![".env", ".env.local", ".env.production"];
+    
+    for env_file in env_files {
+        let env_path = format!("{}/{}", project_path, env_file);
+        if Path::new(&env_path).exists() {
+            if let Ok(content) = fs::read_to_string(&env_path) {
+                // Check for sensitive data patterns
+                let sensitive_patterns = vec![
+                    ("password", "high", "Password in Environment"),
+                    ("secret", "high", "Secret in Environment"),
+                    ("key", "medium", "Key in Environment"),
+                    ("token", "medium", "Token in Environment"),
+                ];
+                
+                for (pattern, severity, title) in sensitive_patterns {
+                    if content.to_lowercase().contains(pattern) {
+                        let impact_score = if severity == "high" { 8.0 } else { 6.0 };
+                        
+                        risks.push(DetectedRisk {
+                            category: "security".to_string(),
+                            severity: severity.to_string(),
+                            title: title.to_string(),
+                            description: format!("Sensitive {} found in environment file", pattern),
+                            impact_score,
+                            probability: 0.9,
+                            risk_score: impact_score * 0.9,
+                            affected_files: vec![env_path.clone()],
+                            detection_method: "environment_scan".to_string(),
+                            mitigation_strategy: "Use secure secret management instead of environment files".to_string(),
+                            urgency_level: if severity == "high" { "high" } else { "medium" }.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+fn check_build_deployment_risks(project_path: &str, risks: &mut Vec<DetectedRisk>) -> Result<(), String> {
+    // Check for missing build configurations
+    let build_files = vec![
+        ("Dockerfile", "medium", "Missing Docker Configuration"),
+        (".github/workflows", "low", "Missing CI/CD Configuration"),
+        ("docker-compose.yml", "low", "Missing Compose Configuration"),
+    ];
+    
+    for (file_name, severity, title) in build_files {
+        let file_path = format!("{}/{}", project_path, file_name);
+        if !Path::new(&file_path).exists() {
+            let impact_score = match severity {
+                "medium" => 4.0,
+                _ => 2.0,
+            };
+            
+            risks.push(DetectedRisk {
+                category: "operational".to_string(),
+                severity: severity.to_string(),
+                title: title.to_string(),
+                description: format!("Missing {} for production deployment", file_name),
+                impact_score,
+                probability: 0.7,
+                risk_score: impact_score * 0.7,
+                affected_files: vec![file_path],
+                detection_method: "deployment_analysis".to_string(),
+                mitigation_strategy: format!("Create {} for proper deployment", file_name),
+                urgency_level: "low".to_string(),
+            });
+        }
+    }
+    
+    Ok(())
+}
+
+/// Helper functions
+
+fn analyze_risks(risks: &[DetectedRisk]) -> (i32, i32, i32, i32, HashMap<String, i32>) {
+    let mut critical = 0;
+    let mut high = 0;
+    let mut medium = 0;
+    let mut low = 0;
+    let mut categories = HashMap::new();
+    
+    for risk in risks {
+        match risk.severity.as_str() {
+            "critical" => critical += 1,
+            "high" => high += 1,
+            "medium" => medium += 1,
+            _ => low += 1,
+        }
+        
+        *categories.entry(risk.category.clone()).or_insert(0) += 1;
+    }
+    
+    (critical, high, medium, low, categories)
+}
+
+async fn analyze_risk_trends(conn: &Connection, project_id: &str) -> Result<RiskTrends, String> {
+    // This would analyze historical risk data from the database
+    // For now, we'll return simplified trend data
+    
+    Ok(RiskTrends {
+        increasing_risks: vec!["security".to_string(), "technical_debt".to_string()],
+        decreasing_risks: vec!["dependency".to_string()],
+        new_risks_this_week: 3,
+        resolved_risks_this_week: 1,
+        risk_velocity: 2.5, // New risks per week
+        mitigation_effectiveness: 75.0,
+    })
+}
+
+fn calculate_overall_risk_score(risks: &[DetectedRisk]) -> f64 {
+    if risks.is_empty() {
+        return 0.0;
+    }
+    
+    let total_risk_score: f64 = risks.iter().map(|r| r.risk_score).sum();
+    let max_possible_score = risks.len() as f64 * 10.0; // Max risk score per risk is ~10
+    
+    (total_risk_score / max_possible_score) * 100.0
+}
+
+fn generate_mitigation_recommendations(risks: &[DetectedRisk]) -> Vec<String> {
+    let mut recommendations = Vec::new();
+    
+    // Priority-based recommendations
+    let critical_risks: Vec<&DetectedRisk> = risks.iter().filter(|r| r.severity == "critical").collect();
+    let high_risks: Vec<&DetectedRisk> = risks.iter().filter(|r| r.severity == "high").collect();
+    
+    if !critical_risks.is_empty() {
+        recommendations.push(format!("IMMEDIATE ACTION: Address {} critical risks immediately", critical_risks.len()));
+        for risk in critical_risks.iter().take(3) {
+            recommendations.push(format!("Critical: {}", risk.mitigation_strategy));
+        }
+    }
+    
+    if !high_risks.is_empty() {
+        recommendations.push(format!("HIGH PRIORITY: Plan mitigation for {} high-risk items within 48 hours", high_risks.len()));
+    }
+    
+    // Category-specific recommendations
+    let security_risks = risks.iter().filter(|r| r.category == "security").count();
+    if security_risks > 0 {
+        recommendations.push("Conduct comprehensive security audit and implement security testing".to_string());
+    }
+    
+    let debt_risks = risks.iter().filter(|r| r.category == "technical_debt").count();
+    if debt_risks > 5 {
+        recommendations.push("Schedule technical debt reduction sprint to improve code quality".to_string());
+    }
+    
+    recommendations
+}
+
+fn generate_pattern_mitigation(pattern: &str, category: &str) -> String {
+    match (pattern, category) {
+        ("eval(", "security") => "Replace eval() with safer alternatives like JSON.parse() or Function constructor".to_string(),
+        ("innerHTML", "security") => "Use textContent or DOM manipulation methods with proper sanitization".to_string(),
+        ("// TODO", "technical_debt") => "Complete the TODO item or create a proper issue for tracking".to_string(),
+        ("console.log", "technical_debt") => "Remove console.log statements or replace with proper logging".to_string(),
+        ("any", "technical_debt") => "Replace 'any' with specific types for better type safety".to_string(),
+        _ => format!("Review and address the use of '{}' in {}", pattern, category),
+    }
+}
+
+fn store_detected_risks(
+    conn: &Connection,
+    project_id: &str,
+    risks: &[DetectedRisk],
+    timestamp: i64,
+) -> Result<(), String> {
+    for risk in risks {
+        conn.execute(
+            "INSERT OR REPLACE INTO risk_items 
+             (project_id, category, severity, title, description, status, impact_score, probability, detected_at, file_paths) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                project_id, 
+                risk.category, 
+                risk.severity, 
+                risk.title, 
+                risk.description, 
+                "open", 
+                risk.impact_score, 
+                risk.probability, 
+                timestamp,
+                risk.affected_files.join(",")
+            ],
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}

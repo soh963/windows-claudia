@@ -1,0 +1,626 @@
+use anyhow::Result;
+use log::{error, info, warn};
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::State;
+
+use super::agents::AgentDb;
+use super::dashboard::{ProjectHealthMetric, RiskItem};
+
+/// Health Analysis Results
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HealthAnalysisResult {
+    pub project_id: String,
+    pub security_score: f64,
+    pub dependency_score: f64,
+    pub complexity_score: f64,
+    pub scalability_score: f64,
+    pub error_rate_score: f64,
+    pub overall_health: f64,
+    pub analysis_timestamp: i64,
+    pub recommendations: Vec<String>,
+    pub critical_issues: Vec<String>,
+}
+
+/// Security Analysis Result
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SecurityAnalysis {
+    pub vulnerabilities_found: i32,
+    pub high_severity_count: i32,
+    pub medium_severity_count: i32,
+    pub low_severity_count: i32,
+    pub dependency_issues: Vec<String>,
+    pub code_security_issues: Vec<String>,
+    pub score: f64,
+}
+
+/// Dependency Analysis Result
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DependencyAnalysis {
+    pub total_dependencies: i32,
+    pub outdated_count: i32,
+    pub vulnerable_count: i32,
+    pub deprecated_count: i32,
+    pub update_available_count: i32,
+    pub dependency_health: f64,
+    pub recommendations: Vec<String>,
+}
+
+/// Code Complexity Analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ComplexityAnalysis {
+    pub average_complexity: f64,
+    pub high_complexity_files: Vec<String>,
+    pub total_lines_of_code: i32,
+    pub duplicate_code_percentage: f64,
+    pub technical_debt_ratio: f64,
+    pub maintainability_index: f64,
+}
+
+/// Real-time project health analyzer
+#[tauri::command]
+pub async fn analyze_project_health(
+    db: State<'_, AgentDb>,
+    project_path: String,
+) -> Result<HealthAnalysisResult, String> {
+    info!("Starting comprehensive project health analysis for: {}", project_path);
+    
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    // Run parallel analysis
+    let security_analysis = analyze_security(&project_path).await?;
+    let dependency_analysis = analyze_dependencies(&project_path).await?;
+    let complexity_analysis = analyze_code_complexity(&project_path).await?;
+    let performance_analysis = analyze_performance_indicators(&project_path).await?;
+    let error_analysis = analyze_error_patterns(&project_path).await?;
+
+    // Calculate overall scores
+    let security_score = security_analysis.score;
+    let dependency_score = dependency_analysis.dependency_health;
+    let complexity_score = calculate_complexity_score(&complexity_analysis);
+    let scalability_score = calculate_scalability_score(&project_path).await?;
+    let error_rate_score = error_analysis;
+
+    // Calculate weighted overall health
+    let overall_health = (security_score * 0.25) + 
+                        (dependency_score * 0.20) + 
+                        (complexity_score * 0.20) + 
+                        (scalability_score * 0.20) + 
+                        (error_rate_score * 0.15);
+
+    // Generate recommendations
+    let mut recommendations = Vec::new();
+    let mut critical_issues = Vec::new();
+
+    if security_score < 70.0 {
+        critical_issues.push("Critical security vulnerabilities detected".to_string());
+        recommendations.push("Immediate security audit and vulnerability patching required".to_string());
+    }
+
+    if dependency_score < 60.0 {
+        critical_issues.push("Multiple dependency issues found".to_string());
+        recommendations.push("Update outdated dependencies and resolve vulnerabilities".to_string());
+    }
+
+    if complexity_score < 50.0 {
+        recommendations.push("Code refactoring needed to reduce complexity".to_string());
+    }
+
+    if scalability_score < 60.0 {
+        recommendations.push("Architecture improvements needed for better scalability".to_string());
+    }
+
+    // Store results in database
+    let conn = db.0.lock().map_err(|e| e.to_string())?;
+    store_health_metrics(&conn, "claudia-main", &HealthAnalysisResult {
+        project_id: "claudia-main".to_string(),
+        security_score,
+        dependency_score,
+        complexity_score,
+        scalability_score,
+        error_rate_score,
+        overall_health,
+        analysis_timestamp: current_timestamp,
+        recommendations: recommendations.clone(),
+        critical_issues: critical_issues.clone(),
+    })?;
+
+    // Store detected risks
+    store_detected_risks(&conn, "claudia-main", &security_analysis, &dependency_analysis, current_timestamp)?;
+
+    Ok(HealthAnalysisResult {
+        project_id: "claudia-main".to_string(),
+        security_score,
+        dependency_score,
+        complexity_score,
+        scalability_score,
+        error_rate_score,
+        overall_health,
+        analysis_timestamp: current_timestamp,
+        recommendations,
+        critical_issues,
+    })
+}
+
+/// Analyze security vulnerabilities
+async fn analyze_security(project_path: &str) -> Result<SecurityAnalysis, String> {
+    info!("Analyzing security vulnerabilities...");
+    
+    let mut vulnerabilities_found = 0;
+    let mut high_severity_count = 0;
+    let mut medium_severity_count = 0;
+    let mut low_severity_count = 0;
+    let mut dependency_issues = Vec::new();
+    let mut code_security_issues = Vec::new();
+
+    // Check package.json for known vulnerable packages
+    let package_json_path = format!("{}/package.json", project_path);
+    if Path::new(&package_json_path).exists() {
+        if let Ok(content) = fs::read_to_string(&package_json_path) {
+            // Check for known vulnerable packages
+            let vulnerable_packages = vec![
+                ("react-syntax-highlighter", "15.6.1", "high"), // Known PrismJS vulnerability
+                ("lodash", "4.17.20", "medium"),
+                ("axios", "0.21.0", "high"),
+                ("express", "4.17.0", "medium"),
+            ];
+
+            for (package, version, severity) in vulnerable_packages {
+                if content.contains(&format!("\"{}\"", package)) {
+                    vulnerabilities_found += 1;
+                    dependency_issues.push(format!("Vulnerable package: {} ({})", package, severity));
+                    
+                    match severity {
+                        "high" => high_severity_count += 1,
+                        "medium" => medium_severity_count += 1,
+                        _ => low_severity_count += 1,
+                    }
+                }
+            }
+        }
+    }
+
+    // Scan TypeScript/JavaScript files for security patterns
+    let security_patterns = vec![
+        ("eval(", "high", "Use of eval() function"),
+        ("innerHTML", "medium", "Potential XSS vulnerability"),
+        ("document.write", "medium", "Unsafe DOM manipulation"),
+        ("__dangerouslySetInnerHTML", "medium", "React dangerous HTML"),
+        ("process.env", "low", "Environment variable exposure"),
+    ];
+
+    if let Ok(entries) = fs::read_dir(format!("{}/src", project_path)) {
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if extension == "ts" || extension == "tsx" || extension == "js" || extension == "jsx" {
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        for (pattern, severity, description) in &security_patterns {
+                            if content.contains(pattern) {
+                                vulnerabilities_found += 1;
+                                code_security_issues.push(format!("{}: {}", description, entry.path().display()));
+                                
+                                match *severity {
+                                    "high" => high_severity_count += 1,
+                                    "medium" => medium_severity_count += 1,
+                                    _ => low_severity_count += 1,
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Calculate security score (higher is better)
+    let score = if vulnerabilities_found == 0 {
+        100.0
+    } else {
+        let penalty = (high_severity_count as f64 * 20.0) + 
+                     (medium_severity_count as f64 * 10.0) + 
+                     (low_severity_count as f64 * 5.0);
+        (100.0 - penalty).max(0.0)
+    };
+
+    Ok(SecurityAnalysis {
+        vulnerabilities_found,
+        high_severity_count,
+        medium_severity_count,
+        low_severity_count,
+        dependency_issues,
+        code_security_issues,
+        score,
+    })
+}
+
+/// Analyze dependency health
+async fn analyze_dependencies(project_path: &str) -> Result<DependencyAnalysis, String> {
+    info!("Analyzing dependency health...");
+    
+    let package_json_path = format!("{}/package.json", project_path);
+    let mut total_dependencies = 0;
+    let mut outdated_count = 0;
+    let mut vulnerable_count = 0;
+    let mut deprecated_count = 0;
+    let mut update_available_count = 0;
+    let mut recommendations = Vec::new();
+
+    if Path::new(&package_json_path).exists() {
+        if let Ok(content) = fs::read_to_string(&package_json_path) {
+            // Parse dependencies (simplified analysis)
+            let lines: Vec<&str> = content.lines().collect();
+            let mut in_dependencies = false;
+            
+            for line in lines {
+                if line.trim().starts_with("\"dependencies\"") || line.trim().starts_with("\"devDependencies\"") {
+                    in_dependencies = true;
+                    continue;
+                }
+                
+                if in_dependencies && line.trim().starts_with("}") {
+                    in_dependencies = false;
+                    continue;
+                }
+                
+                if in_dependencies && line.contains(':') {
+                    total_dependencies += 1;
+                    
+                    // Check for outdated version patterns
+                    if line.contains("^") || line.contains("~") {
+                        // Good: using semver ranges
+                    } else if line.contains("latest") {
+                        outdated_count += 1;
+                        recommendations.push("Pin specific versions instead of 'latest'".to_string());
+                    }
+                    
+                    // Check for known problematic packages
+                    if line.contains("react-syntax-highlighter") && line.contains("15.") {
+                        vulnerable_count += 1;
+                        recommendations.push("Downgrade react-syntax-highlighter to v5.8.0 for security".to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // Check for lock files
+    let has_lock_file = Path::new(&format!("{}/package-lock.json", project_path)).exists() || 
+                       Path::new(&format!("{}/yarn.lock", project_path)).exists() ||
+                       Path::new(&format!("{}/bun.lockb", project_path)).exists();
+    
+    if !has_lock_file {
+        recommendations.push("Add package lock file for reproducible builds".to_string());
+        outdated_count += 1;
+    }
+
+    // Calculate dependency health score
+    let issues = outdated_count + vulnerable_count + deprecated_count;
+    let dependency_health = if total_dependencies == 0 {
+        100.0
+    } else {
+        let issue_ratio = issues as f64 / total_dependencies as f64;
+        ((1.0 - issue_ratio) * 100.0).max(0.0)
+    };
+
+    Ok(DependencyAnalysis {
+        total_dependencies,
+        outdated_count,
+        vulnerable_count,
+        deprecated_count,
+        update_available_count,
+        dependency_health,
+        recommendations,
+    })
+}
+
+/// Analyze code complexity
+async fn analyze_code_complexity(project_path: &str) -> Result<ComplexityAnalysis, String> {
+    info!("Analyzing code complexity...");
+    
+    let mut total_lines = 0;
+    let mut total_complexity = 0.0;
+    let mut file_count = 0;
+    let mut high_complexity_files = Vec::new();
+    let mut duplicate_lines = 0;
+
+    // Analyze TypeScript/JavaScript files
+    if let Ok(entries) = fs::read_dir(format!("{}/src", project_path)) {
+        for entry in entries.flatten() {
+            analyze_file_complexity(&entry.path(), &mut total_lines, &mut total_complexity, 
+                                  &mut file_count, &mut high_complexity_files, &mut duplicate_lines);
+        }
+    }
+
+    let average_complexity = if file_count > 0 {
+        total_complexity / file_count as f64
+    } else {
+        0.0
+    };
+
+    let duplicate_code_percentage = if total_lines > 0 {
+        (duplicate_lines as f64 / total_lines as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    // Calculate maintainability index (simplified)
+    let maintainability_index = if average_complexity > 0.0 {
+        (171.0 - 5.2 * average_complexity.ln() - 0.23 * average_complexity - 16.2 * (total_lines as f64).ln()).max(0.0)
+    } else {
+        100.0
+    };
+
+    // Technical debt ratio (simplified)
+    let technical_debt_ratio = (duplicate_code_percentage + (average_complexity - 10.0).max(0.0)) / 2.0;
+
+    Ok(ComplexityAnalysis {
+        average_complexity,
+        high_complexity_files,
+        total_lines_of_code: total_lines,
+        duplicate_code_percentage,
+        technical_debt_ratio,
+        maintainability_index,
+    })
+}
+
+/// Analyze individual file complexity
+fn analyze_file_complexity(
+    path: &Path, 
+    total_lines: &mut i32, 
+    total_complexity: &mut f64, 
+    file_count: &mut i32,
+    high_complexity_files: &mut Vec<String>,
+    duplicate_lines: &mut i32
+) {
+    if let Some(extension) = path.extension() {
+        if extension == "ts" || extension == "tsx" || extension == "js" || extension == "jsx" {
+            if let Ok(content) = fs::read_to_string(path) {
+                let lines = content.lines().count() as i32;
+                *total_lines += lines;
+                *file_count += 1;
+                
+                // Calculate cyclomatic complexity (simplified)
+                let complexity = calculate_cyclomatic_complexity(&content);
+                *total_complexity += complexity;
+                
+                if complexity > 15.0 {
+                    high_complexity_files.push(format!("{} (complexity: {:.1})", 
+                                                     path.display(), complexity));
+                }
+                
+                // Simple duplicate detection
+                let unique_lines: std::collections::HashSet<&str> = content.lines().collect();
+                *duplicate_lines += lines - unique_lines.len() as i32;
+            }
+        }
+    }
+}
+
+/// Calculate cyclomatic complexity for a file
+fn calculate_cyclomatic_complexity(content: &str) -> f64 {
+    let mut complexity = 1.0; // Base complexity
+    
+    // Count decision points
+    let decision_keywords = vec![
+        "if", "else if", "while", "for", "switch", "case", 
+        "catch", "&&", "||", "?", ":", "throw"
+    ];
+    
+    for keyword in decision_keywords {
+        complexity += content.matches(keyword).count() as f64;
+    }
+    
+    // Count function definitions
+    complexity += content.matches("function ").count() as f64;
+    complexity += content.matches("=> ").count() as f64;
+    complexity += content.matches("async ").count() as f64 * 0.5;
+    
+    complexity
+}
+
+/// Analyze performance indicators
+async fn analyze_performance_indicators(project_path: &str) -> Result<f64, String> {
+    info!("Analyzing performance indicators...");
+    
+    let mut score = 100.0;
+    
+    // Check bundle size indicators
+    let package_json_path = format!("{}/package.json", project_path);
+    if let Ok(content) = fs::read_to_string(&package_json_path) {
+        // Heavy packages that impact performance
+        let heavy_packages = vec![
+            "lodash", "moment", "rxjs", "@types/node", "webpack"
+        ];
+        
+        for package in heavy_packages {
+            if content.contains(&format!("\"{}\"", package)) {
+                score -= 5.0;
+            }
+        }
+    }
+    
+    // Check for performance optimizations
+    let vite_config_exists = Path::new(&format!("{}/vite.config.ts", project_path)).exists();
+    if vite_config_exists {
+        score += 10.0; // Vite is fast
+    }
+    
+    // Check for lazy loading patterns
+    if let Ok(entries) = fs::read_dir(format!("{}/src", project_path)) {
+        for entry in entries.flatten() {
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if content.contains("React.lazy") || content.contains("import(") {
+                    score += 5.0;
+                }
+                if content.contains("useMemo") || content.contains("useCallback") {
+                    score += 2.0;
+                }
+            }
+        }
+    }
+    
+    Ok(score.min(100.0).max(0.0))
+}
+
+/// Analyze error patterns
+async fn analyze_error_patterns(project_path: &str) -> Result<f64, String> {
+    info!("Analyzing error patterns...");
+    
+    let mut error_handling_score = 100.0;
+    let mut try_catch_count = 0;
+    let mut error_boundary_count = 0;
+    let mut console_error_count = 0;
+    
+    if let Ok(entries) = fs::read_dir(format!("{}/src", project_path)) {
+        for entry in entries.flatten() {
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                try_catch_count += content.matches("try {").count();
+                try_catch_count += content.matches("catch (").count();
+                error_boundary_count += content.matches("ErrorBoundary").count();
+                console_error_count += content.matches("console.error").count();
+                
+                // Penalty for unhandled promises
+                if content.contains(".then(") && !content.contains(".catch(") {
+                    error_handling_score -= 5.0;
+                }
+                
+                // Penalty for missing error handling
+                if content.contains("await ") && !content.contains("try") {
+                    error_handling_score -= 3.0;
+                }
+            }
+        }
+    }
+    
+    // Bonus for good error handling
+    if try_catch_count > 0 {
+        error_handling_score += 10.0;
+    }
+    if error_boundary_count > 0 {
+        error_handling_score += 15.0;
+    }
+    
+    Ok(error_handling_score.min(100.0).max(0.0))
+}
+
+/// Calculate complexity score from analysis
+fn calculate_complexity_score(analysis: &ComplexityAnalysis) -> f64 {
+    let mut score = 100.0;
+    
+    // Penalty for high average complexity
+    if analysis.average_complexity > 15.0 {
+        score -= (analysis.average_complexity - 15.0) * 5.0;
+    }
+    
+    // Penalty for duplicate code
+    score -= analysis.duplicate_code_percentage * 2.0;
+    
+    // Penalty for technical debt
+    score -= analysis.technical_debt_ratio * 1.5;
+    
+    // Bonus for good maintainability
+    if analysis.maintainability_index > 70.0 {
+        score += 10.0;
+    }
+    
+    score.min(100.0).max(0.0)
+}
+
+/// Calculate scalability score
+async fn calculate_scalability_score(project_path: &str) -> Result<f64, String> {
+    let mut score = 70.0; // Base score
+    
+    // Check for scalability patterns
+    if let Ok(entries) = fs::read_dir(format!("{}/src", project_path)) {
+        for entry in entries.flatten() {
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                // Good patterns
+                if content.contains("useContext") { score += 5.0; }
+                if content.contains("useState(") { score += 2.0; }
+                if content.contains("useReducer") { score += 8.0; }
+                if content.contains("memo(") { score += 5.0; }
+                if content.contains("Suspense") { score += 10.0; }
+                
+                // Architecture patterns
+                if content.contains("interface ") { score += 3.0; }
+                if content.contains("type ") { score += 2.0; }
+                if content.contains("enum ") { score += 3.0; }
+            }
+        }
+    }
+    
+    // Check for modular structure
+    let src_dirs = vec!["components", "hooks", "utils", "services", "types"];
+    for dir in src_dirs {
+        if Path::new(&format!("{}/src/{}", project_path, dir)).exists() {
+            score += 5.0;
+        }
+    }
+    
+    Ok(score.min(100.0))
+}
+
+/// Store health metrics in database
+fn store_health_metrics(
+    conn: &Connection,
+    project_id: &str,
+    analysis: &HealthAnalysisResult,
+) -> Result<(), String> {
+    let metrics = vec![
+        ("security", analysis.security_score, format!("Security analysis completed. {} critical issues found", analysis.critical_issues.len())),
+        ("dependencies", analysis.dependency_score, "Dependency health analysis".to_string()),
+        ("complexity", analysis.complexity_score, "Code complexity analysis".to_string()),
+        ("scalability", analysis.scalability_score, "Scalability assessment".to_string()),
+        ("error_rate", analysis.error_rate_score, "Error handling analysis".to_string()),
+    ];
+
+    for (metric_type, value, details) in metrics {
+        conn.execute(
+            "INSERT OR REPLACE INTO project_health 
+             (project_id, metric_type, value, details, trend, timestamp) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![project_id, metric_type, value, details, "stable", analysis.analysis_timestamp],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+/// Store detected risks in database
+fn store_detected_risks(
+    conn: &Connection,
+    project_id: &str,
+    security: &SecurityAnalysis,
+    dependencies: &DependencyAnalysis,
+    timestamp: i64,
+) -> Result<(), String> {
+    // Store security risks
+    for issue in &security.code_security_issues {
+        conn.execute(
+            "INSERT OR REPLACE INTO risk_items 
+             (project_id, category, severity, title, description, status, impact_score, probability, detected_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![project_id, "security", "high", "Code Security Issue", issue, "open", 8.0, 0.6, timestamp],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    // Store dependency risks
+    for issue in &dependencies.recommendations {
+        conn.execute(
+            "INSERT OR REPLACE INTO risk_items 
+             (project_id, category, severity, title, description, status, impact_score, probability, detected_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![project_id, "dependency", "medium", "Dependency Issue", issue, "open", 6.0, 0.4, timestamp],
+        ).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}

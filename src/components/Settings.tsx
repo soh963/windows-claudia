@@ -27,7 +27,7 @@ import { StorageTab } from "./StorageTab";
 import { HooksEditor } from "./HooksEditor";
 import { SlashCommandsManager } from "./SlashCommandsManager";
 import { ProxySettings } from "./ProxySettings";
-import { ClaudeCommandSync } from "./ClaudeCommandSync";
+import ClaudeSyncStatus from "./ClaudeSyncStatus";
 import { useTheme } from "@/hooks";
 
 interface SettingsProps {
@@ -884,7 +884,7 @@ export const Settings: React.FC<SettingsProps> = ({
             
             {/* Claude Sync Tab */}
             <TabsContent value="sync">
-              <ClaudeCommandSync setToast={setToast} />
+              <ClaudeSyncStatus />
             </TabsContent>
             
             {/* Storage Tab */}

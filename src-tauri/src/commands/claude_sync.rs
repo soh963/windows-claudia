@@ -5,10 +5,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::AppHandle;
-use tokio::process::Command;
-use tokio::time::timeout;
+use tauri::{AppHandle, Manager, Emitter};
+use tokio::sync::Mutex;
+use tokio::time::{timeout, interval};
 
 use crate::commands::slash_commands::SlashCommand;
 use crate::claude_binary::find_claude_binary;
@@ -44,6 +45,7 @@ pub struct ClaudeSyncState {
     pub claude_version: Option<String>,
     pub commands_cache: HashMap<String, ClaudeCliCommand>,
     pub sync_enabled: bool,
+    pub auto_sync_interval_hours: u64,
 }
 
 impl Default for ClaudeSyncState {
@@ -53,6 +55,22 @@ impl Default for ClaudeSyncState {
             claude_version: None,
             commands_cache: HashMap::new(),
             sync_enabled: true,
+            auto_sync_interval_hours: 24, // Default to 24 hours
+        }
+    }
+}
+
+/// Global sync state for background tasks
+pub struct GlobalSyncState {
+    pub state: Arc<Mutex<ClaudeSyncState>>,
+    pub sync_in_progress: Arc<Mutex<bool>>,
+}
+
+impl Default for GlobalSyncState {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(ClaudeSyncState::default())),
+            sync_in_progress: Arc::new(Mutex::new(false)),
         }
     }
 }
@@ -64,11 +82,19 @@ async fn get_claude_version(app_handle: &AppHandle) -> Result<String> {
     
     debug!("Getting Claude version from: {:?}", claude_binary);
     
+    let mut cmd = if claude_binary.ends_with(".cmd") {
+        crate::windows_command::execute_cmd_file_hidden_tokio(&claude_binary, vec!["--version".to_string()])
+    } else {
+        crate::windows_command::create_hidden_tokio_command(&claude_binary)
+    };
+    
+    if !claude_binary.ends_with(".cmd") {
+        cmd.arg("--version");
+    }
+    
     let output = timeout(
         Duration::from_secs(10),
-        Command::new(&claude_binary)
-            .arg("--version")
-            .stdout(Stdio::piped())
+        cmd.stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .context("Failed to spawn claude --version")?
@@ -227,11 +253,17 @@ async fn discover_from_help_patterns(claude_binary: &PathBuf) -> Result<Vec<Clau
     let help_args = vec!["--help", "help"];
     
     for arg in help_args {
+        let mut cmd = if claude_binary.ends_with(".cmd") {
+            crate::windows_command::execute_cmd_file_hidden_tokio(claude_binary.to_string_lossy().as_ref(), vec![arg.to_string()])
+        } else {
+            let mut cmd = crate::windows_command::create_hidden_tokio_command(claude_binary.to_string_lossy().as_ref());
+            cmd.arg(arg);
+            cmd
+        };
+        
         if let Ok(output) = timeout(
             Duration::from_secs(10),
-            Command::new(claude_binary)
-                .arg(arg)
-                .stdout(Stdio::piped())
+            cmd.stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
                 .context("Failed to spawn claude help")?
@@ -342,10 +374,38 @@ fn accepts_args(command: &str) -> bool {
     !matches!(command, "init" | "clear" | "compact")
 }
 
-/// Sync Claude Code commands
-#[tauri::command]
-pub async fn sync_claude_commands(app: AppHandle) -> Result<ClaudeSyncResult, String> {
+/// Internal sync function for background tasks
+async fn sync_claude_commands_internal(
+    app: AppHandle,
+    global_state: Arc<GlobalSyncState>,
+) -> Result<ClaudeSyncResult, String> {
     info!("Starting Claude Code commands sync");
+    
+    // Check if sync is already in progress
+    {
+        let mut in_progress = global_state.sync_in_progress.lock().await;
+        if *in_progress {
+            return Ok(ClaudeSyncResult {
+                success: false,
+                commands_found: 0,
+                new_commands: 0,
+                updated_commands: 0,
+                sync_time: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+                error: Some("Sync already in progress".to_string()),
+                claude_version: None,
+            });
+        }
+        *in_progress = true;
+    }
+    
+    // Ensure we reset the flag when done
+    let sync_flag = global_state.sync_in_progress.clone();
+    let _guard = scopeguard::guard(sync_flag, |flag| {
+        let flag = flag.clone();
+        tokio::spawn(async move {
+            *flag.lock().await = false;
+        });
+    });
     
     let sync_start = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     
@@ -383,12 +443,34 @@ pub async fn sync_claude_commands(app: AppHandle) -> Result<ClaudeSyncResult, St
     info!("Found {} Claude CLI commands", commands_found);
     
     // Convert to SlashCommand format
-    let slash_commands = convert_to_slash_commands(cli_commands);
+    let slash_commands = convert_to_slash_commands(cli_commands.clone());
     let new_commands = slash_commands.len();
     
-    // For now, we'll just return the sync result
-    // In a full implementation, you'd want to store these commands
-    // and integrate them with the existing slash command system
+    // Update sync state
+    {
+        let mut sync_state = global_state.state.lock().await;
+        sync_state.last_sync = Some(sync_start);
+        sync_state.claude_version = claude_version.clone();
+        
+        // Update commands cache
+        for cmd in &cli_commands {
+            sync_state.commands_cache.insert(cmd.name.clone(), cmd.clone());
+        }
+        
+        // Save sync state
+        if let Err(e) = save_sync_state(&sync_state, &app).await {
+            error!("Failed to save sync state: {}", e);
+        }
+    }
+    
+    // Store slash commands in database
+    if let Err(e) = store_slash_commands(&slash_commands, &app).await {
+        error!("Failed to store slash commands: {}", e);
+    }
+    
+    // Emit event to notify UI
+    app.emit("claude-commands-synced", &slash_commands)
+        .map_err(|e| e.to_string())?;
     
     Ok(ClaudeSyncResult {
         success: true,
@@ -401,18 +483,45 @@ pub async fn sync_claude_commands(app: AppHandle) -> Result<ClaudeSyncResult, St
     })
 }
 
+/// Sync Claude Code commands
+#[tauri::command]
+pub async fn sync_claude_commands(
+    app: AppHandle,
+    state: tauri::State<'_, GlobalSyncState>,
+) -> Result<ClaudeSyncResult, String> {
+    // Create an Arc wrapper around the state for the internal function
+    let global_state = Arc::new(GlobalSyncState {
+        state: state.state.clone(),
+        sync_in_progress: state.sync_in_progress.clone(),
+    });
+    
+    sync_claude_commands_internal(app, global_state).await
+}
+
 /// Get current sync state
 #[tauri::command]
-pub async fn get_claude_sync_state() -> Result<ClaudeSyncState, String> {
-    // In a full implementation, this would read from persistent storage
-    Ok(ClaudeSyncState::default())
+pub async fn get_claude_sync_state(state: tauri::State<'_, GlobalSyncState>) -> Result<ClaudeSyncState, String> {
+    let sync_state = state.state.lock().await;
+    Ok(sync_state.clone())
 }
 
 /// Enable/disable Claude sync
 #[tauri::command]
-pub async fn set_claude_sync_enabled(enabled: bool) -> Result<bool, String> {
+pub async fn set_claude_sync_enabled(
+    enabled: bool,
+    state: tauri::State<'_, GlobalSyncState>,
+    app: AppHandle,
+) -> Result<bool, String> {
     info!("Claude sync enabled: {}", enabled);
-    // In a full implementation, this would persist the setting
+    
+    let mut sync_state = state.state.lock().await;
+    sync_state.sync_enabled = enabled;
+    
+    // Save state to disk
+    if let Err(e) = save_sync_state(&sync_state, &app).await {
+        error!("Failed to save sync state: {}", e);
+    }
+    
     Ok(enabled)
 }
 
@@ -458,5 +567,185 @@ pub async fn check_claude_availability(app: AppHandle) -> Result<bool, String> {
             warn!("Claude binary not found: {}", e);
             Ok(false)
         }
+    }
+}
+
+/// Get sync state file path
+fn get_sync_state_path(app: &AppHandle) -> Result<PathBuf> {
+    let app_data = app.path().app_data_dir()
+        .map_err(|e| anyhow::anyhow!("Failed to get app data directory: {}", e))?;
+    
+    // Ensure directory exists
+    if !app_data.exists() {
+        fs::create_dir_all(&app_data)?;
+    }
+    
+    Ok(app_data.join("claude_sync_state.json"))
+}
+
+/// Save sync state to disk
+async fn save_sync_state(state: &ClaudeSyncState, app: &AppHandle) -> Result<()> {
+    let path = get_sync_state_path(app)?;
+    let json = serde_json::to_string_pretty(state)?;
+    fs::write(path, json)?;
+    Ok(())
+}
+
+/// Load sync state from disk
+pub async fn load_sync_state(app: &AppHandle) -> Result<ClaudeSyncState> {
+    let path = get_sync_state_path(app)?;
+    
+    if !path.exists() {
+        return Ok(ClaudeSyncState::default());
+    }
+    
+    let json = fs::read_to_string(path)?;
+    let state: ClaudeSyncState = serde_json::from_str(&json)?;
+    Ok(state)
+}
+
+/// Store slash commands in database
+async fn store_slash_commands(commands: &[SlashCommand], app: &AppHandle) -> Result<()> {
+    // Get the commands cache directory
+    let app_data = app.path().app_data_dir()
+        .map_err(|e| anyhow::anyhow!("Failed to get app data directory: {}", e))?;
+    
+    let commands_file = app_data.join("claude_synced_commands.json");
+    
+    // Save commands to file
+    let json = serde_json::to_string_pretty(commands)?;
+    fs::write(commands_file, json)?;
+    
+    info!("Stored {} synced Claude commands", commands.len());
+    Ok(())
+}
+
+/// Load stored slash commands
+pub async fn load_stored_commands(app: &AppHandle) -> Result<Vec<SlashCommand>> {
+    let app_data = app.path().app_data_dir()
+        .map_err(|e| anyhow::anyhow!("Failed to get app data directory: {}", e))?;
+    
+    let commands_file = app_data.join("claude_synced_commands.json");
+    
+    if !commands_file.exists() {
+        return Ok(Vec::new());
+    }
+    
+    let json = fs::read_to_string(commands_file)?;
+    let commands: Vec<SlashCommand> = serde_json::from_str(&json)?;
+    Ok(commands)
+}
+
+/// Set automatic sync interval
+#[tauri::command]
+pub async fn set_claude_sync_interval(
+    hours: u64,
+    state: tauri::State<'_, GlobalSyncState>,
+    app: AppHandle,
+) -> Result<u64, String> {
+    info!("Setting Claude sync interval to {} hours", hours);
+    
+    let mut sync_state = state.state.lock().await;
+    sync_state.auto_sync_interval_hours = hours;
+    
+    // Save state to disk
+    if let Err(e) = save_sync_state(&sync_state, &app).await {
+        error!("Failed to save sync state: {}", e);
+    }
+    
+    Ok(hours)
+}
+
+/// Force refresh Claude commands (clears cache and re-syncs)
+#[tauri::command]
+pub async fn force_refresh_claude_commands(
+    app: AppHandle,
+    state: tauri::State<'_, GlobalSyncState>,
+) -> Result<ClaudeSyncResult, String> {
+    info!("Force refreshing Claude commands");
+    
+    // Clear cache
+    {
+        let mut sync_state = state.state.lock().await;
+        sync_state.commands_cache.clear();
+        sync_state.last_sync = None;
+        sync_state.claude_version = None;
+    }
+    
+    // Perform sync
+    sync_claude_commands(app, state).await
+}
+
+/// Start automatic sync background task
+pub async fn start_auto_sync(app: AppHandle, global_state: Arc<GlobalSyncState>) {
+    info!("Starting automatic Claude sync background task");
+    
+    // Load initial state
+    if let Ok(saved_state) = load_sync_state(&app).await {
+        let mut state = global_state.state.lock().await;
+        *state = saved_state;
+    }
+    
+    // Initial sync after 10 seconds
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    
+    // Perform initial sync
+    if let Err(e) = sync_claude_commands_internal(app.clone(), global_state.clone()).await {
+        error!("Initial Claude sync failed: {}", e);
+    }
+    
+    // Set up periodic sync
+    let interval_hours = {
+        let state = global_state.state.lock().await;
+        state.auto_sync_interval_hours
+    };
+    
+    let mut interval = interval(Duration::from_secs(interval_hours * 60 * 60));
+    
+    loop {
+        interval.tick().await;
+        
+        // Check if sync is enabled
+        let sync_enabled = {
+            let state = global_state.state.lock().await;
+            state.sync_enabled
+        };
+        
+        if !sync_enabled {
+            info!("Automatic Claude sync is disabled, skipping");
+            continue;
+        }
+        
+        info!("Running scheduled Claude sync");
+        
+        match sync_claude_commands_internal(app.clone(), global_state.clone()).await {
+            Ok(result) => {
+                if result.success {
+                    info!("Scheduled Claude sync completed successfully");
+                } else {
+                    warn!("Scheduled Claude sync completed with errors: {:?}", result.error);
+                }
+            }
+            Err(e) => {
+                error!("Scheduled Claude sync failed: {}", e);
+            }
+        }
+    }
+}
+
+/// Get next sync time
+#[tauri::command]
+pub async fn get_next_sync_time(state: tauri::State<'_, GlobalSyncState>) -> Result<Option<u64>, String> {
+    let sync_state = state.state.lock().await;
+    
+    if !sync_state.sync_enabled {
+        return Ok(None);
+    }
+    
+    if let Some(last_sync) = sync_state.last_sync {
+        let next_sync = last_sync + (sync_state.auto_sync_interval_hours * 60 * 60);
+        Ok(Some(next_sync))
+    } else {
+        Ok(None)
     }
 }

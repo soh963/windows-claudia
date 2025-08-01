@@ -50,7 +50,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import * as SyntaxHighlighterModule from "react-syntax-highlighter";
+const SyntaxHighlighter = SyntaxHighlighterModule.Prism;
 import { getClaudeSyntaxTheme } from "@/lib/claudeSyntaxTheme";
 import { useTheme } from "@/hooks";
 import { Button } from "@/components/ui/button";
@@ -694,6 +695,64 @@ export const BashWidget: React.FC<{
 };
 
 /**
+ * Code preview component for WriteWidget
+ */
+const CodePreview: React.FC<{ 
+  codeContent: string; 
+  truncated: boolean; 
+  language: string;
+  syntaxTheme: any;
+  isLargeContent: boolean;
+  onMaximize: () => void;
+}> = ({ codeContent, truncated, language, syntaxTheme, isLargeContent, onMaximize }) => (
+  <div 
+    className="rounded-lg border bg-zinc-950 overflow-hidden w-full"
+    style={{ 
+      height: truncated ? '440px' : 'auto', 
+      maxHeight: truncated ? '440px' : undefined,
+      display: 'flex', 
+      flexDirection: 'column' 
+    }}
+  >
+    <div className="px-4 py-2 border-b bg-zinc-950 flex items-center justify-between sticky top-0 z-10">
+      <span className="text-xs font-mono text-muted-foreground">Preview</span>
+      {isLargeContent && truncated && (
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs whitespace-nowrap">
+            Truncated to 1000 chars
+          </Badge>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6"
+            onClick={onMaximize}
+          >
+            <Maximize2 className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+    </div>
+    <div className="overflow-auto flex-1">
+      <SyntaxHighlighter
+        language={language}
+        style={syntaxTheme}
+        customStyle={{
+          margin: 0,
+          padding: '1rem',
+          background: 'transparent',
+          fontSize: '0.75rem',
+          lineHeight: '1.5',
+          overflowX: 'auto'
+        }}
+        wrapLongLines={false}
+      >
+        {codeContent}
+      </SyntaxHighlighter>
+    </div>
+  </div>
+);
+
+/**
  * Widget for Write tool
  */
 export const WriteWidget: React.FC<{ filePath: string; content: string; result?: any }> = ({ filePath, content, result: _result }) => {
@@ -801,53 +860,6 @@ export const WriteWidget: React.FC<{ filePath: string; content: string; result?:
     );
   };
 
-  const CodePreview = ({ codeContent, truncated }: { codeContent: string; truncated: boolean }) => (
-    <div 
-      className="rounded-lg border bg-zinc-950 overflow-hidden w-full"
-      style={{ 
-        height: truncated ? '440px' : 'auto', 
-        maxHeight: truncated ? '440px' : undefined,
-        display: 'flex', 
-        flexDirection: 'column' 
-      }}
-    >
-      <div className="px-4 py-2 border-b bg-zinc-950 flex items-center justify-between sticky top-0 z-10">
-        <span className="text-xs font-mono text-muted-foreground">Preview</span>
-        {isLargeContent && truncated && (
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs whitespace-nowrap">
-              Truncated to 1000 chars
-            </Badge>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-6 w-6"
-              onClick={() => setIsMaximized(true)}
-            >
-              <Maximize2 className="h-3 w-3" />
-            </Button>
-          </div>
-        )}
-      </div>
-      <div className="overflow-auto flex-1">
-        <SyntaxHighlighter
-          language={language}
-          style={syntaxTheme}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            background: 'transparent',
-            fontSize: '0.75rem',
-            lineHeight: '1.5',
-            overflowX: 'auto'
-          }}
-          wrapLongLines={false}
-        >
-          {codeContent}
-        </SyntaxHighlighter>
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-2">
@@ -858,7 +870,14 @@ export const WriteWidget: React.FC<{ filePath: string; content: string; result?:
           {filePath}
         </code>
       </div>
-      <CodePreview codeContent={displayContent} truncated={true} />
+      <CodePreview 
+        codeContent={displayContent} 
+        truncated={true} 
+        language={language}
+        syntaxTheme={syntaxTheme}
+        isLargeContent={isLargeContent}
+        onMaximize={() => setIsMaximized(true)}
+      />
       <MaximizedView />
     </div>
   );
@@ -2964,7 +2983,7 @@ export const TodoReadWidget: React.FC<{ todos?: any[]; result?: any }> = ({ todo
 
         <TabsContent value="list" className="mt-4">
           <div className="space-y-2">
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence mode="sync">
               {filteredTodos.map(todo => (
                 <TodoCard 
                   key={todo.id || filteredTodos.indexOf(todo)} 

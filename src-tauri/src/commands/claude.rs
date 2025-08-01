@@ -225,79 +225,95 @@ fn extract_first_user_message(jsonl_path: &PathBuf) -> (Option<String>, Option<S
 /// Helper function to create a tokio Command with proper environment variables
 /// This ensures commands like Claude can find Node.js and other dependencies
 fn create_command_with_env(program: &str) -> Command {
-    // Convert std::process::Command to tokio::process::Command
-    let _std_cmd = crate::claude_binary::create_command_with_env(program);
-
-    // Create a new tokio Command from the program path
-    let mut tokio_cmd = Command::new(program);
-
-    // Hide console window on Windows
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        tokio_cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    // Clear environment to avoid Git Bash interference
-    tokio_cmd.env_clear();
-
-    // Copy over all environment variables
-    for (key, value) in std::env::vars() {
-        if key == "PATH"
-            || key == "HOME"
-            || key == "USER"
-            || key == "SHELL"
-            || key == "LANG"
-            || key == "LC_ALL"
-            || key.starts_with("LC_")
-            || key == "NODE_PATH"
-            || key == "NVM_DIR"
-            || key == "NVM_BIN"
-            || key == "HOMEBREW_PREFIX"
-            || key == "HOMEBREW_CELLAR"
-            // Windows environment variables
-            || key == "USERPROFILE"
-            || key == "APPDATA"
-            || key == "LOCALAPPDATA"
-            || key == "ProgramFiles"
-            || key == "ProgramFiles(x86)"
-            || key == "TEMP"
-            || key == "TMP"
-            || key == "SystemRoot"
-            || key == "COMSPEC"
-            || key == "PATHEXT"
-            // Proxy environment variables
-            || key == "HTTP_PROXY"
-            || key == "HTTPS_PROXY"
-            || key == "NO_PROXY"
-            || key == "ALL_PROXY"
-        {
-            // Skip Git Bash specific variables that might cause issues
-            if key == "SHELL" && value.contains("/usr/bin/bash") {
-                continue;
-            }
-            if key == "MSYSTEM" || key == "MINGW_PREFIX" || key == "MINGW_CHOST" {
-                continue;
-            }
-            
-            log::debug!("Inheriting env var: {}={}", key, value);
-            tokio_cmd.env(&key, &value);
-        }
-    }
-
-    // Add NVM support if the program is in an NVM directory
-    if program.contains("/.nvm/versions/node/") {
-        if let Some(node_bin_dir) = std::path::Path::new(program).parent() {
-            let current_path = std::env::var("PATH").unwrap_or_default();
-            let node_bin_str = node_bin_dir.to_string_lossy();
-            if !current_path.contains(&node_bin_str.as_ref()) {
-                let new_path = format!("{}:{}", node_bin_str, current_path);
-                tokio_cmd.env("PATH", new_path);
+        let mut cmd = crate::windows_command::create_hidden_tokio_command(program);
+        
+        // Copy over essential environment variables
+        for (key, value) in std::env::vars() {
+            if key == "PATH"
+                || key == "HOME"
+                || key == "USER"
+                || key == "SHELL"
+                || key == "LANG"
+                || key == "LC_ALL"
+                || key.starts_with("LC_")
+                || key == "NODE_PATH"
+                || key == "NVM_DIR"
+                || key == "NVM_BIN"
+                || key == "HOMEBREW_PREFIX"
+                || key == "HOMEBREW_CELLAR"
+                // Windows environment variables
+                || key == "USERPROFILE"
+                || key == "APPDATA"
+                || key == "LOCALAPPDATA"
+                || key == "ProgramFiles"
+                || key == "ProgramFiles(x86)"
+                || key == "TEMP"
+                || key == "TMP"
+                || key == "SystemRoot"
+                || key == "COMSPEC"
+                || key == "PATHEXT"
+                // Proxy environment variables
+                || key == "HTTP_PROXY"
+                || key == "HTTPS_PROXY"
+                || key == "NO_PROXY"
+                || key == "ALL_PROXY"
+            {
+                // Skip Git Bash specific variables that might cause issues
+                if key == "SHELL" && value.contains("/usr/bin/bash") {
+                    continue;
+                }
+                if key == "MSYSTEM" || key == "MINGW_PREFIX" || key == "MINGW_CHOST" {
+                    continue;
+                }
+                
+                log::debug!("Inheriting env var: {}={}", key, value);
+                cmd.env(&key, &value);
             }
         }
+        
+        cmd
     }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Convert std::process::Command to tokio::process::Command
+        let _std_cmd = crate::claude_binary::create_command_with_env(program);
 
-    tokio_cmd
+        // Create a new tokio Command from the program path
+        let mut tokio_cmd = Command::new(program);
+
+        // Clear environment to avoid Git Bash interference
+        tokio_cmd.env_clear();
+        
+        // Copy over essential environment variables
+        for (key, value) in std::env::vars() {
+            if key == "PATH"
+                || key == "HOME"
+                || key == "USER"
+                || key == "SHELL"
+                || key == "LANG"
+                || key == "LC_ALL"
+                || key.starts_with("LC_")
+                || key == "NODE_PATH"
+                || key == "NVM_DIR"
+                || key == "NVM_BIN"
+                || key == "HOMEBREW_PREFIX"
+                || key == "HOMEBREW_CELLAR"
+                // Proxy environment variables
+                || key == "HTTP_PROXY"
+                || key == "HTTPS_PROXY"
+                || key == "NO_PROXY"
+                || key == "ALL_PROXY"
+            {
+                log::debug!("Inheriting env var: {}={}", key, value);
+                tokio_cmd.env(&key, &value);
+            }
+        }
+        
+        tokio_cmd
+    }
 }
 
 /// Creates a system binary command with the given arguments
@@ -310,46 +326,25 @@ fn create_system_command(
         // For Windows .cmd files, use cmd /c with proper escaping
         #[cfg(target_os = "windows")]
         {
-            // Force use of Windows cmd.exe, not Git Bash or other shells
-            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
-            let mut cmd = Command::new(cmd_exe);
+            // Use windows_command utility with proper args formatting
+            let mut cmd = crate::windows_command::execute_cmd_file_hidden_tokio(claude_path, args.clone());
             
-            // Build the complete command string with proper quoting
-            let mut command_parts = Vec::new();
+            // Apply runtime-aware environment configuration
+            let strategy = crate::runtime_utils::get_command_strategy();
             
-            // Quote the path if it contains spaces
-            if claude_path.contains(' ') {
-                command_parts.push(format!("\"{}\"", claude_path));
-            } else {
-                command_parts.push(claude_path.to_string());
+            // Clear problematic environment variables
+            for env_var in strategy.get_env_vars_to_remove() {
+                cmd.env_remove(env_var);
             }
             
-            // Add arguments with proper quoting
-            for arg in &args {
-                if arg.contains(' ') || arg.contains('"') {
-                    command_parts.push(format!("\"{}\"", arg.replace('"', "\\\"")));
-                } else {
-                    command_parts.push(arg.clone());
-                }
+            // Set appropriate environment variables
+            for (key, value) in strategy.get_env_vars() {
+                cmd.env(key, value);
             }
+            cmd.env("COMSPEC", "C:\\Windows\\System32\\cmd.exe");
+            cmd.env("PATH", std::env::var("PATH").unwrap_or_default());
             
-            let full_command = command_parts.join(" ");
-            
-            cmd.arg("/c");
-            cmd.arg(&full_command);
-            
-            // Clear any MSYS2/Git Bash environment variables that might interfere
-            cmd.env_remove("MSYSTEM");
-            cmd.env_remove("MSYS");
-            cmd.env_remove("MINGW_PREFIX");
-            cmd.env_remove("MSYSTEM_PREFIX");
-            cmd.env("COMSPEC", cmd_exe);  // Force correct COMSPEC
-            
-            log::debug!("Windows .cmd command: {} /c {}", cmd_exe, full_command);
-            
-            // Apply CREATE_NO_WINDOW with additional flags to ensure no console window
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(CREATE_NO_WINDOW | 0x00000200); // CREATE_NEW_PROCESS_GROUP
+            log::debug!("Windows .cmd command via utility: {}", claude_path);
             cmd
         }
         #[cfg(not(target_os = "windows"))]
@@ -595,6 +590,9 @@ pub async fn open_new_session(app: AppHandle, path: Option<String>) -> Result<St
 
     #[cfg(debug_assertions)]
     {
+        #[cfg(target_os = "windows")]
+        let mut cmd = crate::windows_command::create_hidden_std_command(&claude_path);
+        #[cfg(not(target_os = "windows"))]
         let mut cmd = std::process::Command::new(claude_path);
 
         // If a path is provided, use it; otherwise use current directory
@@ -658,32 +656,16 @@ pub async fn check_claude_auth(app: AppHandle) -> Result<ClaudeAuthStatus, Strin
     let mut cmd = if claude_path.ends_with(".cmd") {
         #[cfg(target_os = "windows")]
         {
-            // Force use of Windows cmd.exe, not Git Bash or other shells
-            let cmd_exe = "C:\\Windows\\System32\\cmd.exe";
-            let mut cmd = Command::new(cmd_exe);
-            
-            // Build the complete command string with proper quoting
-            let full_command = if claude_path.contains(' ') {
-                format!("\"{}\" mcp list", claude_path)
-            } else {
-                format!("{} mcp list", claude_path)
-            };
-            
-            cmd.arg("/c");
-            cmd.arg(&full_command);
+            let mut cmd = crate::windows_command::execute_cmd_file_hidden_tokio(&claude_path, vec!["mcp".to_string(), "list".to_string()]);
             
             // Clear any MSYS2/Git Bash environment variables that might interfere
             cmd.env_remove("MSYSTEM");
             cmd.env_remove("MSYS");
             cmd.env_remove("MINGW_PREFIX");
             cmd.env_remove("MSYSTEM_PREFIX");
-            cmd.env("COMSPEC", cmd_exe);  // Force correct COMSPEC
+            cmd.env("COMSPEC", "C:\\Windows\\System32\\cmd.exe");  // Force correct COMSPEC
             
-            log::debug!("Auth check command: {} /c {}", cmd_exe, full_command);
-            
-            // Apply CREATE_NO_WINDOW with additional flags
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(CREATE_NO_WINDOW | 0x00000200); // CREATE_NEW_PROCESS_GROUP
+            log::debug!("Auth check command via utility: {}", claude_path);
             cmd
         }
         #[cfg(not(target_os = "windows"))]
@@ -694,13 +676,7 @@ pub async fn check_claude_auth(app: AppHandle) -> Result<ClaudeAuthStatus, Strin
             cmd
         }
     } else {
-        let mut cmd = Command::new(&claude_path);
-        // Hide console window on Windows
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
+        let mut cmd = crate::windows_command::create_hidden_tokio_command(&claude_path);
         // Use 'claude mcp list' as a test command - it should work if authenticated
         cmd.arg("mcp").arg("list");
         cmd
@@ -779,6 +755,11 @@ pub async fn check_claude_version(app: AppHandle) -> Result<ClaudeVersionStatus,
 
     #[cfg(debug_assertions)]
     {
+        #[cfg(target_os = "windows")]
+        let output = crate::windows_command::create_hidden_std_command(&claude_path)
+            .arg("--version")
+            .output();
+        #[cfg(not(target_os = "windows"))]
         let output = std::process::Command::new(claude_path)
             .arg("--version")
             .output();
@@ -988,13 +969,36 @@ pub async fn load_session_history(
     );
 
     let claude_dir = get_claude_dir().map_err(|e| e.to_string())?;
-    let session_path = claude_dir
+    let mut session_path = claude_dir
         .join("projects")
         .join(&project_id)
         .join(format!("{}.jsonl", session_id));
 
+    // If not found, try searching in all project directories as fallback
     if !session_path.exists() {
-        return Err(format!("Session file not found: {}", session_id));
+        log::warn!("Session file not found at expected path, searching all projects...");
+        
+        let projects_dir = claude_dir.join("projects");
+        if projects_dir.exists() {
+            // Search all project directories for the session file
+            if let Ok(entries) = std::fs::read_dir(&projects_dir) {
+                for entry in entries.flatten() {
+                    if entry.path().is_dir() {
+                        let potential_path = entry.path().join(format!("{}.jsonl", session_id));
+                        if potential_path.exists() {
+                            log::info!("Found session file in: {:?}", entry.path());
+                            session_path = potential_path;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If still not found, return error
+        if !session_path.exists() {
+            return Err(format!("Session file not found: {}", session_id));
+        }
     }
 
     let file =
@@ -1183,7 +1187,7 @@ pub async fn cancel_claude_execution(
                     if let Some(pid) = pid {
                         log::info!("Attempting system kill as last resort for PID: {}", pid);
                         let kill_result = if cfg!(target_os = "windows") {
-                            std::process::Command::new("taskkill")
+                            crate::windows_command::create_hidden_std_command("taskkill")
                                 .args(["/F", "/PID", &pid.to_string()])
                                 .output()
                         } else {
@@ -1918,11 +1922,14 @@ pub async fn get_checkpoint_diff(
                 let additions = to_file.content.lines().count();
                 let deletions = from_file.content.lines().count();
 
+                // Generate actual diff content
+                let diff_content = generate_diff_content(&from_file.content, &to_file.content);
+                
                 modified_files.push(crate::checkpoint::FileDiff {
                     path: path.clone(),
                     additions,
                     deletions,
-                    diff_content: None, // TODO: Generate actual diff
+                    diff_content: Some(diff_content),
                 });
             }
         } else {
@@ -2241,7 +2248,11 @@ pub async fn validate_hook_command(command: String) -> Result<serde_json::Value,
     log::info!("Validating hook command syntax");
 
     // Validate syntax without executing
+    #[cfg(target_os = "windows")]
+    let mut cmd = crate::windows_command::create_hidden_std_command("bash");
+    #[cfg(not(target_os = "windows"))]
     let mut cmd = std::process::Command::new("bash");
+    
     cmd.arg("-n") // Syntax check only
        .arg("-c")
        .arg(&command);
@@ -2263,4 +2274,42 @@ pub async fn validate_hook_command(command: String) -> Result<serde_json::Value,
         }
         Err(e) => Err(format!("Failed to validate command: {}", e))
     }
+}
+
+/// Generate diff content between two file contents
+fn generate_diff_content(from_content: &str, to_content: &str) -> String {
+    use similar::{ChangeTag, TextDiff};
+    
+    let diff = TextDiff::from_lines(from_content, to_content);
+    let mut diff_output = String::new();
+    
+    for (idx, group) in diff.grouped_ops(3).iter().enumerate() {
+        if idx > 0 {
+            diff_output.push_str("...\n");
+        }
+        
+        for op in group {
+            for change in diff.iter_changes(op) {
+                match change.tag() {
+                    ChangeTag::Delete => {
+                        diff_output.push('-');
+                        diff_output.push_str(&change.to_string());
+                    }
+                    ChangeTag::Insert => {
+                        diff_output.push('+');
+                        diff_output.push_str(&change.to_string());
+                    }
+                    ChangeTag::Equal => {
+                        diff_output.push(' ');
+                        diff_output.push_str(&change.to_string());
+                    }
+                }
+                if !change.to_string().ends_with('\n') {
+                    diff_output.push('\n');
+                }
+            }
+        }
+    }
+    
+    diff_output
 }

@@ -10,6 +10,7 @@ export interface Tab {
   agentData?: any; // for agent-execution tabs
   claudeFileId?: string; // for claude-file tabs
   initialProjectPath?: string; // for chat tabs
+  projectData?: any; // for dashboard tabs - stores project object
   status: 'active' | 'idle' | 'running' | 'complete' | 'error';
   hasUnsavedChanges: boolean;
   order: number;
@@ -181,7 +182,51 @@ export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 export const useTabContext = () => {
   const context = useContext(TabContext);
   if (!context) {
-    throw new Error('useTabContext must be used within a TabProvider');
+    // Provide fallback to prevent React Error #130 in production
+    console.warn('useTabContext called outside TabProvider, providing fallback');
+    
+    const fallbackTab: Tab = {
+      id: 'fallback-tab',
+      type: 'projects',
+      title: 'CC Projects',
+      status: 'idle',
+      hasUnsavedChanges: false,
+      order: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    return {
+      tabs: [fallbackTab],
+      activeTabId: 'fallback-tab',
+      addTab: (_tabData: Omit<Tab, 'id' | 'order' | 'createdAt' | 'updatedAt'>) => {
+        console.warn('[Tab Fallback] addTab called');
+        return 'fallback-tab';
+      },
+      removeTab: (id: string) => {
+        console.warn(`[Tab Fallback] removeTab called with: ${id}`);
+      },
+      updateTab: (id: string, _updates: Partial<Tab>) => {
+        console.warn(`[Tab Fallback] updateTab called with: ${id}`);
+      },
+      setActiveTab: (id: string) => {
+        console.warn(`[Tab Fallback] setActiveTab called with: ${id}`);
+      },
+      reorderTabs: (_startIndex: number, _endIndex: number) => {
+        console.warn(`[Tab Fallback] reorderTabs called`);
+      },
+      getTabById: (id: string) => {
+        console.warn(`[Tab Fallback] getTabById called with: ${id}`);
+        return id === 'fallback-tab' ? fallbackTab : undefined;
+      },
+      closeAllTabs: () => {
+        console.warn('[Tab Fallback] closeAllTabs called');
+      },
+      getTabsByType: (type: 'chat' | 'agent') => {
+        console.warn(`[Tab Fallback] getTabsByType called with: ${type}`);
+        return [];
+      },
+    } as TabContextType;
   }
   return context;
 };

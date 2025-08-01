@@ -25,17 +25,27 @@
       {
         "title": "Claudia",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "visible": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "fullscreen": false,
+        "maximized": false,
+        "resizable": true,
+        "center": true
       }
     ],
+    "withGlobalTauri": false,
+    "macOSPrivateApi": false,
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; connect-src 'self' ipc: https://ipc.localhost",
+      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; connect-src 'self' ipc: https://ipc.localhost; font-src 'self' data:; media-src 'self' blob: data:",
       "assetProtocol": {
         "enable": true,
         "scope": [
           "**"
         ]
-      }
+      },
+      "dangerousDisableAssetCspModification": false
     }
   },
   "plugins": {

@@ -394,7 +394,7 @@ export const AgentsModal: React.FC<AgentsModalProps> = ({ open, onOpenChange }) 
                   </div>
                 ) : (
                   <div className="grid gap-4 py-4">
-                    <AnimatePresence mode="popLayout">
+                    <AnimatePresence mode="sync">
                       {filteredRunningAgents.map((run) => (
                         <motion.div
                           key={run.id}

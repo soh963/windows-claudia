@@ -18,17 +18,37 @@ export interface ProcessInfo {
 }
 
 /**
- * Represents a project in the ~/.claude/projects directory
+ * Represents a project in the database
  */
 export interface Project {
-  /** The project ID (derived from the directory name) */
+  /** The project ID (unique identifier) */
   id: string;
-  /** The original project path (decoded from the directory name) */
+  /** The project path on the filesystem */
   path: string;
-  /** List of session IDs (JSONL file names without extension) */
-  sessions: string[];
-  /** Unix timestamp when the project directory was created */
-  created_at: number;
+  /** The project name (optional, derived from path if not provided) */
+  name?: string;
+  /** Project description (optional) */
+  description?: string;
+  /** Creation timestamp */
+  created_at: string;
+  /** Last access timestamp (optional) */
+  last_accessed?: string;
+  /** Number of sessions associated with this project (optional) */
+  sessions_count?: number;
+  /** Project status */
+  status?: string;
+  /** Project type */
+  project_type?: string;
+  /** Git repository URL (optional) */
+  git_repo?: string;
+  /** Technology stack as JSON array string (optional) */
+  tech_stack?: string;
+  /** Team members as JSON array string (optional) */
+  team_members?: string;
+  /** Additional metadata as JSON object string (optional) */
+  metadata?: string;
+  /** List of session IDs for backward compatibility */
+  sessions?: string[];
 }
 
 /**
@@ -510,6 +530,148 @@ export interface McpSearchResult {
   servers: McpServerInfo[];
   total_found: number;
   source: string;
+}
+
+// Claude Sync Types
+export interface ClaudeSyncState {
+  last_sync: number | null;
+  claude_version: string | null;
+  commands_cache: Record<string, any>;
+  sync_enabled: boolean;
+  auto_sync_interval_hours: number;
+}
+
+export interface ClaudeSyncResult {
+  success: boolean;
+  commands_found: number;
+  new_commands: number;
+  updated_commands: number;
+  sync_time: number;
+  error: string | null;
+  claude_version: string | null;
+}
+
+// Dashboard Types (matching Rust backend)
+export interface ProjectHealthMetric {
+  id?: number;
+  project_id: string;
+  metric_type: string;
+  value: number;
+  timestamp: number;
+  details?: string;
+  trend?: string;
+}
+
+export interface FeatureItem {
+  id?: number;
+  project_id: string;
+  name: string;
+  description?: string;
+  status: string;
+  independence_score?: number;
+  dependencies?: string;
+  file_paths?: string;
+  complexity_score?: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface RiskItem {
+  id?: number;
+  project_id: string;
+  category: string;
+  severity: string;
+  title: string;
+  description: string;
+  mitigation?: string;
+  status: string;
+  impact_score?: number;
+  probability?: number;
+  detected_at: number;
+  resolved_at?: number;
+  file_paths?: string;
+}
+
+export interface DocumentationStatus {
+  id?: number;
+  project_id: string;
+  doc_type: string;
+  completion_percentage?: number;
+  total_sections?: number;
+  completed_sections?: number;
+  missing_sections?: string;
+  file_paths?: string;
+  last_updated: number;
+  quality_score?: number;
+}
+
+export interface AIUsageMetric {
+  id?: number;
+  project_id: string;
+  model_name: string;
+  agent_type?: string;
+  mcp_server?: string;
+  token_count: number;
+  request_count: number;
+  success_count: number;
+  failure_count: number;
+  success_rate?: number;
+  avg_response_time?: number;
+  total_cost?: number;
+  session_date: string;
+  timestamp: number;
+}
+
+export interface WorkflowStage {
+  id?: number;
+  project_id: string;
+  stage_name: string;
+  stage_order: number;
+  status: string;
+  start_date?: number;
+  end_date?: number;
+  duration_days?: number;
+  efficiency_score?: number;
+  bottlenecks?: string;
+  updated_at: number;
+}
+
+export interface ProjectGoals {
+  id?: number;
+  project_id: string;
+  primary_goal?: string;
+  secondary_goals?: string;
+  overall_completion?: number;
+  features_completion?: number;
+  documentation_completion?: number;
+  tests_completion?: number;
+  deployment_readiness?: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface DashboardConfig {
+  id?: number;
+  project_id: string;
+  config_version?: string;
+  refresh_interval?: number;
+  cache_duration?: number;
+  enabled_widgets?: string;
+  custom_metrics?: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface DashboardSummary {
+  project_id: string;
+  health_metrics: ProjectHealthMetric[];
+  feature_status: FeatureItem[];
+  risk_items: RiskItem[];
+  documentation_status: DocumentationStatus[];
+  ai_usage: AIUsageMetric[];
+  workflow_stages: WorkflowStage[];
+  project_goals?: ProjectGoals;
+  config?: DashboardConfig;
 }
 
 /**
@@ -1973,6 +2135,254 @@ export const api = {
       });
     } catch (error) {
       console.error("Failed to execute slash command:", error);
+      throw error;
+    }
+  },
+
+  // Dashboard API methods
+
+  /**
+   * Gets dashboard summary for a project
+   * @param projectId - The project ID to get dashboard data for
+   * @returns Promise resolving to dashboard summary
+   */
+  async dashboardGetSummary(projectId: string): Promise<DashboardSummary> {
+    try {
+      return await invoke<DashboardSummary>("dashboard_get_summary", { projectId });
+    } catch (error) {
+      console.error("Failed to get dashboard summary:", error);
+      
+      // In production, try to recover from project not found errors
+      if (error instanceof Error && (
+        error.message.includes("Project not found") || 
+        error.message.includes("Invalid project path") ||
+        error.message.includes("Path does not exist")
+      )) {
+        console.warn("Project not found, attempting to recover...");
+        
+        try {
+          // Try to get current working project
+          const workingProject = await this.getCurrentWorkingProject();
+          if (workingProject && workingProject.id === projectId) {
+            console.log("Found working project, re-creating if needed...");
+            await this.createProjectIfNotExists(workingProject.path, workingProject.name);
+            
+            // Retry the dashboard summary after re-creating project
+            return await invoke<DashboardSummary>("dashboard_get_summary", { projectId });
+          }
+        } catch (recoveryError) {
+          console.error("Failed to recover from project not found error:", recoveryError);
+        }
+      }
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Analyzes a project and updates dashboard metrics
+   * @param projectId - The project ID to analyze
+   * @param projectPath - The absolute path to the project
+   * @returns Promise resolving to analysis result message
+   */
+  async dashboardAnalyzeProject(projectId: string, projectPath: string): Promise<string> {
+    try {
+      return await invoke<string>("dashboard_analyze_project", { projectId, projectPath });
+    } catch (error) {
+      console.error("Failed to analyze project:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Seeds the dashboard with sample data for demonstration
+   * @param projectId - The project ID to seed data for
+   * @returns Promise resolving to success message
+   */
+  async dashboardSeedData(projectId: string): Promise<string> {
+    try {
+      return await invoke<string>("dashboard_seed_data", { projectId });
+    } catch (error) {
+      console.error("Failed to seed dashboard data:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Updates a project health metric
+   * @param metric - The health metric to update
+   * @returns Promise resolving to the metric ID
+   */
+  async dashboardUpdateHealthMetric(metric: ProjectHealthMetric): Promise<number> {
+    try {
+      return await invoke<number>("dashboard_update_health_metric", { metric });
+    } catch (error) {
+      console.error("Failed to update health metric:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Updates or creates a feature
+   * @param feature - The feature to update or create
+   * @returns Promise resolving to the feature ID
+   */
+  async dashboardUpdateFeature(feature: FeatureItem): Promise<number> {
+    try {
+      return await invoke<number>("dashboard_update_feature", { feature });
+    } catch (error) {
+      console.error("Failed to update feature:", error);
+      throw error;
+    }
+  },
+
+  // Claude Sync API methods
+
+  /**
+   * Sync Claude commands from CLI
+   * @returns Promise resolving to sync result
+   */
+  async syncClaudeCommands(): Promise<ClaudeSyncResult> {
+    try {
+      return await invoke<ClaudeSyncResult>("sync_claude_commands");
+    } catch (error) {
+      console.error("Failed to sync Claude commands:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get current Claude sync state
+   * @returns Promise resolving to sync state
+   */
+  async getClaudeSyncState(): Promise<ClaudeSyncState> {
+    try {
+      return await invoke<ClaudeSyncState>("get_claude_sync_state");
+    } catch (error) {
+      console.error("Failed to get Claude sync state:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Enable or disable Claude sync
+   * @param enabled - Whether to enable sync
+   * @returns Promise resolving to enabled state
+   */
+  async setClaudeSyncEnabled(enabled: boolean): Promise<boolean> {
+    try {
+      return await invoke<boolean>("set_claude_sync_enabled", { enabled });
+    } catch (error) {
+      console.error("Failed to set Claude sync enabled:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get synced Claude commands
+   * @returns Promise resolving to array of slash commands
+   */
+  async getSyncedClaudeCommands(): Promise<SlashCommand[]> {
+    try {
+      return await invoke<SlashCommand[]>("get_synced_claude_commands");
+    } catch (error) {
+      console.error("Failed to get synced Claude commands:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Check if Claude CLI is available
+   * @returns Promise resolving to availability status
+   */
+  async checkClaudeAvailability(): Promise<boolean> {
+    try {
+      return await invoke<boolean>("check_claude_availability");
+    } catch (error) {
+      console.error("Failed to check Claude availability:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Set automatic sync interval
+   * @param hours - Sync interval in hours
+   * @returns Promise resolving to the set interval
+   */
+  async setClaudeSyncInterval(hours: number): Promise<number> {
+    try {
+      return await invoke<number>("set_claude_sync_interval", { hours });
+    } catch (error) {
+      console.error("Failed to set Claude sync interval:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Force refresh Claude commands (clears cache)
+   * @returns Promise resolving to sync result
+   */
+  async forceRefreshClaudeCommands(): Promise<ClaudeSyncResult> {
+    try {
+      return await invoke<ClaudeSyncResult>("force_refresh_claude_commands");
+    } catch (error) {
+      console.error("Failed to force refresh Claude commands:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get next scheduled sync time
+   * @returns Promise resolving to next sync timestamp or null
+   */
+  async getNextSyncTime(): Promise<number | null> {
+    try {
+      return await invoke<number | null>("get_next_sync_time");
+    } catch (error) {
+      console.error("Failed to get next sync time:", error);
+      throw error;
+    }
+  },
+
+  // Dashboard Utils
+  /**
+   * Get the current working directory project if it exists
+   * @returns Promise resolving to the current project or null
+   */
+  async getCurrentWorkingProject(): Promise<Project | null> {
+    try {
+      return await invoke<Project | null>('get_current_working_project');
+    } catch (error) {
+      console.error("Failed to get current working project:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get recent projects sorted by last access time
+   * @param limit - Maximum number of projects to return
+   * @returns Promise resolving to an array of recent projects
+   */
+  async getRecentProjects(limit: number = 10): Promise<Project[]> {
+    try {
+      return await invoke<Project[]>('get_recent_projects', { limit });
+    } catch (error) {
+      console.error("Failed to get recent projects:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a project if it doesn't exist
+   * @param path - The project path
+   * @param name - Optional project name
+   * @returns Promise resolving to the project
+   */
+  async createProjectIfNotExists(path: string, name?: string): Promise<Project> {
+    try {
+      return await invoke<Project>('create_project_if_not_exists', { path, name });
+    } catch (error) {
+      console.error("Failed to create project:", error);
       throw error;
     }
   }

@@ -41,7 +41,7 @@ export const PromptQueue: React.FC<PromptQueueProps> = React.memo(({
         </div>
         
         <div className="space-y-2 max-h-32 overflow-y-auto">
-          <AnimatePresence mode="popLayout">
+          <AnimatePresence mode="wait">
             {queuedPrompts.map((queuedPrompt, index) => (
               <motion.div
                 key={queuedPrompt.id}

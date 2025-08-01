@@ -19,11 +19,12 @@ import { UsageDashboard } from "@/components/UsageDashboard";
 import { MCPManager } from "@/components/MCPManager";
 import { NFOCredits } from "@/components/NFOCredits";
 import { ClaudeBinaryDialog } from "@/components/ClaudeBinaryDialog";
-import { Toast, ToastContainer } from "@/components/ui/toast";
+import { ToastProvider, useToast } from "@/hooks/useToast";
 import { ProjectSettings } from '@/components/ProjectSettings';
 import { TabManager } from "@/components/TabManager";
 import { TabContent } from "@/components/TabContent";
 import { AgentsModal } from "@/components/AgentsModal";
+import DashboardMain from "@/components/dashboard/DashboardMain";
 import { useTabState } from "@/hooks/useTabState";
 
 type View = 
@@ -39,6 +40,7 @@ type View =
   | "agent-run-view"
   | "mcp"
   | "usage-dashboard"
+  | "dashboard"
   | "project-settings"
   | "tabs"; // New view for tab-based interface
 
@@ -48,6 +50,7 @@ type View =
 function AppContent() {
   const [view, setView] = useState<View>("tabs");
   const { createClaudeMdTab, createSettingsTab, createUsageTab, createMCPTab, createDashboardTab } = useTabState();
+  const { showToast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -56,7 +59,6 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
   const [showNFO, setShowNFO] = useState(false);
   const [showClaudeBinaryDialog, setShowClaudeBinaryDialog] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [projectForSettings, setProjectForSettings] = useState<Project | null>(null);
   const [previousView] = useState<View>("welcome");
   const [showAgentsModal, setShowAgentsModal] = useState(false);
@@ -337,7 +339,7 @@ function AppContent() {
 
               {/* Content */}
               {!loading && (
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="sync">
                   {selectedProject ? (
                     <motion.div
                       key="sessions"
@@ -428,6 +430,15 @@ function AppContent() {
           <UsageDashboard onBack={() => handleViewChange("welcome")} />
         );
       
+      case "dashboard":
+        return selectedProject ? (
+          <DashboardMain 
+            projectId={selectedProject.id} 
+            projectPath={selectedProject.path} 
+            onBack={() => handleViewChange("welcome")} 
+          />
+        ) : null;
+      
       case "mcp":
         return (
           <MCPManager onBack={() => handleViewChange("welcome")} />
@@ -484,23 +495,12 @@ function AppContent() {
         open={showClaudeBinaryDialog}
         onOpenChange={setShowClaudeBinaryDialog}
         onSuccess={() => {
-          setToast({ message: "Claude binary path saved successfully", type: "success" });
+          showToast("Claude binary path saved successfully", "success");
           // Trigger a refresh of the Claude version check
           window.location.reload();
         }}
-        onError={(message) => setToast({ message, type: "error" })}
+        onError={(message) => showToast(message, "error")}
       />
-      
-      {/* Toast Container */}
-      <ToastContainer>
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onDismiss={() => setToast(null)}
-          />
-        )}
-      </ToastContainer>
     </div>
   );
 }
@@ -513,7 +513,9 @@ function App() {
     <ThemeProvider>
       <OutputCacheProvider>
         <TabProvider>
-          <AppContent />
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
         </TabProvider>
       </OutputCacheProvider>
     </ThemeProvider>
