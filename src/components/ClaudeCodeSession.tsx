@@ -1011,13 +1011,6 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
               </Button>
             )}
             <div className="flex items-center gap-2">
-              {showSettings && (
-                <CheckpointSettings
-                  sessionId={effectiveSession?.id || ''}
-                  projectId={effectiveSession?.project_id || ''}
-                  projectPath={projectPath}
-                />
-              )}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>

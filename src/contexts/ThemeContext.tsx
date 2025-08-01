@@ -79,10 +79,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const savedColors = await api.getSetting(CUSTOM_COLORS_STORAGE_KEY);
         
         if (savedColors) {
-          const colors = JSON.parse(savedColors) as CustomThemeColors;
-          setCustomColorsState(colors);
-          if (theme === 'custom') {
-            applyTheme('custom', colors);
+          try {
+            const colors = JSON.parse(savedColors) as CustomThemeColors;
+            setCustomColorsState(colors);
+            if (theme === 'custom') {
+              applyTheme('custom', colors);
+            }
+          } catch (error) {
+            console.error('Failed to parse saved theme colors:', error);
+            // Use default colors if parsing fails
+            localStorage.removeItem('custom-theme-colors');
           }
         }
       } catch (error) {

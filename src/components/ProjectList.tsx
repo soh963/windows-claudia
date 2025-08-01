@@ -7,11 +7,14 @@ import {
   ChevronRight, 
   Settings,
   MoreVertical,
-  Activity
+  Activity,
+  Search,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,22 +80,79 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   className,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Filter projects based on search query
+  const filteredProjects = projects.filter(project => {
+    const projectName = getProjectName(project.path).toLowerCase();
+    const projectPath = project.path.toLowerCase();
+    const query = searchQuery.toLowerCase();
+    
+    return projectName.includes(query) || projectPath.includes(query);
+  });
   
   // Calculate pagination
-  const totalPages = Math.ceil(projects.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentProjects = projects.slice(startIndex, endIndex);
+  const currentProjects = filteredProjects.slice(startIndex, endIndex);
   
-  // Reset to page 1 if projects change
+  // Reset to page 1 if projects change or search query changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [projects.length]);
+  }, [projects.length, searchQuery]);
   
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {currentProjects.map((project, index) => (
+      {/* Search bar */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search projects..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 pr-10"
+        />
+        {searchQuery && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+            onClick={() => setSearchQuery("")}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Results info */}
+      {searchQuery && (
+        <p className="text-sm text-muted-foreground">
+          Found {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} 
+          {searchQuery && ` matching "${searchQuery}"`}
+        </p>
+      )}
+
+      {/* Empty state for no results */}
+      {filteredProjects.length === 0 && searchQuery ? (
+        <div className="text-center py-12">
+          <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No projects found</h3>
+          <p className="text-sm text-muted-foreground">
+            No projects match your search for "{searchQuery}"
+          </p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => setSearchQuery("")}
+          >
+            Clear search
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {currentProjects.map((project, index) => (
           <motion.div
             key={project.id}
             initial={{ opacity: 0, y: 20 }}
@@ -180,14 +240,18 @@ export const ProjectList: React.FC<ProjectListProps> = ({
               </div>
             </Card>
           </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
       
-      <Pagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-      />
+      {/* Pagination - only show if we have filtered projects and more than one page */}
+      {filteredProjects.length > 0 && totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
+      )}
     </div>
   );
 }; 

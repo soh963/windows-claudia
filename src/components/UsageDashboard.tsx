@@ -341,7 +341,7 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({ onBack }) => {
               <TabsContent value="models">
                 <Card className="p-6">
                   <h3 className="text-sm font-semibold mb-4">Usage by Model</h3>
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                     {stats.by_model.map((model) => (
                       <div key={model.model} className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -388,7 +388,7 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({ onBack }) => {
               <TabsContent value="projects">
                 <Card className="p-6">
                   <h3 className="text-sm font-semibold mb-4">Usage by Project</h3>
-                  <div className="space-y-3">
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                     {stats.by_project.map((project) => (
                       <div key={project.project_path} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                         <div className="flex flex-col truncate">
@@ -420,7 +420,7 @@ export const UsageDashboard: React.FC<UsageDashboardProps> = ({ onBack }) => {
               <TabsContent value="sessions">
                   <Card className="p-6">
                       <h3 className="text-sm font-semibold mb-4">Usage by Session</h3>
-                      <div className="space-y-3">
+                      <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                           {sessionStats?.map((session) => (
                               <div key={`${session.project_path}-${session.project_name}`} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                                   <div className="flex flex-col">
