@@ -3,37 +3,15 @@
 
   <a href="https://claudiacode.com"><h1>Claudia</h1></a>
   
-  <div id="language-selector" style="margin: 15px 0; text-align: center;">
-    <button onclick="switchLanguage('ko')" id="btn-ko" 
-            style="background: #3b82f6; color: white; border: none; padding: 10px 20px; margin: 0 8px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.3s ease;">
-      🇰🇷 한국어
-    </button>
-    <button onclick="switchLanguage('en')" id="btn-en" 
-            style="background: #64748b; color: white; border: none; padding: 10px 20px; margin: 0 8px; border-radius: 8px; cursor: pointer; font-weight: normal; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.3s ease;">
-      🇺🇸 English
-    </button>
-    <div style="margin-top: 8px; font-size: 12px; color: #666; opacity: 0.8;">
-      💡 <strong>Tip:</strong> Press <kbd style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Ctrl+L</kbd> to switch languages
-    </div>
-  </div>
-
-  <div id="content-ko">
-    <p>
-      <strong>Claude Code를 위한 강력한 GUI 앱 및 툴킷</strong>
-    </p>
-    <p>
-      <strong>커스텀 에이전트 생성, 대화형 Claude Code 세션 관리, 보안 백그라운드 에이전트 실행 등의 기능을 제공합니다.</strong>
-    </p>
-  </div>
-
-  <div id="content-en" style="display: none;">
-    <p>
-      <strong>A powerful GUI app and Toolkit for Claude Code</strong>
-    </p>
-    <p>
-      <strong>Create custom agents, manage interactive Claude Code sessions, run secure background agents, and more.</strong>
-    </p>
-  </div>
+  <p>
+    <strong>Claude Code를 위한 강력한 GUI 앱 및 툴킷</strong><br>
+    <strong>A powerful GUI app and Toolkit for Claude Code</strong>
+  </p>
+  
+  <p>
+    <strong>커스텀 에이전트 생성, 대화형 Claude Code 세션 관리, 보안 백그라운드 에이전트 실행 등의 기능을 제공합니다.</strong><br>
+    <strong>Create custom agents, manage interactive Claude Code sessions, run secure background agents, and more.</strong>
+  </p>
   
   <p>
     <a href="#features"><img src="https://img.shields.io/badge/Features-✨-blue?style=for-the-badge" alt="Features"></a>
@@ -43,150 +21,9 @@
   </p>
 </div>
 
-<script>
-function switchLanguage(lang) {
-  // 언어 버튼 요소들
-  const koBtn = document.getElementById('btn-ko');
-  const enBtn = document.getElementById('btn-en');
-  
-  // 주 콘텐츠 요소들
-  const koContent = document.getElementById('content-ko');
-  const enContent = document.getElementById('content-en');
-  
-  // 모든 언어별 섹션들
-  const allKoSections = document.querySelectorAll('.lang-ko');
-  const allEnSections = document.querySelectorAll('.lang-en');
-  
-  // 로컬 스토리지에 언어 설정 저장
-  localStorage.setItem('claudia-lang', lang);
-  
-  if (lang === 'ko') {
-    // 한국어 모드 활성화
-    if (koContent) koContent.style.display = 'block';
-    if (enContent) enContent.style.display = 'none';
-    
-    // 버튼 스타일 업데이트
-    if (koBtn) {
-      koBtn.style.background = '#3b82f6';
-      koBtn.style.fontWeight = 'bold';
-      koBtn.style.transform = 'scale(1.05)';
-    }
-    if (enBtn) {
-      enBtn.style.background = '#64748b';
-      enBtn.style.fontWeight = 'normal';
-      enBtn.style.transform = 'scale(1)';
-    }
-    
-    // 모든 언어별 섹션 표시/숨김
-    allKoSections.forEach(el => {
-      if (el) el.style.display = 'block';
-    });
-    allEnSections.forEach(el => {
-      if (el) el.style.display = 'none';
-    });
-    
-  } else if (lang === 'en') {
-    // 영어 모드 활성화
-    if (koContent) koContent.style.display = 'none';
-    if (enContent) enContent.style.display = 'block';
-    
-    // 버튼 스타일 업데이트
-    if (enBtn) {
-      enBtn.style.background = '#3b82f6';
-      enBtn.style.fontWeight = 'bold';
-      enBtn.style.transform = 'scale(1.05)';
-    }
-    if (koBtn) {
-      koBtn.style.background = '#64748b';
-      koBtn.style.fontWeight = 'normal';
-      koBtn.style.transform = 'scale(1)';
-    }
-    
-    // 모든 언어별 섹션 표시/숨김
-    allKoSections.forEach(el => {
-      if (el) el.style.display = 'none';
-    });
-    allEnSections.forEach(el => {
-      if (el) el.style.display = 'block';
-    });
-  }
-  
-  // 부드러운 전환 효과 추가
-  document.body.style.transition = 'opacity 0.2s ease-in-out';
-}
-
-// 페이지 로드 시 초기화
-document.addEventListener('DOMContentLoaded', function() {
-  // 버튼에 호버 효과 및 전환 효과 추가
-  const buttons = document.querySelectorAll('#language-selector button');
-  buttons.forEach(button => {
-    button.style.transition = 'all 0.3s ease';
-    button.style.border = 'none';
-    button.style.outline = 'none';
-    
-    button.addEventListener('mouseenter', function() {
-      // 활성 버튼인지 확인 (파란색 배경인 경우)
-      const isActive = this.style.background.includes('59, 130, 246') || this.style.background === '#3b82f6';
-      if (isActive) return;
-      
-      this.style.background = '#475569';
-      this.style.transform = 'scale(1.02)';
-      this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-    });
-    
-    button.addEventListener('mouseleave', function() {
-      // 활성 버튼인지 확인 (파란색 배경인 경우)
-      const isActive = this.style.background.includes('59, 130, 246') || this.style.background === '#3b82f6';
-      if (isActive) return;
-      
-      this.style.background = '#64748b';
-      this.style.transform = 'scale(1)';
-      this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-    });
-  });
-  
-  // 저장된 언어 설정 확인 또는 기본값(한국어) 사용
-  const savedLang = localStorage.getItem('claudia-lang') || 'ko';
-  switchLanguage(savedLang);
-  
-  // 키보드 단축키 지원 (Ctrl+L로 언어 전환)
-  document.addEventListener('keydown', function(e) {
-    if (e.ctrlKey && e.key === 'l') {
-      e.preventDefault();
-      const currentLang = localStorage.getItem('claudia-lang') || 'ko';
-      const newLang = currentLang === 'ko' ? 'en' : 'ko';
-      switchLanguage(newLang);
-    }
-  });
-});
-
-// 언어 자동 감지 (브라우저 언어 설정 기반)
-function detectLanguage() {
-  const browserLang = navigator.language || navigator.userLanguage;
-  if (browserLang.startsWith('ko')) {
-    return 'ko';
-  } else {
-    return 'en';
-  }
-}
-</script>
-
 ![457013521-6133a738-d0cb-4d3e-8746-c6768c82672c](https://github.com/user-attachments/assets/a028de9e-d881-44d8-bae5-7326ab3558b9)
 
 https://github.com/user-attachments/assets/bf0bdf9d-ba91-45af-9ac4-7274f57075cf
-
-<div class="lang-ko">
-
-> [!TIP]
-> **⭐ 저장소에 스타를 주고 [@getAsterisk](https://x.com/getAsterisk)를 X에서 팔로우하여 `asteria-swe-v0`의 얼리 액세스를 받으세요**.
->
-> **🔧 이것은 사전 구축된 CC 에이전트와 향상된 Windows 호환성을 갖춘 Windows 최적화 포크입니다.**
-
-## 🆕 이 포크의 새로운 기능
-
-</div>
-
-<div class="lang-en" style="display: none;">
 
 > [!TIP]
 > **⭐ Star the repo and follow [@getAsterisk](https://x.com/getAsterisk) on X for early access to `asteria-swe-v0`**.
@@ -194,52 +31,6 @@ https://github.com/user-attachments/assets/bf0bdf9d-ba91-45af-9ac4-7274f57075cf
 > **🔧 This is a Windows-optimized fork with pre-built CC agents and enhanced Windows compatibility.**
 
 ## 🆕 What's New in This Fork
-
-</div>
-
-<div class="lang-ko">
-
-### Windows 최적화
-- ✅ Windows 빌드 오류 수정 (아이콘 형식 문제)
-- ✅ Windows 개발 환경에 대한 사전 구성
-- ✅ Bun을 사용한 최적화된 빌드 프로세스
-
-### 사전 구축된 CC 에이전트 (총 29개)
-이 포크에는 바로 사용 가능한 에이전트의 포괄적인 컬렉션이 포함되어 있습니다:
-
-**개발 및 코드 품질**
-- 🎯 Git Commit Bot - 지능적인 커밋을 통한 자동화된 Git 워크플로
-- 🛡️ Security Scanner - 고급 보안 감사 (OWASP, CWE)
-- 🧪 Unit Tests Bot - 포괄적인 테스트 생성
-- 🔍 Code Analyzer - 코드 품질 및 구조 분석
-- 📋 Code Review Agent - 자동화된 코드 리뷰
-- 🐛 Bug Finder-Fixer - 버그 탐지 및 수정
-
-**아키텍처 및 디자인**
-- 🏛️ Architect Agent - 시스템 설계 전문가
-- 🎨 Frontend Development Suite - 모던 UI 개발
-- 💻 IDE Agent - 통합 개발 환경
-- 🌐 API Gateway Agent - API 관리 및 보안
-
-**인프라 및 운영**
-- 📊 Data Pipeline Coordinator - ETL 및 스트리밍 데이터
-- 🗄️ Database Agent - 데이터 지속성 최적화
-- 📡 Monitor Agent - 시스템 관찰 가능성
-- ⚡ Performance Agent - 성능 최적화
-- 🔧 Resource Manager - 인프라 관리
-
-**전문 에이전트**
-- 🤖 AI/ML Coordinator - 머신 러닝 파이프라인
-- 💼 Business Logic Agent - 핵심 애플리케이션 로직
-- 🔐 State Management Agent - 애플리케이션 상태 오케스트레이션
-- 🎨 UI Component Agent - 모던 컴포넌트 개발
-- 🌐 Web App Coordinator - 프론트엔드/백엔드 통합
-
-**그리고 더 많은 기능들!** 전체 목록은 `cc_agents` 디렉토리를 확인하세요.
-
-</div>
-
-<div class="lang-en" style="display: none;">
 
 ### Windows Optimizations
 - ✅ Fixed Windows build errors (icon format issues)
@@ -279,26 +70,6 @@ This fork includes a comprehensive collection of ready-to-use agents:
 
 **And many more!** Check the `cc_agents` directory for the complete list.
 
-</div>
-
-<div class="lang-ko">
-
-## 🌟 개요
-
-**Claudia**는 Claude Code와 상호작용하는 방식을 변화시키는 강력한 데스크톱 애플리케이션입니다. Tauri 2로 구축되어 Claude Code 세션 관리, 커스텀 에이전트 생성, 사용량 추적 등을 위한 아름다운 GUI를 제공합니다.
-
-이 Windows 최적화 포크에는 다음이 포함됩니다:
-- **29개의 사전 구축된 CC 에이전트** 바로 사용 가능
-- **더 나은 성능을 위한 Windows 전용 최적화**
-- **적절한 아이콘 처리를 포함한 향상된 Windows 빌드 프로세스**
-- **다양한 개발 작업을 위한 완전한 에이전트 라이브러리**
-
-Claudia를 Claude Code의 명령 센터로 생각하세요 - 명령줄 도구와 AI 지원 개발을 더 직관적이고 생산적으로 만드는 시각적 경험 사이의 격차를 해소합니다.
-
-</div>
-
-<div class="lang-en" style="display: none;">
-
 ## 🌟 Overview
 
 **Claudia** is a powerful desktop application that transforms how you interact with Claude Code. Built with Tauri 2, it provides a beautiful GUI for managing your Claude Code sessions, creating custom agents, tracking usage, and much more.
@@ -311,26 +82,12 @@ This Windows-optimized fork includes:
 
 Think of Claudia as your command center for Claude Code - bridging the gap between the command-line tool and a visual experience that makes AI-assisted development more intuitive and productive.
 
-</div>
+## 📋 목차 / Table of Contents
 
-<div class="lang-ko">
-
-## 📋 목차
-
+**한국어 (Korean)**
 - [🌟 개요](#-개요)
 - [✨ 기능](#-기능)
-  - [🗂️ 프로젝트 및 세션 관리](#️-프로젝트-및-세션-관리)
-  - [🤖 CC 에이전트](#-cc-에이전트)
-  - [📊 사용량 분석 대시보드](#-사용량-분석-대시보드)
-  - [🔌 MCP 서버 관리](#-mcp-서버-관리)
-  - [⏰ 타임라인 및 체크포인트](#-타임라인-및-체크포인트)
-  - [📝 CLAUDE.md 관리](#-claudemd-관리)
 - [📖 사용법](#-사용법)
-  - [시작하기](#시작하기)
-  - [프로젝트 관리](#프로젝트-관리)
-  - [에이전트 생성](#에이전트-생성)
-  - [사용량 추적](#사용량-추적)
-  - [MCP 서버 사용](#mcp-서버-사용)
 - [🚀 설치](#-설치)
 - [🔨 소스에서 빌드](#-소스에서-빌드)
 - [🛠️ 개발](#️-개발)
@@ -339,27 +96,10 @@ Think of Claudia as your command center for Claude Code - bridging the gap betwe
 - [📄 라이선스](#-라이선스)
 - [🙏 감사의 말](#-감사의-말)
 
-</div>
-
-<div class="lang-en" style="display: none;">
-
-## 📋 Table of Contents
-
+**English**
 - [🌟 Overview](#-overview)
 - [✨ Features](#-features)
-  - [🗂️ Project & Session Management](#️-project--session-management)
-  - [🤖 CC Agents](#-cc-agents)
-  
-  - [📊 Usage Analytics Dashboard](#-usage-analytics-dashboard)
-  - [🔌 MCP Server Management](#-mcp-server-management)
-  - [⏰ Timeline & Checkpoints](#-timeline--checkpoints)
-  - [📝 CLAUDE.md Management](#-claudemd-management)
 - [📖 Usage](#-usage)
-  - [Getting Started](#getting-started)
-  - [Managing Projects](#managing-projects)
-  - [Creating Agents](#creating-agents)
-  - [Tracking Usage](#tracking-usage)
-  - [Working with MCP Servers](#working-with-mcp-servers)
 - [🚀 Installation](#-installation)
 - [🔨 Build from Source](#-build-from-source)
 - [🛠️ Development](#️-development)
@@ -367,57 +107,6 @@ Think of Claudia as your command center for Claude Code - bridging the gap betwe
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 - [🙏 Acknowledgments](#-acknowledgments)
-
-</div>
-
-<div class="lang-ko">
-
-## ✨ 기능
-
-### 🗂️ **프로젝트 및 세션 관리**
-- **시각적 프로젝트 브라우저**: `~/.claude/projects/`의 모든 Claude Code 프로젝트를 탐색
-- **세션 히스토리**: 전체 컨텍스트와 함께 과거 코딩 세션을 보고 재개
-- **스마트 검색**: 내장된 검색으로 프로젝트와 세션을 빠르게 찾기
-- **세션 인사이트**: 첫 번째 메시지, 타임스탬프, 세션 메타데이터를 한눈에 확인
-
-### 🤖 **CC 에이전트**
-- **커스텀 AI 에이전트**: 커스텀 시스템 프롬프트와 동작으로 전문화된 에이전트 생성
-- **사전 구축된 에이전트 라이브러리**: 29개의 바로 사용 가능한 에이전트 포함:
-  - Git Commit Bot, Security Scanner, Unit Tests Bot
-  - AI/ML Coordinator, Architect Agent, API Gateway Agent
-  - 프론트엔드/백엔드 전문가, 성능 최적화 도구
-  - 그리고 더 많은 전문 개발 에이전트들
-- **백그라운드 실행**: 논블로킹 작업을 위해 별도 프로세스에서 에이전트 실행
-- **실행 히스토리**: 상세한 로그와 성능 측정항목으로 모든 에이전트 실행 추적
-
-### 📊 **사용량 분석 대시보드**
-- **비용 추적**: Claude API 사용량과 비용을 실시간으로 모니터링
-- **토큰 분석**: 모델, 프로젝트, 기간별 상세 분석
-- **시각적 차트**: 사용량 트렌드와 패턴을 보여주는 아름다운 차트
-- **데이터 내보내기**: 회계 및 분석을 위한 사용량 데이터 내보내기
-
-### 🔌 **MCP 서버 관리**
-- **서버 레지스트리**: 중앙 UI에서 Model Context Protocol 서버 관리
-- **쉬운 구성**: UI를 통해 서버 추가 또는 기존 구성에서 가져오기
-- **연결 테스트**: 사용 전 서버 연결 확인
-- **Claude Desktop 가져오기**: Claude Desktop에서 서버 구성 가져오기
-
-### ⏰ **타임라인 및 체크포인트**
-- **세션 버전 관리**: 코딩 세션의 어느 지점에서나 체크포인트 생성
-- **시각적 타임라인**: 분기형 타임라인으로 세션 히스토리 탐색
-- **즉시 복원**: 한 번의 클릭으로 어떤 체크포인트든 되돌아가기
-- **세션 분기**: 기존 체크포인트에서 새로운 브랜치 생성
-- **차이점 뷰어**: 체크포인트 간 정확한 변경사항 확인
-
-### 📝 **CLAUDE.md 관리**
-- **내장 에디터**: 앱 내에서 직접 CLAUDE.md 파일 편집
-- **실시간 미리보기**: 마크다운이 실시간으로 렌더링되는 것을 확인
-- **프로젝트 스캐너**: 프로젝트의 모든 CLAUDE.md 파일 찾기
-- **구문 하이라이팅**: 구문 하이라이팅을 포함한 완전한 마크다운 지원
-
-</div>
-
-<div class="lang-en" style="display: none;">
 
 ## ✨ Features
 
@@ -462,151 +151,80 @@ Think of Claudia as your command center for Claude Code - bridging the gap betwe
 - **Project Scanner**: Find all CLAUDE.md files in your projects
 - **Syntax Highlighting**: Full markdown support with syntax highlighting
 
-</div>
+## 📖 Usage / 사용법
 
-<div class="lang-ko">
+### Getting Started / 시작하기
 
-## 📖 사용법
+1. **Launch Claudia / Claudia 실행**: Open the application after installation / 설치 후 애플리케이션 열기
+2. **Welcome Screen / 환영 화면**: Choose between CC Agents or CC Projects / CC 에이전트 또는 CC 프로젝트 중 선택
+3. **First Time Setup / 초기 설정**: Claudia will automatically detect your `~/.claude` directory / Claudia가 자동으로 `~/.claude` 디렉토리를 감지
 
-### 시작하기
-
-1. **Claudia 실행**: 설치 후 애플리케이션 열기
-2. **환영 화면**: CC 에이전트 또는 CC 프로젝트 중 선택
-3. **초기 설정**: Claudia가 자동으로 `~/.claude` 디렉토리를 감지
-
-### 프로젝트 관리
-
-```
-CC 프로젝트 → 프로젝트 선택 → 세션 보기 → 재개 또는 새로 시작
-```
-
-- 어떤 프로젝트든 클릭하여 세션 보기
-- 각 세션은 첫 번째 메시지와 타임스탬프를 표시
-- 세션을 직접 재개하거나 새로 시작
-
-### 에이전트 생성
-
-```
-CC 에이전트 → 에이전트 생성 → 구성 → 실행
-```
-
-1. **에이전트 디자인**: 이름, 아이콘, 시스템 프롬프트 설정
-2. **모델 구성**: 사용 가능한 Claude 모델 중 선택
-3. **권한 설정**: 파일 읽기/쓰기 및 네트워크 액세스 구성
-4. **작업 실행**: 어떤 프로젝트든 에이전트 실행
-
-### 사용량 추적
-
-```
-메뉴 → 사용량 대시보드 → 분석 보기
-```
-
-- 모델, 프로젝트, 날짜별 비용 모니터링
-- 보고서용 데이터 내보내기
-- 사용량 알림 설정 (곧 출시 예정)
-
-### MCP 서버 사용
-
-```
-메뉴 → MCP 관리자 → 서버 추가 → 구성
-```
-
-- 수동으로 또는 JSON을 통해 서버 추가
-- Claude Desktop 구성에서 가져오기
-- 사용 전 연결 테스트
-
-</div>
-
-<div class="lang-en" style="display: none;">
-
-## 📖 Usage
-
-### Getting Started
-
-1. **Launch Claudia**: Open the application after installation
-2. **Welcome Screen**: Choose between CC Agents or CC Projects
-3. **First Time Setup**: Claudia will automatically detect your `~/.claude` directory
-
-### Managing Projects
+### Managing Projects / 프로젝트 관리
 
 ```
 CC Projects → Select Project → View Sessions → Resume or Start New
+CC 프로젝트 → 프로젝트 선택 → 세션 보기 → 재개 또는 새로 시작
 ```
 
-- Click on any project to view its sessions
-- Each session shows the first message and timestamp
-- Resume sessions directly or start new ones
+- Click on any project to view its sessions / 어떤 프로젝트든 클릭하여 세션 보기
+- Each session shows the first message and timestamp / 각 세션은 첫 번째 메시지와 타임스탬프를 표시
+- Resume sessions directly or start new ones / 세션을 직접 재개하거나 새로 시작
 
-### Creating Agents
+### Creating Agents / 에이전트 생성
 
 ```
 CC Agents → Create Agent → Configure → Execute
+CC 에이전트 → 에이전트 생성 → 구성 → 실행
 ```
 
-1. **Design Your Agent**: Set name, icon, and system prompt
-2. **Configure Model**: Choose between available Claude models
-3. **Set Permissions**: Configure file read/write and network access
-4. **Execute Tasks**: Run your agent on any project
+1. **Design Your Agent / 에이전트 디자인**: Set name, icon, and system prompt / 이름, 아이콘, 시스템 프롬프트 설정
+2. **Configure Model / 모델 구성**: Choose between available Claude models / 사용 가능한 Claude 모델 중 선택
+3. **Set Permissions / 권한 설정**: Configure file read/write and network access / 파일 읽기/쓰기 및 네트워크 액세스 구성
+4. **Execute Tasks / 작업 실행**: Run your agent on any project / 어떤 프로젝트든 에이전트 실행
 
-### Tracking Usage
+### Tracking Usage / 사용량 추적
 
 ```
 Menu → Usage Dashboard → View Analytics
+메뉴 → 사용량 대시보드 → 분석 보기
 ```
 
-- Monitor costs by model, project, and date
-- Export data for reports
-- Set up usage alerts (coming soon)
+- Monitor costs by model, project, and date / 모델, 프로젝트, 날짜별 비용 모니터링
+- Export data for reports / 보고서용 데이터 내보내기
+- Set up usage alerts (coming soon) / 사용량 알림 설정 (곧 출시 예정)
 
-### Working with MCP Servers
+### Working with MCP Servers / MCP 서버 사용
 
 ```
 Menu → MCP Manager → Add Server → Configure
+메뉴 → MCP 관리자 → 서버 추가 → 구성
 ```
 
-- Add servers manually or via JSON
-- Import from Claude Desktop configuration
-- Test connections before using
+- Add servers manually or via JSON / 수동으로 또는 JSON을 통해 서버 추가
+- Import from Claude Desktop configuration / Claude Desktop 구성에서 가져오기
+- Test connections before using / 사용 전 연결 테스트
 
-</div>
+## 🚀 Installation / 설치
 
-<div class="lang-ko">
+### Prerequisites / 필수 조건
 
-## 🚀 설치
+- **Claude Code CLI**: Install from [Claude's official site](https://claude.ai/code) / [Claude 공식 사이트](https://claude.ai/code)에서 설치
 
-### 필수 조건
-
-- **Claude Code CLI**: [Claude 공식 사이트](https://claude.ai/code)에서 설치
-
-### 릴리스 실행 파일이 곧 출시될 예정입니다
-
-</div>
-
-<div class="lang-en" style="display: none;">
-
-## 🚀 Installation
-
-### Prerequisites
-
-- **Claude Code CLI**: Install from [Claude's official site](https://claude.ai/code)
-
-### Release Executables Will Be Published Soon
-
-</div>
+### Release Executables Will Be Published Soon / 릴리스 실행 파일이 곧 출시될 예정입니다
 
 ## 🔨 Build from Source
 
-### Prerequisites
+### Prerequisites / 필수 조건
 
 Before building Claudia from source, ensure you have the following installed:
 
-#### System Requirements
+#### System Requirements / 시스템 요구사항
 
 - **Operating System**: Windows 10/11, macOS 11+, or Linux (Ubuntu 20.04+)
 - **RAM**: Minimum 4GB (8GB recommended)
 - **Storage**: At least 1GB free space
 
-#### Required Tools
+#### Required Tools / 필수 도구
 
 1. **Rust** (1.70.0 or later)
    ```bash
@@ -632,7 +250,7 @@ Before building Claudia from source, ensure you have the following installed:
    - Download and install from [Claude's official site](https://claude.ai/code)
    - Ensure `claude` is available in your PATH
 
-#### Platform-Specific Dependencies
+#### Platform-Specific Dependencies / 플랫폼별 의존성
 
 **Linux (Ubuntu/Debian)**
 ```bash
@@ -667,52 +285,52 @@ brew install pkg-config
 - Install [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 - Install [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) (usually pre-installed on Windows 11)
 
-### Build Steps
+### Build Steps / 빌드 단계
 
-1. **Clone the Repository**
+1. **Clone the Repository / 저장소 복제**
    ```bash
    git clone https://github.com/soh963/windows-claudia.git
    cd windows-claudia
    ```
 
-2. **Install Frontend Dependencies**
+2. **Install Frontend Dependencies / 프론트엔드 의존성 설치**
    ```bash
    bun install
    ```
 
-3. **Build the Application**
+3. **Build the Application / 애플리케이션 빌드**
    
-   **For Development (with hot reload)**
+   **For Development (with hot reload) / 개발용 (핫 리로드)**
    ```bash
    bun run tauri dev
    ```
    
-   **For Production Build**
+   **For Production Build / 프로덕션 빌드**
    ```bash
-   # Build the application
+   # Build the application / 애플리케이션 빌드
    bun run tauri build
    
-   # The built executable will be in:
+   # The built executable will be in: / 빌드된 실행 파일 위치:
    # - Linux: src-tauri/target/release/
    # - macOS: src-tauri/target/release/
    # - Windows: src-tauri/target/release/
    ```
 
-4. **Platform-Specific Build Options**
+4. **Platform-Specific Build Options / 플랫폼별 빌드 옵션**
    
-   **Debug Build (faster compilation, larger binary)**
+   **Debug Build (faster compilation, larger binary) / 디버그 빌드**
    ```bash
    bun run tauri build --debug
    ```
    
-   **Universal Binary for macOS (Intel + Apple Silicon)**
+   **Universal Binary for macOS (Intel + Apple Silicon) / macOS 유니버설 바이너리**
    ```bash
    bun run tauri build --target universal-apple-darwin
    ```
 
-### Troubleshooting
+### Troubleshooting / 문제 해결
 
-#### Common Issues
+#### Common Issues / 일반적인 문제
 
 1. **"cargo not found" error**
    - Ensure Rust is installed and `~/.cargo/bin` is in your PATH
@@ -734,12 +352,12 @@ brew install pkg-config
    - Try building with fewer parallel jobs: `cargo build -j 2`
    - Close other applications to free up RAM
 
-#### Verify Your Build
+#### Verify Your Build / 빌드 검증
 
 After building, you can verify the application works:
 
 ```bash
-# Run the built executable directly
+# Run the built executable directly / 빌드된 실행 파일 직접 실행
 # Linux/macOS
 ./src-tauri/target/release/claudia
 
@@ -747,11 +365,11 @@ After building, you can verify the application works:
 ./src-tauri/target/release/claudia.exe
 ```
 
-### Build Artifacts
+### Build Artifacts / 빌드 결과물
 
 The build process creates several artifacts:
 
-- **Executable**: The main Claudia application
+- **Executable**: The main Claudia application / 메인 Claudia 애플리케이션
 - **Installers** (when using `tauri build`):
   - `.deb` package (Linux)
   - `.AppImage` (Linux)
@@ -763,7 +381,7 @@ All artifacts are located in `src-tauri/target/release/`.
 
 ## 🛠️ Development
 
-### Tech Stack
+### Tech Stack / 기술 스택
 
 - **Frontend**: React 18 + TypeScript + Vite 6
 - **Backend**: Rust with Tauri 2
@@ -771,7 +389,7 @@ All artifacts are located in `src-tauri/target/release/`.
 - **Database**: SQLite (via rusqlite)
 - **Package Manager**: Bun
 
-### Project Structure
+### Project Structure / 프로젝트 구조
 
 ```
 claudia/
@@ -788,114 +406,55 @@ claudia/
 └── public/                # Public assets
 ```
 
-### Development Commands
+### Development Commands / 개발 명령어
 
 ```bash
-# Start development server
+# Start development server / 개발 서버 시작
 bun run tauri dev
 
-# Run frontend only
+# Run frontend only / 프론트엔드만 실행
 bun run dev
 
-# Type checking
+# Type checking / 타입 체크
 bunx tsc --noEmit
 
-# Run Rust tests
+# Run Rust tests / Rust 테스트 실행
 cd src-tauri && cargo test
 
-# Format code
+# Format code / 코드 포맷팅
 cd src-tauri && cargo fmt
 ```
 
-<div class="lang-ko">
-
-## 🔒 보안
-
-Claudia는 사용자의 프라이버시와 보안을 최우선으로 합니다:
-
-1. **프로세스 격리**: 에이전트는 별도 프로세스에서 실행
-2. **권한 제어**: 에이전트별 파일 및 네트워크 액세스 구성
-3. **로컬 저장소**: 모든 데이터가 사용자 머신에 보관
-4. **텔레메트리 없음**: 데이터 수집이나 추적 없음
-5. **오픈 소스**: 오픈 소스 코드를 통한 완전한 투명성
-
-## 🤝 기여
-
-기여를 환영합니다! 자세한 내용은 [기여 가이드](CONTRIBUTING.md)를 참조하세요.
-
-### 기여 분야
-
-- 🐛 버그 수정 및 개선
-- ✨ 새로운 기능 및 향상
-- 📚 문서 개선
-- 🎨 UI/UX 향상
-- 🧪 테스트 커버리지
-- 🌐 국제화
-
-## 📄 라이선스
-
-이 프로젝트는 AGPL 라이선스 하에 라이선스가 부여됩니다 - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
-
-</div>
-
-<div class="lang-en" style="display: none;">
-
-## 🔒 Security
+## 🔒 Security / 보안
 
 Claudia prioritizes your privacy and security:
 
-1. **Process Isolation**: Agents run in separate processes
-2. **Permission Control**: Configure file and network access per agent
-3. **Local Storage**: All data stays on your machine
-4. **No Telemetry**: No data collection or tracking
-5. **Open Source**: Full transparency through open source code
+1. **Process Isolation**: Agents run in separate processes / 프로세스 격리: 에이전트는 별도 프로세스에서 실행
+2. **Permission Control**: Configure file and network access per agent / 권한 제어: 에이전트별 파일 및 네트워크 액세스 구성
+3. **Local Storage**: All data stays on your machine / 로컬 저장소: 모든 데이터가 사용자 머신에 보관
+4. **No Telemetry**: No data collection or tracking / 텔레메트리 없음: 데이터 수집이나 추적 없음
+5. **Open Source**: Full transparency through open source code / 오픈 소스: 오픈 소스 코드를 통한 완전한 투명성
 
-## 🤝 Contributing
+## 🤝 Contributing / 기여
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-### Areas for Contribution
+### Areas for Contribution / 기여 분야
 
-- 🐛 Bug fixes and improvements
-- ✨ New features and enhancements
-- 📚 Documentation improvements
-- 🎨 UI/UX enhancements
-- 🧪 Test coverage
-- 🌐 Internationalization
+- 🐛 Bug fixes and improvements / 버그 수정 및 개선
+- ✨ New features and enhancements / 새로운 기능 및 향상
+- 📚 Documentation improvements / 문서 개선
+- 🎨 UI/UX enhancements / UI/UX 향상
+- 🧪 Test coverage / 테스트 커버리지
+- 🌐 Internationalization / 국제화
 
-## 📄 License
+## 📄 License / 라이선스
 
 This project is licensed under the AGPL License - see the [LICENSE](LICENSE) file for details.
 
-</div>
-
 ## 🙏 Acknowledgments
 
-<div class="lang-ko">
-
-### 💙 원작자에게 특별한 감사
-
-이 프로젝트는 **Asterisk**의 놀라운 팀이 만든 **Claudia**의 뛰어난 기반 위에 구축되었습니다. 이렇게 뛰어난 도구를 만들고 오픈 소스로 공개해 주신 것에 대해 깊은 감사를 표합니다.
-
-**원본 저장소**: [github.com/asterisk-org/claudia](https://github.com/asterisk-org/claudia)  
-**원작자**: [Asterisk Team](https://asterisk.so/)  
-**제작자 팔로우**: X에서 [@getAsterisk](https://x.com/getAsterisk)  
-
-> "거인의 어깨 위에 서서" - 원본 Claudia는 우리의 향상된 Windows 최적화 버전을 위한 완벽한 기반을 제공했습니다.
-
-### 🌟 Nova AI 향상 버전 - 새로운 기능 및 개선사항
-
-**Nova AI**의 이 향상된 버전은 원본 Claudia 위에 구축된 광범위한 업그레이드와 새로운 기능들을 포함합니다:
-
----
-
-## 🚀 Nova AI 개선사항 및 새로운 기능
-
-</div>
-
-<div class="lang-en" style="display: none;">
-
-### 💙 Special Thanks to Original Creator
+### 💙 Special Thanks to Original Creator / 원작자에게 특별한 감사
 
 This project is built upon the excellent foundation of **Claudia** by the amazing team at **Asterisk**. We extend our deepest gratitude for creating such an exceptional tool and making it open source.
 
@@ -912,37 +471,6 @@ This enhanced version by **Nova AI** includes extensive upgrades and new feature
 ---
 
 ## 🚀 Nova AI Enhancements & New Features
-
-</div>
-
-<div class="lang-ko">
-
-### ✨ **프로젝트 대시보드 시스템** (새로운 기능)
-- **📊 종합 프로젝트 분석 대시보드**
-  - 실시간 프로젝트 건강 모니터링 (보안, 의존성, 복잡성, 성능)
-  - 시각적 진행률 표시기가 있는 프로젝트 완료 추적
-  - 기능 독립성 분석 및 의존성 매핑
-  - 심각도 분류를 통한 위험 평가 (치명적, 높음, 중간, 낮음)
-  - 문서화 상태 추적 및 완성도 측정
-  - 병목 지점 식별을 통한 워크플로 시각화
-  - 비용 최적화 인사이트가 포함된 AI 사용량 분석
-
-- **🎯 스마트 프로젝트 목표 및 기능 추적**
-  - 자동화된 기능 탐지 및 상태 추적
-  - 마일스톤 시각화를 통한 목표 완료 백분율
-  - 우선순위 기반 기능 관리
-  - 시간 경과에 따른 진행률 추세 분석
-
-- **📈 고급 분석 엔진**
-  - 다차원 건강 점수 알고리즘
-  - 성능 병목 지점 식별
-  - 보안 취약성 평가
-  - 코드 복잡성 및 유지보수성 측정
-  - 리소스 사용량 최적화 권장사항
-
-</div>
-
-<div class="lang-en" style="display: none;">
 
 ### ✨ **Project Dashboard System** (NEW)
 - **📊 Comprehensive Project Analytics Dashboard**
@@ -967,34 +495,6 @@ This enhanced version by **Nova AI** includes extensive upgrades and new feature
   - Code complexity and maintainability metrics
   - Resource usage optimization recommendations
 
-</div>
-
-<div class="lang-ko">
-
-### 🤖 **향상된 AI 및 에이전트 시스템**
-- **💎 고급 AI 사용량 추적**
-  - 실시간 AI 모델 사용량 분석 (Claude 3.5 Sonnet, Opus, Haiku)
-  - 모델, 프로젝트 및 기간별 비용 분석
-  - 세부 측정항목이 포함된 세션 기반 추적
-  - 사용 패턴 분석 및 최적화 제안
-  - 다중 모델 비교 및 효율성 인사이트
-
-- **🔄 자동 동기화 시스템**
-  - Claude Code CLI 자동 동기화
-  - 구성 가능한 동기화 간격 (5분, 15분, 30분, 1시간)
-  - 실시간 상태 업데이트가 포함된 백그라운드 동기화
-  - 즉시 실행 가능한 수동 동기화 오버라이드
-
-- **🎨 고급 에이전트 실행**
-  - stdin 처리를 통한 향상된 에이전트 성능
-  - 긴 명령어 처리 (Windows 명령줄 길이 제한 수정)
-  - 백그라운드 작업 오케스트레이션
-  - 에이전트 성공률 추적 및 최적화
-
-</div>
-
-<div class="lang-en" style="display: none;">
-
 ### 🤖 **Enhanced AI & Agent System**
 - **💎 Advanced AI Usage Tracking**
   - Real-time AI model usage analytics (Claude 3.5 Sonnet, Opus, Haiku)
@@ -1014,8 +514,6 @@ This enhanced version by **Nova AI** includes extensive upgrades and new feature
   - Long command handling (Windows command line length fix)
   - Background task orchestration
   - Agent success rate tracking and optimization
-
-</div>
 
 ### 🛡️ **Production-Grade Stability & Performance**
 - **💪 Enhanced Error Handling**
@@ -1186,57 +684,13 @@ CREATE TABLE risk_items (
 
 ---
 
-<div class="lang-ko">
-
-## 🛠️ **설치 및 설정 (향상됨)**
-
-### 📦 **빠른 설치**
-```bash
-# 향상된 버전 클론
-git clone https://github.com/lovecat/enhanced-claudia.git
-cd enhanced-claudia
-
-# 의존성 설치 (Windows 최적화)
-bun install
-
-# 프로덕션 빌드
-bun run tauri build
-
-# 향상된 MSI 설치 프로그램이 생성됩니다:
-# src-tauri/target/release/Claudia_0.2.0_x64_en-US.msi
-```
-
-### 🎯 **개발 설정**
-```bash
-# 핫 리로드가 포함된 개발 모드
-bun run tauri dev
-
-# 종합 테스트 실행
-bun test                    # 프론트엔드 테스트
-cd src-tauri && cargo test  # 백엔드 테스트
-
-# 성능 벤치마킹
-bun run benchmark          # 성능 테스트
-```
-
-### 🔧 **구성 옵션**
-- **자동 동기화 간격**: 5분에서 1시간
-- **대시보드 새로고침 빈도**: 실시간에서 수동까지
-- **성능 모니터링**: 세부 측정항목 활성화/비활성화
-- **테마 설정**: 시스템 동기화를 통한 다크/라이트 모드
-- **알림 설정**: 사용자 정의 가능한 토스트 환경설정
-
-</div>
-
-<div class="lang-en" style="display: none;">
-
 ## 🛠️ **Installation & Setup (Enhanced)**
 
 ### 📦 **Quick Installation**
 ```bash
 # Clone the enhanced version
-git clone https://github.com/lovecat/enhanced-claudia.git
-cd enhanced-claudia
+git clone https://github.com/soh963/windows-claudia.git
+cd windows-claudia
 
 # Install dependencies (optimized for Windows)
 bun install
@@ -1267,8 +721,6 @@ bun run benchmark          # Performance testing
 - **Performance monitoring**: Enable/disable detailed metrics
 - **Theme preferences**: Dark/light mode with system sync
 - **Notification settings**: Customizable toast preferences
-
-</div>
 
 ---
 
@@ -1305,35 +757,18 @@ bun run benchmark          # Performance testing
 ---
 
 <div align="center">
-  <div class="lang-ko">
-    <p>
-      <strong>원본: <a href="https://asterisk.so/">Asterisk 팀</a>이 ❤️로 제작</strong><br>
-      <strong>향상: Nova AI 팀이 ❤️로 개선</strong>
-    </p>
-    <p>
-      <a href="https://github.com/soh963/windows-claudia/issues">버그 신고</a>
-      ·
-      <a href="https://github.com/soh963/windows-claudia/issues">기능 요청</a>
-      ·
-      <a href="https://github.com/asterisk-org/claudia">원본 저장소</a>
-    </p>
-  </div>
-  
-  <div class="lang-en" style="display: none;">
-    <p>
-      <strong>Original: Made with ❤️ by the <a href="https://asterisk.so/">Asterisk Team</a></strong><br>
-      <strong>Enhanced: With ❤️ by Nova AI Team</strong>
-    </p>
-    <p>
-      <a href="https://github.com/soh963/windows-claudia/issues">Report Bug</a>
-      ·
-      <a href="https://github.com/soh963/windows-claudia/issues">Request Feature</a>
-      ·
-      <a href="https://github.com/asterisk-org/claudia">Original Repository</a>
-    </p>
-  </div>
+  <p>
+    <strong>Original: Made with ❤️ by the <a href="https://asterisk.so/">Asterisk Team</a></strong><br>
+    <strong>Enhanced: With ❤️ by Nova AI Team</strong>
+  </p>
+  <p>
+    <a href="https://github.com/soh963/windows-claudia/issues">Report Bug</a>
+    ·
+    <a href="https://github.com/soh963/windows-claudia/issues">Request Feature</a>
+    ·
+    <a href="https://github.com/asterisk-org/claudia">Original Repository</a>
+  </p>
 </div>
-
 
 ## Star History
 
