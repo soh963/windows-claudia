@@ -36,3 +36,6 @@ CLAUDE.md
 # Claude project-specific files
 .claude/
 nul
+
+# Auto-generated analysis files
+src-tauri/_claudia_*.json
