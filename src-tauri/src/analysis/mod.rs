@@ -128,7 +128,7 @@ impl ProjectAnalyzer {
     /// Analyze security aspects
     async fn analyze_security(&self) -> Result<f64> {
         let mut issues = 0;
-        let mut total_checks = 0;
+        // let mut total_checks = 0;
         
         // Check for hardcoded secrets
         let secret_patterns = vec![
@@ -146,7 +146,7 @@ impl ProjectAnalyzer {
                 matches!(ext, "rs" | "ts" | "tsx" | "js" | "jsx" | "env")
             })
         {
-            total_checks += 1;
+            // total_checks += 1;
             let content = match fs::read_to_string(entry.path()).await {
                 Ok(c) => c,
                 Err(_) => continue,

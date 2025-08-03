@@ -229,6 +229,9 @@ fn try_which_command() -> Option<ClaudeInstallation> {
                 return None;
             }
 
+            // Non-Windows systems
+            #[cfg(not(target_os = "windows"))]
+            {
             // Parse aliased output: "claude: aliased to /path/to/claude"
             let path = if output_str.starts_with("claude:") && output_str.contains("aliased to") {
                 output_str
@@ -256,6 +259,7 @@ fn try_which_command() -> Option<ClaudeInstallation> {
                 source: "which".to_string(),
                 installation_type: InstallationType::System,
             })
+            }
         }
         _ => None,
     }

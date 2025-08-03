@@ -25,7 +25,6 @@ import { TabManager } from "@/components/TabManager";
 import { TabContent } from "@/components/TabContent";
 import { AgentsModal } from "@/components/AgentsModal";
 import DashboardMain from "@/components/dashboard/DashboardMain";
-import { SplitPaneLayout } from "@/components/SplitPaneLayout";
 import { useTabState } from "@/hooks/useTabState";
 
 type View = 
@@ -418,14 +417,12 @@ function AppContent() {
       
       case "tabs":
         return (
-          <SplitPaneLayout>
-            <div className="h-full flex flex-col">
-              <TabManager className="flex-shrink-0" />
-              <div className="flex-1 overflow-hidden">
-                <TabContent />
-              </div>
+          <div className="h-full flex flex-col">
+            <TabManager className="flex-shrink-0" />
+            <div className="flex-1 overflow-hidden">
+              <TabContent />
             </div>
-          </SplitPaneLayout>
+          </div>
         );
       
       case "usage-dashboard":

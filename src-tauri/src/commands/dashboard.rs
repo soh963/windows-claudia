@@ -6,8 +6,6 @@ use tauri::State;
 
 use super::agents::AgentDb;
 use super::ai_usage_tracker::{get_ai_usage_stats, AIUsageStats};
-use super::dashboard_utils::{normalize_path, create_project_if_not_exists};
-use chrono::Utc;
 
 /// Project Health Metrics
 #[derive(Debug, Serialize, Deserialize, Clone)]
