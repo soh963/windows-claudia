@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, ArrowLeft, Calendar, Clock, MessageSquare } from "lucide-react";
+import { FileText, ArrowLeft, Calendar, Clock, MessageSquare, Image } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
@@ -148,7 +148,11 @@ export const SessionList: React.FC<SessionListProps> = ({
                           {session.first_message && (
                             <div className="space-y-1">
                               <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                                <MessageSquare className="h-3 w-3" />
+                                {session.first_message.includes('data:image/') ? (
+                                  <Image className="h-3 w-3" />
+                                ) : (
+                                  <MessageSquare className="h-3 w-3" />
+                                )}
                                 <span>First message:</span>
                               </div>
                               <p className="text-xs line-clamp-2 text-foreground/80">

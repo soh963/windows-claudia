@@ -2139,6 +2139,42 @@ export const api = {
     }
   },
 
+  // Image handling API methods
+
+  /**
+   * Saves a base64 image to a temporary file
+   * @param base64Data - The base64 encoded image data (with or without data: prefix)
+   * @param mimeType - Optional mime type if not included in data URL
+   * @returns Promise resolving to the saved image info
+   */
+  async saveBase64Image(
+    base64Data: string,
+    mimeType?: string
+  ): Promise<{ path: string; filename: string }> {
+    try {
+      return await invoke<{ path: string; filename: string }>("save_base64_image", {
+        base64Data,
+        mimeType
+      });
+    } catch (error) {
+      console.error("Failed to save base64 image:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Cleans up old temporary images (older than 24 hours)
+   * @returns Promise resolving to the number of files cleaned up
+   */
+  async cleanupTempImages(): Promise<number> {
+    try {
+      return await invoke<number>("cleanup_temp_images");
+    } catch (error) {
+      console.error("Failed to cleanup temp images:", error);
+      throw error;
+    }
+  },
+
   // Dashboard API methods
 
   /**

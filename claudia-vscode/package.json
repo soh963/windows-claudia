@@ -1,0 +1,161 @@
+{
+  "name": "claudia-vscode",
+  "displayName": "Claudia - Claude AI Assistant",
+  "description": "Claude AI Assistant integrated directly into VS Code with chat, code analysis, and project management",
+  "version": "0.2.1",
+  "publisher": "claudia-dev",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/claudia-dev/claudia"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Productivity",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "claude",
+    "ai",
+    "assistant",
+    "chat",
+    "code",
+    "analysis",
+    "productivity",
+    "webview",
+    "integrated"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudia.openPanel",
+        "title": "Open Claudia Panel",
+        "category": "Claudia",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "claudia.newChat",
+        "title": "New Chat",
+        "category": "Claudia",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudia.analyzeCurrentFile",
+        "title": "Analyze Current File",
+        "category": "Claudia",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "claudia.analyzeProject",
+        "title": "Analyze Project",
+        "category": "Claudia",
+        "icon": "$(folder)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "claudia.openPanel"
+        },
+        {
+          "command": "claudia.newChat"
+        },
+        {
+          "command": "claudia.analyzeCurrentFile"
+        },
+        {
+          "command": "claudia.analyzeProject"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "claudia.analyzeCurrentFile",
+          "group": "claudia",
+          "when": "editorTextFocus"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "claudia.analyzeProject",
+          "group": "claudia"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "claudia.openPanel",
+          "group": "navigation",
+          "when": "resourceExtname != '.md'"
+        }
+      ]
+    },
+    "views": {
+      "claudia": [
+        {
+          "id": "claudia.main",
+          "name": "Claudia Assistant",
+          "when": "true"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudia",
+          "title": "Claudia AI Assistant",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "claudia.openPanel",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c"
+      },
+      {
+        "command": "claudia.newChat",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n"
+      }
+    ],
+    "configuration": {
+      "title": "Claudia",
+      "properties": {
+        "claudia.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically open Claudia panel when VS Code starts"
+        },
+        "claudia.retainContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Retain webview context when panel is hidden"
+        },
+        "claudia.showInEditorTitle": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Claudia button in editor title bar"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^16.x",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^4.9.5"
+  },
+  "icon": "icon.png"
+}

@@ -21,3 +21,4 @@ pub mod slash_commands;
 pub mod proxy;
 pub mod intelligent_routing;
 pub mod mcp_manager;
+pub mod image_handler;

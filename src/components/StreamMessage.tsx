@@ -609,6 +609,31 @@ const StreamMessageComponent: React.FC<StreamMessageProps> = ({ message, classNa
                     );
                   }
                   
+                  // Image content
+                  if (content.type === "image") {
+                    renderedSomething = true;
+                    return (
+                      <div key={idx} className="space-y-2">
+                        <div className="text-sm text-muted-foreground">Image:</div>
+                        <div className="border rounded-md overflow-hidden max-w-md">
+                          <img
+                            src={content.source?.data ? `data:${content.source.media_type};base64,${content.source.data}` : content.source?.url || ''}
+                            alt="Attached image"
+                            className="w-full h-auto object-contain max-h-96"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const errorDiv = document.createElement('div');
+                              errorDiv.className = 'p-4 text-center text-muted-foreground bg-muted';
+                              errorDiv.textContent = 'Failed to load image';
+                              target.parentNode?.appendChild(errorDiv);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
                   // Text content
                   if (content.type === "text") {
                     // Handle both string and object formats

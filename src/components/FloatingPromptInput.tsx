@@ -22,6 +22,8 @@ import { SlashCommandPicker } from "./SlashCommandPicker";
 import { ImagePreview } from "./ImagePreview";
 import { type FileEntry, type SlashCommand } from "@/lib/api";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { isBase64DataUrl } from "@/lib/imageUtils";
+import { validatePromptLength, checkProblematicContent, escapeForCommandLine } from "@/lib/promptValidation";
 
 interface FloatingPromptInputProps {
   /**
@@ -191,6 +193,7 @@ const FloatingPromptInputInner = (
   const [attachedFiles, setAttachedFiles] = useState<{path: string, type: 'image' | 'file'}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const expandedTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -239,20 +242,32 @@ const FloatingPromptInputInner = (
 
   // Extract image paths from prompt text
   // Extract attached files into prompt format when sending
-  const buildFinalPrompt = (text: string): string => {
-    if (attachedFiles.length === 0) return text;
+  const buildFinalPrompt = (text: string, files?: typeof attachedFiles): string => {
+    // Handle special characters and tags safely
+    let safeText = escapeForCommandLine(text);
     
-    let finalPrompt = text;
+    // Use provided files or fall back to attachedFiles
+    const filesToProcess = files || attachedFiles;
     
-    // Add attached files as mentions at the beginning
-    const mentions = attachedFiles.map(file => {
+    // If no files, just return the escaped text
+    if (filesToProcess.length === 0) return safeText;
+    
+    // Build file references
+    const fileReferences: string[] = [];
+    
+    filesToProcess.forEach(file => {
       const path = file.path;
-      // Wrap path in quotes if it contains spaces or is a data URL
-      return path.includes(' ') || path.startsWith('data:') ? `@"${path}"` : `@${path}`;
-    }).join(' ');
+      // Wrap path in quotes if it contains spaces or special characters
+      const needsQuotes = path.includes(' ') || path.includes('(') || path.includes(')');
+      const quotedPath = needsQuotes ? `"${path}"` : path;
+      fileReferences.push(`@${quotedPath}`);
+    });
     
-    // Add mentions at the beginning with proper spacing
-    finalPrompt = mentions + (text.trim() ? ' ' + text.trim() : '');
+    // Only add file references if we have any
+    if (fileReferences.length === 0) return safeText;
+    
+    // Add file references at the beginning with proper spacing
+    const finalPrompt = fileReferences.join(' ') + (safeText.trim() ? ' ' + safeText.trim() : '');
     
     return finalPrompt;
   };
@@ -345,9 +360,90 @@ const FloatingPromptInputInner = (
     }
   }, [isExpanded]);
 
-  const handleSend = () => {
-    if ((prompt.trim() || attachedFiles.length > 0) && !disabled) {
-      let finalPrompt = buildFinalPrompt(prompt.trim());
+  const handleSend = async () => {
+    // Check if we can send
+    const canSend = !disabled && (prompt.trim().length > 0 || attachedFiles.length > 0);
+    
+    if (!canSend) {
+      // Provide specific feedback about why sending is disabled
+      if (disabled) {
+        console.warn("전송이 비활성화된 상태입니다.");
+      } else if (!prompt.trim() && attachedFiles.length === 0) {
+        console.warn("메시지를 입력하거나 파일을 첨부해주세요.");
+      }
+      return;
+    }
+
+    try {
+      // Check for problematic content first
+      const contentCheck = checkProblematicContent(prompt);
+      if (contentCheck.hasIssues) {
+        console.warn('Potential issues detected in prompt:', contentCheck.issues);
+      }
+      
+      // Process attached files and handle base64 images
+      const processedFiles: typeof attachedFiles = [];
+      const base64Images: typeof attachedFiles = [];
+      const regularFiles: typeof attachedFiles = [];
+      
+      // Separate base64 images from regular files
+      attachedFiles.forEach(file => {
+        if (isBase64DataUrl(file.path)) {
+          base64Images.push(file);
+        } else {
+          regularFiles.push(file);
+          processedFiles.push(file);
+        }
+      });
+      
+      // Check if we have base64 images that need to be saved as temporary files
+      if (base64Images.length > 0) {
+        setIsProcessingImages(true);
+        console.log(`Found ${base64Images.length} base64 image(s), saving to temporary files...`);
+        
+        // Import api here to avoid circular dependencies
+        const { api } = await import("@/lib/api");
+        
+        // Save base64 images as temporary files
+        for (const base64Image of base64Images) {
+          try {
+            const savedImage = await api.saveBase64Image(base64Image.path);
+            console.log('Saved base64 image to:', savedImage.path);
+            
+            // Add the saved file path to processed files
+            processedFiles.push({
+              ...base64Image,
+              path: savedImage.path
+            });
+          } catch (err) {
+            console.error('Failed to save base64 image:', err);
+            // If saving fails, notify the user but continue with other images
+          }
+        }
+        
+        setIsProcessingImages(false);
+        
+        // If some images couldn't be saved, notify the user
+        const savedCount = processedFiles.length - regularFiles.length;
+        if (savedCount < base64Images.length) {
+          const failedCount = base64Images.length - savedCount;
+          console.warn(`${failedCount} image(s) could not be saved and were omitted.`);
+        }
+      }
+      
+      // Build the final prompt with processed files
+      let finalPrompt = buildFinalPrompt(prompt.trim(), processedFiles);
+      
+      // Validate the final prompt length with processed files
+      const validation = validatePromptLength(finalPrompt, processedFiles.map(f => f.path));
+      if (!validation.isValid) {
+        console.error(validation.message);
+        alert('The message is too long to send. Try removing some files or shortening your message.');
+        return;
+      }
+      
+      // Update attachedFiles to show the processed files in the UI
+      setAttachedFiles(processedFiles);
       
       // Append thinking phrase if not auto mode
       const thinkingMode = THINKING_MODES.find(m => m.id === selectedThinkingMode);
@@ -359,6 +455,14 @@ const FloatingPromptInputInner = (
       setPrompt("");
       setAttachedFiles([]);
       setEmbeddedImages([]);
+    } catch (error) {
+      console.error("메시지 전송 중 오류 발생:", error);
+      // Show user-friendly error message
+      if (error instanceof Error && error.message.includes('command line is too long')) {
+        alert('The message is too long to send. Try removing some images or shortening your message.');
+      } else {
+        alert('An error occurred while sending the message. Please try again.');
+      }
     }
   };
 
@@ -825,7 +929,7 @@ const FloatingPromptInputInner = (
 
                 <Button
                   onClick={handleSend}
-                  disabled={!prompt.trim() || disabled}
+                  disabled={disabled || (!prompt.trim() && attachedFiles.length === 0)}
                   size="default"
                   className="min-w-[60px]"
                 >
@@ -857,24 +961,50 @@ const FloatingPromptInputInner = (
           {/* Attached files display */}
           {attachedFiles.length > 0 && (
             <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-wrap">
-              {attachedFiles.map((file, index) => (
-                <div key={index} className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-md">
-                  {file.type === 'image' ? (
-                    <ImageIcon className="h-3 w-3 text-blue-500" />
-                  ) : (
-                    <Paperclip className="h-3 w-3 text-gray-500" />
-                  )}
-                  <span className="text-xs max-w-[150px] truncate">
-                    {file.path.startsWith('data:') ? 'Pasted Image' : file.path.split('/').pop()}
-                  </span>
-                  <button
-                    onClick={() => handleRemoveFile(index)}
-                    className="ml-1 text-muted-foreground hover:text-foreground"
+              {attachedFiles.map((file, index) => {
+                const isBase64 = isBase64DataUrl(file.path);
+                
+                return (
+                  <div 
+                    key={index} 
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded-md",
+                      isBase64 && isProcessingImages ? "bg-blue-500/20 border border-blue-500/50" : "bg-muted/50"
+                    )}
                   >
-                    ×
-                  </button>
+                    {file.type === 'image' ? (
+                      <ImageIcon className={cn("h-3 w-3", isBase64 && isProcessingImages ? "text-blue-500" : "text-blue-500")} />
+                    ) : (
+                      <Paperclip className="h-3 w-3 text-gray-500" />
+                    )}
+                    <span className="text-xs max-w-[150px] truncate">
+                      {file.path.startsWith('data:') ? 'Pasted Image' : file.path.split('/').pop() || file.path.split('\\').pop()}
+                    </span>
+                    {isBase64 && isProcessingImages && (
+                      <div className="rotating-symbol text-blue-500 ml-1" style={{ fontSize: '10px' }} />
+                    )}
+                    <button
+                      onClick={() => handleRemoveFile(index)}
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      disabled={isProcessingImages}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+              {attachedFiles.some(f => isBase64DataUrl(f.path)) && (
+                <div className="text-xs text-muted-foreground w-full mt-1 flex items-center gap-1">
+                  {isProcessingImages ? (
+                    <>
+                      <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span>Processing images...</span>
+                    </>
+                  ) : (
+                    <span>Pasted images will be saved as temporary files.</span>
+                  )}
                 </div>
-              ))}
+              )}
             </div>
           )}
           
@@ -1071,7 +1201,7 @@ const FloatingPromptInputInner = (
               {/* Send/Stop Button */}
               <Button
                 onClick={isLoading ? onCancel : handleSend}
-                disabled={isLoading ? false : (!prompt.trim() || disabled)}
+                disabled={isLoading ? false : (disabled || (!prompt.trim() && attachedFiles.length === 0))}
                 variant={isLoading ? "destructive" : "default"}
                 size="default"
                 className="min-w-[60px]"

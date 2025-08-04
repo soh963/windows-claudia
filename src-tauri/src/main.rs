@@ -316,6 +316,10 @@ fn main() {
             commands::intelligent_routing::analyze_chat_input,
             commands::intelligent_routing::parse_mcp_install_request,
             
+            // Image Handler
+            commands::image_handler::save_base64_image,
+            commands::image_handler::cleanup_temp_images,
+            
             // MCP Manager
             commands::mcp_manager::search_mcp_servers,
             commands::mcp_manager::install_mcp_server,

@@ -55,22 +55,69 @@ export function formatISOTimestamp(isoString: string): string {
 }
 
 /**
- * Truncates text to a specified length with ellipsis
+ * Truncates text to a specified length with ellipsis, handling image content
  * @param text - Text to truncate
  * @param maxLength - Maximum length
  * @returns Truncated text
  */
 export function truncateText(text: string, maxLength: number): string {
+  // If the text already contains image indicators from getFirstLine, don't double-process
+  if (text.startsWith('📷')) {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength - 3) + '...';
+  }
+  
+  // Handle raw text that might contain image data
+  if (text.includes('data:image/')) {
+    // Use getFirstLine to get the processed version first
+    const processedText = getFirstLine(text);
+    if (processedText.length <= maxLength) return processedText;
+    return processedText.slice(0, maxLength - 3) + '...';
+  }
+  
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength - 3) + '...';
 }
 
 /**
- * Gets the first line of text
+ * Gets the first line of text, handling image content appropriately
  * @param text - Text to process
- * @returns First line of text
+ * @returns First line of text or image indicator
  */
 export function getFirstLine(text: string): string {
+  // Check if the text contains base64 image data
+  if (text.includes('data:image/')) {
+    // More precise regex for base64 data URLs
+    const imageMatches = text.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g);
+    const imageCount = imageMatches ? imageMatches.length : 0;
+    
+    // Extract any text content that's not image data
+    let textWithoutImages = text;
+    if (imageMatches) {
+      imageMatches.forEach(match => {
+        textWithoutImages = textWithoutImages.replace(match, '');
+      });
+    }
+    
+    // Clean up JSON formatting and extra whitespace
+    textWithoutImages = textWithoutImages
+      .replace(/[{}"[\],]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (textWithoutImages && textWithoutImages.length > 0) {
+      const firstTextLine = textWithoutImages.split('\n')[0].trim();
+      if (firstTextLine) {
+        return imageCount === 1 
+          ? `📷 ${firstTextLine}`
+          : `📷 ${imageCount} images + ${firstTextLine}`;
+      }
+    }
+    
+    // If no text content, just show image indicator
+    return imageCount === 1 ? '📷 Image' : `📷 ${imageCount} images`;
+  }
+  
   const lines = text.split('\n');
   return lines[0] || '';
 }

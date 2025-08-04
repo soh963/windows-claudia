@@ -1089,3 +1089,147 @@ D:\claudia\src-tauri\target\release\bundle\nsis\Claudia_0.1.0_x64-setup.exe
 - **일관성**: 전체 애플리케이션에서 일관된 에러 처리 패턴 적용
 
 ---
+
+## 🚀 v0.2.1 최종 업데이트 - 이미지 처리 및 HTML 안전성 강화
+
+### 2025-08-04 - 클립보드 이미지 및 HTML 처리 문제 해결
+
+#### 1. "Command line too long" 오류 해결 (CRITICAL)
+- **문제**: 클립보드에서 붙여넣은 이미지가 base64로 인코딩되어 Windows 명령줄 8191자 제한 초과
+- **원인**: 대용량 base64 이미지 데이터가 명령줄 인자로 전달됨
+- **해결 과정**:
+  1. **초기 시도**: 이미지 필터링 및 경고 메시지 표시 (부분 해결)
+  2. **사용자 제안**: 클립보드 이미지를 임시 폴더에 저장하고 경로 참조
+  3. **최종 구현**: 
+     - Rust 백엔드에 `image_handler.rs` 모듈 추가
+     - `save_base64_image` 명령으로 base64를 임시 파일로 저장
+     - `cleanup_temp_images` 명령으로 24시간 이상된 임시 파일 자동 정리
+
+- **구현 코드**:
+  ```rust
+  // src-tauri/src/commands/image_handler.rs
+  #[tauri::command]
+  pub async fn save_base64_image(
+      app: AppHandle,
+      base64_data: String,
+      mime_type: Option<String>,
+  ) -> Result<SavedImage, String> {
+      // base64 디코딩
+      let image_data = general_purpose::STANDARD
+          .decode(&base64_content)
+          .map_err(|e| format!("Failed to decode base64: {}", e))?;
+      
+      // 임시 디렉토리에 저장
+      let claudia_temp = temp_dir.join("claudia_images");
+      let filename = format!("claudia_image_{}_{}.{}", 
+          chrono::Local::now().format("%Y%m%d_%H%M%S"),
+          Uuid::new_v4().simple(),
+          extension
+      );
+      
+      fs::write(&file_path, image_data)?;
+      Ok(SavedImage { path: absolute_path, filename })
+  }
+  ```
+
+- **Frontend 통합**:
+  ```typescript
+  // FloatingPromptInput.tsx
+  if (base64Images.length > 0) {
+    setIsProcessingImages(true);
+    for (const base64Image of base64Images) {
+      const savedImage = await api.saveBase64Image(base64Image.path);
+      processedFiles.push({
+        ...base64Image,
+        path: savedImage.path
+      });
+    }
+  }
+  ```
+
+- **결과**:
+  - 이미지는 `%TEMP%\claudia_images\` 폴더에 저장
+  - 파일 경로만 명령줄로 전달되어 길이 제한 문제 해결
+  - 사용자 친화적인 "Processing images..." 메시지 표시
+
+#### 2. HTML 코드 및 이모지 처리 문제 해결
+- **문제**: HTML 코드와 이모지(🔍, 🗑️)가 포함된 텍스트 입력 시 처리 중단
+- **원인 분석**:
+  1. 이모지가 Windows 명령줄에서 UTF-8 인코딩 문제 발생
+  2. 브라우저 확장 속성(`bis_skin_checked`)이 예상치 못한 파싱 오류 유발
+  3. 브라우저 환경에서 Node.js의 `process` 객체 참조 오류
+
+- **해결책**:
+  ```typescript
+  // promptValidation.ts
+  export function escapeForCommandLine(text: string): string {
+    // 이모지를 안전한 텍스트로 변환
+    text = text
+      .replace(/🔍/g, '[SEARCH]')
+      .replace(/🗑️/g, '[DELETE]')
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '[EMOJI]');
+    
+    // 브라우저 확장 속성 제거
+    text = text.replace(/bis_skin_checked="[^"]*"/g, '');
+    
+    // 브라우저 환경 감지
+    const isWindows = typeof window !== 'undefined' && 
+      window.navigator?.platform?.toLowerCase().includes('win');
+    
+    if (isWindows) {
+      text = text.replace(/"/g, '\\"');
+      text = text.replace(/[&|<>^]/g, '^$&');
+      text = text.replace(/\r?\n/g, ' ');
+    }
+    
+    return text;
+  }
+  ```
+
+- **추가 안전장치**:
+  ```typescript
+  // 문제 콘텐츠 감지 기능
+  export function checkProblematicContent(text: string): {
+    hasIssues: boolean;
+    issues: string[];
+  } {
+    const issues: string[] = [];
+    
+    // 이모지 감지
+    if (/[\u{1F300}-\u{1F9FF}]/u.test(text)) {
+      issues.push('Text contains emojis that might cause encoding issues');
+    }
+    
+    // 브라우저 확장 아티팩트 감지
+    if (/<[^>]+bis_skin_checked/i.test(text)) {
+      issues.push('Text contains browser extension artifacts');
+    }
+    
+    // 긴 인라인 스타일 감지
+    if (/style="[^"]{500,}"/g.test(text)) {
+      issues.push('Text contains very long inline styles');
+    }
+    
+    return { hasIssues: issues.length > 0, issues };
+  }
+  ```
+
+#### 3. 최종 검증 및 빌드
+- **테스트 시나리오**:
+  1. ✅ 클립보드 이미지 붙여넣기 → 임시 파일 저장 → 경로 전달
+  2. ✅ HTML 코드 입력 → 이모지 변환 → 안전한 처리
+  3. ✅ 브라우저 환경에서 `process is not defined` 오류 해결
+  4. ✅ 긴 인라인 스타일 감지 및 경고
+
+- **빌드 결과**: v0.2.1 성공적 완료
+  - TypeScript 컴파일: 성공
+  - Rust 컴파일: 성공 (경고 무시 가능)
+  - 최종 패키지 생성 완료
+
+### 핵심 개선사항 요약
+1. **이미지 처리**: Base64 → 임시 파일 저장 → 파일 경로 참조
+2. **텍스트 안전성**: 이모지 변환, HTML 속성 정리, 특수 문자 이스케이프
+3. **크로스 플랫폼**: 브라우저/Node.js 환경 구분하여 안전한 처리
+4. **사용자 경험**: 실시간 처리 상태 표시, 친화적인 오류 메시지
+
+---
