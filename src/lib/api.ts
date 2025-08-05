@@ -1697,6 +1697,58 @@ export const api = {
   },
 
   /**
+   * Updates an existing MCP server
+   */
+  async mcpUpdate(
+    name: string,
+    transport: string,
+    command?: string,
+    args: string[] = [],
+    env: Record<string, string> = {},
+    url?: string,
+    scope: string = "local"
+  ): Promise<AddServerResult> {
+    try {
+      return await invoke<AddServerResult>("mcp_update", {
+        name,
+        transport,
+        command,
+        args,
+        env,
+        url,
+        scope,
+      });
+    } catch (error) {
+      console.error("Failed to update MCP server:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Exports an MCP server configuration as JSON
+   */
+  async mcpExportJson(name: string): Promise<string> {
+    try {
+      return await invoke<string>("mcp_export_json", { name });
+    } catch (error) {
+      console.error("Failed to export MCP server as JSON:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Exports all MCP servers as JSON
+   */
+  async mcpExportAllJson(): Promise<string> {
+    try {
+      return await invoke<string>("mcp_export_all_json");
+    } catch (error) {
+      console.error("Failed to export all MCP servers as JSON:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Resets project-scoped server approval choices
    */
   async mcpResetProjectChoices(): Promise<string> {

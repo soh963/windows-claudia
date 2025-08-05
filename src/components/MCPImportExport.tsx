@@ -100,25 +100,55 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
             // Multiple servers format
             for (const [name, config] of Object.entries(jsonData.mcpServers)) {
               try {
+                // Determine transport type based on config
+                const hasUrl = (config as any).url;
+                const hasCommand = (config as any).command;
+                
+                if (!hasUrl && !hasCommand) {
+                  console.error(`Server ${name}: Must have either 'command' (for stdio) or 'url' (for SSE)`);
+                  totalFailed++;
+                  continue;
+                }
+                
                 const serverConfig = {
-                  type: "stdio",
+                  type: hasUrl ? "sse" : "stdio",
                   command: (config as any).command,
                   args: (config as any).args || [],
-                  env: (config as any).env || {}
+                  env: (config as any).env || {},
+                  url: (config as any).url
                 };
             
                 const result = await api.mcpAddJson(name, JSON.stringify(serverConfig), importScope);
                 if (result.success) {
                   totalImported++;
                 } else {
+                  console.error(`Failed to import ${name}: ${result.message}`);
                   totalFailed++;
                 }
               } catch (e) {
+                console.error(`Error importing ${name}:`, e);
                 totalFailed++;
               }
             }
-          } else if (jsonData.type && jsonData.command) {
-            // Single server format
+          } else if (jsonData.type) {
+            // Single server format - validate based on type
+            const type = jsonData.type;
+            if (type === "stdio" && !jsonData.command) {
+              console.error(`${file.name}: 'command' is required for stdio transport`);
+              totalFailed++;
+              continue;
+            }
+            if (type === "sse" && !jsonData.url) {
+              console.error(`${file.name}: 'url' is required for SSE transport`);
+              totalFailed++;
+              continue;
+            }
+            if (type !== "stdio" && type !== "sse") {
+              console.error(`${file.name}: Invalid transport type '${type}'. Must be 'stdio' or 'sse'`);
+              totalFailed++;
+              continue;
+            }
+            
             const name = prompt(`Enter a name for the server from ${file.name}:`);
             if (!name) {
               totalFailed++;
@@ -129,10 +159,11 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
             if (result.success) {
               totalImported++;
             } else {
+              console.error(`Failed to import ${name}: ${result.message}`);
               totalFailed++;
             }
           } else {
-            console.error(`Unrecognized JSON format in ${file.name}`);
+            console.error(`Unrecognized JSON format in ${file.name}. Must have either 'type' field or 'mcpServers' object`);
             totalFailed++;
           }
         } catch (error) {
@@ -158,11 +189,29 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
   };
 
   /**
-   * Handles exporting servers (placeholder)
+   * Handles exporting servers
    */
-  const handleExport = () => {
-    // TODO: Implement export functionality
-    onError("Export functionality coming soon!");
+  const handleExport = async () => {
+    try {
+      // Get all servers as JSON
+      const jsonContent = await api.mcpExportAllJson();
+      
+      // Create a blob and download link
+      const blob = new Blob([jsonContent], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mcp-servers-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      onError("Configuration exported successfully!");
+    } catch (error) {
+      console.error("Failed to export servers:", error);
+      onError("Failed to export configuration");
+    }
   };
 
   /**
@@ -290,28 +339,27 @@ export const MCPImportExport: React.FC<MCPImportExportProps> = ({
           </div>
         </Card>
 
-        {/* Export (Coming Soon) */}
-        <Card className="p-4 opacity-60">
+        {/* Export */}
+        <Card className="p-4 hover:bg-accent/5 transition-colors">
           <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-muted rounded-lg">
-                <Upload className="h-5 w-5 text-muted-foreground" />
+              <div className="p-2.5 bg-green-500/10 rounded-lg">
+                <Upload className="h-5 w-5 text-green-500" />
               </div>
               <div className="flex-1">
                 <h4 className="text-sm font-medium">Export Configuration</h4>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Export your MCP server configuration
+                  Export all MCP servers to a JSON file
                 </p>
               </div>
             </div>
             <Button
               onClick={handleExport}
-              disabled={true}
-              variant="secondary"
-              className="w-full gap-2"
+              variant="outline"
+              className="w-full gap-2 hover:bg-green-500/10 hover:text-green-600 hover:border-green-500/50"
             >
               <Upload className="h-4 w-4" />
-              Export (Coming Soon)
+              Export to JSON
             </Button>
           </div>
         </Card>

@@ -14,11 +14,13 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
-  Copy
+  Copy,
+  Edit2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api, type MCPServer } from "@/lib/api";
+import { MCPServerEdit } from "./MCPServerEdit";
 
 interface MCPServerListProps {
   /**
@@ -53,6 +55,7 @@ export const MCPServerList: React.FC<MCPServerListProps> = React.memo(({
   const [testingServer, setTestingServer] = useState<string | null>(null);
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
   const [copiedServer, setCopiedServer] = useState<string | null>(null);
+  const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
 
   // Memoize server grouping by scope
   const serversByScope = useMemo(() => {
@@ -249,6 +252,14 @@ export const MCPServerList: React.FC<MCPServerListProps> = React.memo(({
               <Button
                 variant="ghost"
                 size="sm"
+                onClick={() => setEditingServer(server)}
+                className="hover:bg-blue-500/10 hover:text-blue-600"
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => handleRemoveServer(server.name)}
                 disabled={removingServer === server.name}
                 className="hover:bg-destructive/10 hover:text-destructive"
@@ -403,6 +414,19 @@ export const MCPServerList: React.FC<MCPServerListProps> = React.memo(({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Edit Server Dialog */}
+      {editingServer && (
+        <MCPServerEdit
+          server={editingServer}
+          open={!!editingServer}
+          onClose={() => setEditingServer(null)}
+          onUpdated={() => {
+            setEditingServer(null);
+            onRefresh();
+          }}
+        />
       )}
     </div>
   );

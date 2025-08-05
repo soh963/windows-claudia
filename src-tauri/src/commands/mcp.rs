@@ -45,6 +45,18 @@ pub struct MCPServer {
     pub status: ServerStatus,
 }
 
+/// MCP server configuration for JSON export/import
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MCPServerConfig {
+    pub command: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub args: Vec<String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
+    pub env: HashMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
 /// Server status information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerStatus {
@@ -63,15 +75,6 @@ pub struct MCPProjectConfig {
     pub mcp_servers: HashMap<String, MCPServerConfig>,
 }
 
-/// Individual server configuration in .mcp.json
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MCPServerConfig {
-    pub command: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-}
 
 /// Result of adding a server
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -521,6 +524,156 @@ pub async fn mcp_add_json(
         name, scope
     );
 
+    // Validate JSON structure before passing to command
+    match serde_json::from_str::<serde_json::Value>(&json_config) {
+        Ok(json_value) => {
+            // Check if it's a valid object
+            if !json_value.is_object() {
+                return Ok(AddServerResult {
+                    success: false,
+                    message: "Invalid JSON: Expected an object".to_string(),
+                    server_name: None,
+                });
+            }
+            
+            let obj = json_value.as_object().unwrap();
+            
+            // Check for required fields based on transport type
+            if let Some(type_value) = obj.get("type") {
+                if let Some(type_str) = type_value.as_str() {
+                    match type_str {
+                        "stdio" => {
+                            // Validate stdio requirements
+                            if !obj.contains_key("command") {
+                                return Ok(AddServerResult {
+                                    success: false,
+                                    message: "Invalid JSON: 'command' is required for stdio transport".to_string(),
+                                    server_name: None,
+                                });
+                            }
+                            
+                            // Validate command is a string
+                            if let Some(cmd) = obj.get("command") {
+                                if !cmd.is_string() || cmd.as_str().unwrap_or("").trim().is_empty() {
+                                    return Ok(AddServerResult {
+                                        success: false,
+                                        message: "Invalid JSON: 'command' must be a non-empty string".to_string(),
+                                        server_name: None,
+                                    });
+                                }
+                            }
+                            
+                            // Validate args if present
+                            if let Some(args) = obj.get("args") {
+                                if !args.is_array() {
+                                    return Ok(AddServerResult {
+                                        success: false,
+                                        message: "Invalid JSON: 'args' must be an array".to_string(),
+                                        server_name: None,
+                                    });
+                                }
+                                
+                                // Check all args are strings
+                                if let Some(args_array) = args.as_array() {
+                                    for (idx, arg) in args_array.iter().enumerate() {
+                                        if !arg.is_string() {
+                                            return Ok(AddServerResult {
+                                                success: false,
+                                                message: format!("Invalid JSON: args[{}] must be a string", idx),
+                                                server_name: None,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        "sse" => {
+                            // Validate SSE requirements
+                            if !obj.contains_key("url") {
+                                return Ok(AddServerResult {
+                                    success: false,
+                                    message: "Invalid JSON: 'url' is required for SSE transport".to_string(),
+                                    server_name: None,
+                                });
+                            }
+                            
+                            // Validate URL is a string
+                            if let Some(url) = obj.get("url") {
+                                if !url.is_string() || url.as_str().unwrap_or("").trim().is_empty() {
+                                    return Ok(AddServerResult {
+                                        success: false,
+                                        message: "Invalid JSON: 'url' must be a non-empty string".to_string(),
+                                        server_name: None,
+                                    });
+                                }
+                                
+                                // Basic URL validation
+                                let url_str = url.as_str().unwrap();
+                                if !url_str.starts_with("http://") && !url_str.starts_with("https://") {
+                                    return Ok(AddServerResult {
+                                        success: false,
+                                        message: "Invalid JSON: 'url' must start with http:// or https://".to_string(),
+                                        server_name: None,
+                                    });
+                                }
+                            }
+                        }
+                        _ => {
+                            return Ok(AddServerResult {
+                                success: false,
+                                message: format!("Invalid JSON: Unknown transport type '{}'", type_str),
+                                server_name: None,
+                            });
+                        }
+                    }
+                } else {
+                    return Ok(AddServerResult {
+                        success: false,
+                        message: "Invalid JSON: 'type' must be a string".to_string(),
+                        server_name: None,
+                    });
+                }
+            } else {
+                return Ok(AddServerResult {
+                    success: false,
+                    message: "Invalid JSON: 'type' field is required".to_string(),
+                    server_name: None,
+                });
+            }
+            
+            // Validate env if present
+            if let Some(env) = obj.get("env") {
+                if !env.is_object() {
+                    return Ok(AddServerResult {
+                        success: false,
+                        message: "Invalid JSON: 'env' must be an object".to_string(),
+                        server_name: None,
+                    });
+                }
+                
+                // Check all env values are strings
+                if let Some(env_obj) = env.as_object() {
+                    for (key, value) in env_obj.iter() {
+                        if !value.is_string() {
+                            return Ok(AddServerResult {
+                                success: false,
+                                message: format!("Invalid JSON: env['{}'] must be a string", key),
+                                server_name: None,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            return Ok(AddServerResult {
+                success: false,
+                message: format!("Invalid JSON: {}", e),
+                server_name: None,
+            });
+        }
+    }
+
     // Build command args
     let mut cmd_args = vec!["add-json", &name, &json_config];
 
@@ -883,4 +1036,144 @@ pub async fn mcp_save_project_config(
         .map_err(|e| format!("Failed to write .mcp.json: {}", e))?;
 
     Ok("Project MCP configuration saved".to_string())
+}
+
+/// Updates an existing MCP server configuration
+#[tauri::command]
+pub async fn mcp_update(
+    app: AppHandle,
+    name: String,
+    transport: String,
+    command: Option<String>,
+    args: Vec<String>,
+    env: HashMap<String, String>,
+    url: Option<String>,
+    scope: String,
+) -> Result<AddServerResult, String> {
+    info!("Updating MCP server: {}", name);
+    
+    let claude_path = find_claude_binary(&app)
+        .map_err(|e| format!("Could not find claude binary: {}", e))?;
+    
+    // First remove the existing server
+    let mut remove_cmd = create_command_with_env(&claude_path);
+    remove_cmd.args(&["mcp", "remove", &name]);
+    
+    let remove_output = remove_cmd.output()
+        .map_err(|e| format!("Failed to execute claude mcp remove: {}", e))?;
+    
+    if !remove_output.status.success() {
+        // If removal fails, it might not exist, so we'll continue anyway
+        let stderr = String::from_utf8_lossy(&remove_output.stderr);
+        error!("Failed to remove existing server (may not exist): {}", stderr);
+    }
+    
+    // Now add the updated server
+    let mut add_cmd = create_command_with_env(&claude_path);
+    add_cmd.args(&["mcp", "add"]);
+    
+    // Add scope flag
+    match scope.as_str() {
+        "project" => add_cmd.arg("--project"),
+        "user" => add_cmd.arg("--user"),
+        _ => &mut add_cmd, // default is local
+    };
+    
+    add_cmd.arg(&name);
+    
+    match transport.as_str() {
+        "stdio" => {
+            if let Some(cmd) = command {
+                add_cmd.arg(&cmd);
+                for arg in &args {
+                    add_cmd.arg(arg);
+                }
+            } else {
+                return Err("Command is required for stdio transport".to_string());
+            }
+        }
+        "sse" => {
+            if let Some(u) = url {
+                add_cmd.arg(&u);
+            } else {
+                return Err("URL is required for SSE transport".to_string());
+            }
+        }
+        _ => return Err(format!("Unknown transport type: {}", transport)),
+    }
+    
+    // Add environment variables
+    for (key, value) in &env {
+        add_cmd.env(key, value);
+    }
+    
+    let output = add_cmd.output()
+        .map_err(|e| format!("Failed to execute claude mcp add: {}", e))?;
+    
+    if output.status.success() {
+        Ok(AddServerResult {
+            success: true,
+            message: format!("Successfully updated MCP server '{}'", name),
+            server_name: Some(name.clone()),
+        })
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Ok(AddServerResult {
+            success: false,
+            message: format!("Failed to update MCP server: {}", stderr),
+            server_name: None,
+        })
+    }
+}
+
+/// Exports an MCP server configuration as JSON
+#[tauri::command]
+pub async fn mcp_export_json(
+    app: AppHandle,
+    name: String,
+) -> Result<String, String> {
+    info!("Exporting MCP server {} as JSON", name);
+    
+    // Get the server details
+    let server = mcp_get(app, name).await?;
+    
+    // Convert to MCPServerConfig format
+    let config = MCPServerConfig {
+        command: server.command,
+        args: if server.args.is_empty() { vec![] } else { server.args },
+        env: if server.env.is_empty() { HashMap::new() } else { server.env },
+        url: server.url,
+    };
+    
+    // Serialize to JSON
+    serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize server config: {}", e))
+}
+
+/// Gets all MCP servers as a JSON configuration
+#[tauri::command]
+pub async fn mcp_export_all_json(
+    app: AppHandle,
+) -> Result<String, String> {
+    info!("Exporting all MCP servers as JSON");
+    
+    // Get all servers
+    let servers = mcp_list(app).await?;
+    
+    // Convert to a map of MCPServerConfig
+    let mut config_map: HashMap<String, MCPServerConfig> = HashMap::new();
+    
+    for server in servers {
+        let config = MCPServerConfig {
+            command: server.command,
+            args: if server.args.is_empty() { vec![] } else { server.args },
+            env: if server.env.is_empty() { HashMap::new() } else { server.env },
+            url: server.url,
+        };
+        config_map.insert(server.name, config);
+    }
+    
+    // Serialize to JSON
+    serde_json::to_string_pretty(&config_map)
+        .map_err(|e| format!("Failed to serialize servers config: {}", e))
 }
