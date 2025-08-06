@@ -5,9 +5,6 @@ import {
   ChevronUp,
   Activity,
   BarChart3,
-  Clock,
-  CheckCircle2,
-  XCircle,
   X,
   RefreshCw,
   Sparkles,
@@ -17,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
@@ -25,8 +22,6 @@ import {
   ProgressTrackerProps,
   ProgressTrackerState,
   ModelType,
-  TaskStatus,
-  Task,
   DEFAULT_PROGRESS_CONFIG,
 } from '@/types/progressTracker';
 

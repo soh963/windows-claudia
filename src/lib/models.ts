@@ -4,7 +4,7 @@
 
 import type { GeminiRequest } from './api-types';
 
-export type ModelProvider = 'claude' | 'gemini';
+export type ModelProvider = 'claude' | 'gemini' | 'ollama';
 
 export interface Model {
   id: string;
@@ -36,6 +36,16 @@ export interface ModelCapabilities {
   supportedImageTypes?: string[];
   supportedFileTypes?: string[];
   supportedAudioTypes?: string[];
+  // Enhanced characteristics for auto-selection
+  intelligence?: number;        // 0-100 reasoning capability
+  speed?: number;              // 0-100 response speed  
+  codingExcellence?: number;   // 0-100 coding ability
+  analysisDepth?: number;      // 0-100 analytical skills
+  creativeWriting?: number;    // 0-100 creative capability
+  technicalPrecision?: number; // 0-100 technical accuracy
+  costPerToken?: number;       // Cost per 1K tokens in USD
+  averageResponseTime?: number; // Average response time in ms
+  successRate?: number;        // 0-100% success rate
 }
 
 export interface ModelConfiguration {
@@ -75,7 +85,17 @@ export const CLAUDE_MODELS: Model[] = [
       webBrowsing: false,
       maxOutputTokens: 8192,
       supportedImageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown']
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      // Auto-selection adaptive characteristics
+      intelligence: 95,          // Highest intelligence (varies by task)
+      speed: 85,                // Good speed (varies by model selected)
+      codingExcellence: 95,     // Excellent coding (uses best available)
+      analysisDepth: 95,        // Deep analysis capability
+      creativeWriting: 90,      // High creativity
+      technicalPrecision: 95,   // Highest precision
+      costPerToken: 0.015,      // Variable cost (depends on selection)
+      averageResponseTime: 1500, // Adaptive response time
+      successRate: 99.5         // Highest success rate through optimization
     },
     defaultConfig: {
       temperature: 0.7,
@@ -100,7 +120,17 @@ export const CLAUDE_MODELS: Model[] = [
       webBrowsing: true,
       maxOutputTokens: 8192,
       supportedImageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown']
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      // Supreme supervisor characteristics
+      intelligence: 100,         // Highest intelligence - supreme supervisor
+      speed: 80,                // Balanced speed for deep thinking
+      codingExcellence: 100,    // Best coding performance
+      analysisDepth: 100,       // Deepest analysis capability
+      creativeWriting: 95,      // Excellent creativity
+      technicalPrecision: 100,  // Perfect technical precision
+      costPerToken: 0.075,      // Premium pricing for premium intelligence
+      averageResponseTime: 2500, // Takes time for deep thinking
+      successRate: 99.9         // Highest success rate
     },
     defaultConfig: {
       temperature: 0.7,
@@ -517,8 +547,205 @@ export const GEMINI_MODELS: Model[] = [
   }
 ];
 
+// Ollama models - local models with dynamic detection
+export const OLLAMA_MODELS: Model[] = [
+  {
+    id: 'llama3.3:latest',
+    name: 'Llama 3.3 (Latest)',
+    provider: 'ollama',
+    description: 'Latest Llama 3.3 model - excellent for coding and reasoning',
+    contextWindow: 131072, // 128K context
+    supportsVision: false,
+    capabilities: {
+      streaming: true,
+      functionCalling: false,
+      systemInstructions: true,
+      multimodal: false,
+      codeExecution: false,
+      webBrowsing: false,
+      maxOutputTokens: 4096,
+      supportedImageTypes: [],
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      // Local model characteristics
+      intelligence: 85,          // High intelligence for local model
+      speed: 95,                // Very fast local processing
+      codingExcellence: 90,     // Excellent coding capabilities
+      analysisDepth: 80,        // Good analysis
+      creativeWriting: 85,      // Good creativity
+      technicalPrecision: 85,   // Good precision
+      costPerToken: 0,          // Free local processing
+      averageResponseTime: 800, // Fast local response
+      successRate: 95           // High local success rate
+    },
+    defaultConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096
+    }
+  },
+  {
+    id: 'llama3.2:latest',
+    name: 'Llama 3.2 (Latest)',
+    provider: 'ollama',
+    description: 'Fast and efficient Llama 3.2 model',
+    contextWindow: 131072,
+    supportsVision: false,
+    capabilities: {
+      streaming: true,
+      functionCalling: false,
+      systemInstructions: true,
+      multimodal: false,
+      codeExecution: false,
+      webBrowsing: false,
+      maxOutputTokens: 4096,
+      supportedImageTypes: [],
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      intelligence: 80,
+      speed: 98,
+      codingExcellence: 85,
+      analysisDepth: 75,
+      creativeWriting: 80,
+      technicalPrecision: 80,
+      costPerToken: 0,
+      averageResponseTime: 600,
+      successRate: 93
+    },
+    defaultConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096
+    }
+  },
+  {
+    id: 'codellama:latest',
+    name: 'Code Llama (Latest)',
+    provider: 'ollama',
+    description: 'Specialized coding model based on Llama',
+    contextWindow: 16384,
+    supportsVision: false,
+    capabilities: {
+      streaming: true,
+      functionCalling: false,
+      systemInstructions: true,
+      multimodal: false,
+      codeExecution: false,
+      webBrowsing: false,
+      maxOutputTokens: 4096,
+      supportedImageTypes: [],
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      intelligence: 75,
+      speed: 95,
+      codingExcellence: 95,    // Specialized for coding
+      analysisDepth: 70,
+      creativeWriting: 60,
+      technicalPrecision: 90,  // High technical precision
+      costPerToken: 0,
+      averageResponseTime: 700,
+      successRate: 90
+    },
+    defaultConfig: {
+      temperature: 0.1, // Lower temperature for coding
+      maxOutputTokens: 4096
+    }
+  },
+  {
+    id: 'qwen2.5:latest',
+    name: 'Qwen 2.5 (Latest)',
+    provider: 'ollama',
+    description: 'Advanced Chinese-English bilingual model',
+    contextWindow: 32768,
+    supportsVision: false,
+    capabilities: {
+      streaming: true,
+      functionCalling: false,
+      systemInstructions: true,
+      multimodal: false,
+      codeExecution: false,
+      webBrowsing: false,
+      maxOutputTokens: 4096,
+      supportedImageTypes: [],
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      intelligence: 82,
+      speed: 90,
+      codingExcellence: 85,
+      analysisDepth: 85,
+      creativeWriting: 90,     // Excellent for creative writing
+      technicalPrecision: 80,
+      costPerToken: 0,
+      averageResponseTime: 900,
+      successRate: 92
+    },
+    defaultConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096
+    }
+  },
+  {
+    id: 'mistral:latest',
+    name: 'Mistral (Latest)',
+    provider: 'ollama',
+    description: 'Fast and efficient European model',
+    contextWindow: 32768,
+    supportsVision: false,
+    capabilities: {
+      streaming: true,
+      functionCalling: false,
+      systemInstructions: true,
+      multimodal: false,
+      codeExecution: false,
+      webBrowsing: false,
+      maxOutputTokens: 4096,
+      supportedImageTypes: [],
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      intelligence: 78,
+      speed: 92,
+      codingExcellence: 80,
+      analysisDepth: 80,
+      creativeWriting: 85,
+      technicalPrecision: 85,
+      costPerToken: 0,
+      averageResponseTime: 750,
+      successRate: 91
+    },
+    defaultConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096
+    }
+  },
+  {
+    id: 'phi3:latest',
+    name: 'Phi-3 (Latest)',
+    provider: 'ollama',
+    description: 'Microsoft compact high-performance model',
+    contextWindow: 131072,
+    supportsVision: false,
+    capabilities: {
+      streaming: true,
+      functionCalling: false,
+      systemInstructions: true,
+      multimodal: false,
+      codeExecution: false,
+      webBrowsing: false,
+      maxOutputTokens: 4096,
+      supportedImageTypes: [],
+      supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
+      intelligence: 83,
+      speed: 96,
+      codingExcellence: 88,
+      analysisDepth: 82,
+      creativeWriting: 78,
+      technicalPrecision: 88,
+      costPerToken: 0,
+      averageResponseTime: 650,
+      successRate: 94
+    },
+    defaultConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096
+    }
+  }
+];
+
 // All available models
-export const ALL_MODELS: Model[] = [...CLAUDE_MODELS, ...GEMINI_MODELS];
+export const ALL_MODELS: Model[] = [...CLAUDE_MODELS, ...GEMINI_MODELS, ...OLLAMA_MODELS];
 
 // Helper functions
 export function getModelById(id: string): Model | undefined {
@@ -537,6 +764,11 @@ export function isGeminiModel(modelId: string): boolean {
 export function isClaudeModel(modelId: string): boolean {
   const model = getModelById(modelId);
   return model?.provider === 'claude';
+}
+
+export function isOllamaModel(modelId: string): boolean {
+  const model = getModelById(modelId);
+  return model?.provider === 'ollama';
 }
 
 // For backward compatibility with existing code
