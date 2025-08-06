@@ -1,0 +1,48 @@
+# <emoji> <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+
+# Emoji Guide:
+# 🔧 backend    - Backend/Rust changes
+# 🎨 frontend   - Frontend/UI changes
+# 🧩 components - Component changes
+# 📚 docs       - Documentation
+# ⚙️  config     - Configuration
+# 🧪 test       - Testing
+# 📊 monitoring - Monitoring/observability
+# 🤖 gemini     - Gemini integration
+# 🔄 misc       - Miscellaneous
+
+# Type Guide:
+# feat     - New feature
+# fix      - Bug fix
+# docs     - Documentation only
+# style    - Code style (formatting, semicolons etc)
+# refactor - Code change that neither fixes a bug nor adds a feature
+# perf     - Performance improvement
+# test     - Adding missing tests
+# build    - Changes to build system or dependencies
+# ci       - CI/CD changes
+# chore    - Other changes that don't modify src or test files
+# revert   - Reverts a previous commit
+
+# Scope Examples:
+# backend, frontend, components, docs, config, api, ui, auth, db
+
+# Subject:
+# - Use imperative mood ("add" not "added")
+# - Don't capitalize first letter
+# - No period at the end
+# - Max 50 characters
+
+# Body:
+# - Use to explain what and why, not how
+# - Wrap at 72 characters
+# - Can use multiple paragraphs
+
+# Footer:
+# - Reference issues: "Fixes #123"
+# - Breaking changes: Start with "BREAKING CHANGE:"
+# - Co-authors: "Co-authored-by: Name <email>"

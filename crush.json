@@ -1,0 +1,31 @@
+{
+  "providers": {
+    "gemini": {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "type": "openai",
+      "api_key": "${GEMINI_API_KEY}",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "enabled": true,
+      "models": [
+        {
+          "id": "gemini-2.0-flash-exp",
+          "name": "Gemini 2.0 Flash Experimental",
+          "max_tokens": 8192
+        }
+      ]
+    }
+  },
+  "models": {
+    "large": {
+      "provider": "gemini",
+      "model": "gemini-2.0-flash-exp",
+      "max_tokens": 8192
+    },
+    "small": {
+      "provider": "gemini",
+      "model": "gemini-2.0-flash-exp", 
+      "max_tokens": 4096
+    }
+  }
+}

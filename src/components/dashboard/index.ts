@@ -1,9 +1,15 @@
 export { default as DashboardMain } from './DashboardMain';
 export { HealthMetrics } from './HealthMetrics';
+export { EnhancedHealthMetrics } from './EnhancedHealthMetrics';
 export { default as CompletionStatus } from './CompletionStatus';
 export { default as FeatureIndependence } from './FeatureIndependence';
+export { default as FeatureStatusMatrix } from './FeatureStatusMatrix';
+export { default as FeatureStatusMatrixDemo } from './FeatureStatusMatrixDemo';
 export { default as AIAnalytics } from './AIAnalytics';
 export { default as RiskAssessment } from './RiskAssessment';
 export { default as DocumentationStatus } from './DocumentationStatus';
 export { default as WorkflowVisualization } from './WorkflowVisualization';
+export { default as WorkflowVisualizationDemo } from './WorkflowVisualizationDemo';
 export { default as ProjectGoals } from './ProjectGoals';
+export { default as DashboardComponentsDemo } from './DashboardComponentsDemo';
+export { generateMockRisks, generateMockDocumentation, getDashboardDemoData } from './DashboardDemoData';

@@ -11,8 +11,10 @@ import { performanceMonitor, measureAsync } from '@/lib/performance';
 
 // Import all dashboard components
 import { HealthMetrics } from './HealthMetrics';
+import { EnhancedHealthMetrics } from './EnhancedHealthMetrics';
 import CompletionStatus from './CompletionStatus';
 import FeatureIndependence from './FeatureIndependence';
+import FeatureStatusMatrix from './FeatureStatusMatrix';
 import AIAnalytics from './AIAnalytics';
 import RiskAssessment from './RiskAssessment';
 import DocumentationStatus from './DocumentationStatus';
@@ -253,7 +255,7 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <TabsList className="grid w-full grid-cols-5 mb-6">
+            <TabsList className="grid w-full grid-cols-6 mb-6">
               <TabsTrigger value="overview" className="relative">
                 Overview
                 {activeTab === 'overview' && (
@@ -267,6 +269,16 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
               <TabsTrigger value="features" className="relative">
                 Features
                 {activeTab === 'features' && (
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="matrix" className="relative">
+                Matrix
+                {activeTab === 'matrix' && (
                   <motion.div
                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
                     layoutId="activeTab"
@@ -334,16 +346,45 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
                   </motion.div>
                 </motion.div>
                 <motion.div variants={dashboardVariants.item}>
-                  <HealthMetrics metrics={data?.health_metrics || []} loading={loading} />
+                  <EnhancedHealthMetrics 
+                    projectId={projectId} 
+                    projectPath={projectPath} 
+                    loading={loading}
+                    onRefresh={handleRefresh}
+                  />
                 </motion.div>
                 <motion.div variants={dashboardVariants.item}>
-                  <RiskAssessment risks={data?.risk_items || []} loading={loading} />
+                  <RiskAssessment 
+                    risks={data?.risk_items || []} 
+                    loading={loading}
+                    compact={true}
+                    onRefresh={handleRefresh}
+                    realTimeUpdates={true}
+                  />
                 </motion.div>
               </TabsContent>
 
               <TabsContent value="features" className="space-y-4">
                 <motion.div variants={dashboardVariants.item}>
                   <FeatureIndependence features={data?.feature_status || []} loading={loading} />
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="matrix" className="space-y-4">
+                <motion.div variants={dashboardVariants.item}>
+                  <FeatureStatusMatrix 
+                    features={data?.feature_status || []} 
+                    loading={loading}
+                    onFeatureClick={(feature) => {
+                      console.log('Feature clicked:', feature);
+                      // Handle feature click - could open a detail modal or navigate
+                    }}
+                    onFeatureUpdate={(feature) => {
+                      console.log('Feature update requested:', feature);
+                      // Handle feature update - could trigger a refresh or update state
+                      handleRefresh();
+                    }}
+                  />
                 </motion.div>
               </TabsContent>
 
@@ -355,21 +396,29 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
                   animate="show"
                 >
                   <motion.div variants={dashboardVariants.item}>
-                    <HealthMetrics 
-                      metrics={data?.health_metrics || []} 
-                      loading={loading} 
+                    <EnhancedHealthMetrics 
+                      projectId={projectId} 
+                      projectPath={projectPath} 
+                      loading={loading}
+                      onRefresh={handleRefresh}
                     />
                   </motion.div>
                   <motion.div variants={dashboardVariants.item}>
                     <DocumentationStatus 
                       docs={data?.documentation_status || []} 
-                      loading={loading} 
+                      loading={loading}
+                      compact={false}
+                      onRefresh={handleRefresh}
+                      showFilters={true}
                     />
                   </motion.div>
                   <motion.div variants={dashboardVariants.item}>
                     <RiskAssessment 
                       risks={data?.risk_items || []} 
-                      loading={loading} 
+                      loading={loading}
+                      compact={false}
+                      onRefresh={handleRefresh}
+                      realTimeUpdates={true}
                     />
                   </motion.div>
                 </motion.div>

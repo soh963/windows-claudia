@@ -10,7 +10,9 @@ import {
   Square,
   Brain,
   Paperclip,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Star,
+  Settings2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,16 +22,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { FilePicker } from "./FilePicker";
 import { SlashCommandPicker } from "./SlashCommandPicker";
 import { ImagePreview } from "./ImagePreview";
-import { type FileEntry, type SlashCommand } from "@/lib/api";
+import { type FileEntry, type SlashCommand, api } from "@/lib/api";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isBase64DataUrl } from "@/lib/imageUtils";
 import { validatePromptLength, checkProblematicContent, escapeForCommandLine } from "@/lib/promptValidation";
+import { ALL_MODELS, getModelById, isGeminiModel } from "@/lib/models";
+import { GeminiApiKeyModal } from "./GeminiApiKeyModal";
+import { ModelSelector } from "./ModelSelector";
 
 interface FloatingPromptInputProps {
   /**
    * Callback when prompt is sent
    */
-  onSend: (prompt: string, model: "sonnet" | "opus") => void;
+  onSend: (prompt: string, model: string) => void;
   /**
    * Whether the input is loading
    */
@@ -41,7 +46,7 @@ interface FloatingPromptInputProps {
   /**
    * Default model to select
    */
-  defaultModel?: "sonnet" | "opus";
+  defaultModel?: string;
   /**
    * Project path for file picker
    */
@@ -133,27 +138,16 @@ const ThinkingModeIndicator: React.FC<{ level: number }> = ({ level }) => {
   );
 };
 
-type Model = {
-  id: "sonnet" | "opus";
-  name: string;
-  description: string;
-  icon: React.ReactNode;
+// Model icons mapping
+const MODEL_ICONS: Record<string, React.ReactNode> = {
+  'auto': <Settings2 className="h-4 w-4" />,
+  'sonnet': <Zap className="h-4 w-4" />,
+  'opus': <Sparkles className="h-4 w-4" />,
+  'gemini-2.0-flash-exp': <Star className="h-4 w-4" />,
+  'gemini-exp-1206': <Brain className="h-4 w-4" />,
+  'gemini-1.5-pro-002': <Sparkles className="h-4 w-4" />,
+  'gemini-1.5-flash-002': <Zap className="h-4 w-4" />
 };
-
-const MODELS: Model[] = [
-  {
-    id: "sonnet",
-    name: "Claude 4 Sonnet",
-    description: "Faster, efficient for most tasks",
-    icon: <Zap className="h-4 w-4" />
-  },
-  {
-    id: "opus",
-    name: "Claude 4 Opus",
-    description: "More capable, better for complex tasks",
-    icon: <Sparkles className="h-4 w-4" />
-  }
-];
 
 /**
  * FloatingPromptInput component - Fixed position prompt input with model picker
@@ -179,7 +173,9 @@ const FloatingPromptInputInner = (
   ref: React.Ref<FloatingPromptInputRef>,
 ) => {
   const [prompt, setPrompt] = useState("");
-  const [selectedModel, setSelectedModel] = useState<"sonnet" | "opus">(defaultModel);
+  const [selectedModel, setSelectedModel] = useState<string>(defaultModel || "sonnet");
+  const [showGeminiApiKeyModal, setShowGeminiApiKeyModal] = useState(false);
+  const [pendingGeminiModel, setPendingGeminiModel] = useState<string | null>(null);
   const [selectedThinkingMode, setSelectedThinkingMode] = useState<ThinkingMode>("auto");
   const [isExpanded, setIsExpanded] = useState(false);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -451,7 +447,30 @@ const FloatingPromptInputInner = (
         finalPrompt = `${finalPrompt}.\n\n${thinkingMode.phrase}.`;
       }
       
-      onSend(finalPrompt, selectedModel);
+      // Handle auto model selection
+      let actualModel = selectedModel;
+      if (selectedModel === 'auto') {
+        try {
+          const recommendation = await api.getAutoModelRecommendation(finalPrompt);
+          actualModel = recommendation.recommended_model;
+          
+          // Add selection reasoning to the prompt as a comment
+          const reasoningComment = `\n\n<!-- Auto Model Selection: ${recommendation.recommended_model} (${(recommendation.confidence * 100).toFixed(0)}% confidence) - ${recommendation.reasoning} -->`;
+          finalPrompt = finalPrompt + reasoningComment;
+          
+          console.log('Auto model selection:', {
+            recommended: recommendation.recommended_model,
+            confidence: recommendation.confidence,
+            reasoning: recommendation.reasoning,
+            alternatives: recommendation.alternative_models
+          });
+        } catch (error) {
+          console.error('Auto model selection failed, falling back to sonnet:', error);
+          actualModel = 'sonnet'; // Fallback to default
+        }
+      }
+      
+      onSend(finalPrompt, actualModel);
       setPrompt("");
       setAttachedFiles([]);
       setEmbeddedImages([]);
@@ -793,7 +812,7 @@ const FloatingPromptInputInner = (
     }
   };
 
-  const selectedModelData = MODELS.find(m => m.id === selectedModel) || MODELS[0];
+  const selectedModelData = getModelById(selectedModel) || ALL_MODELS[0];
 
   return (
     <>
@@ -859,7 +878,7 @@ const FloatingPromptInputInner = (
                       onClick={() => setModelPickerOpen(!modelPickerOpen)}
                       className="gap-2"
                     >
-                      {selectedModelData.icon}
+                      {MODEL_ICONS[selectedModel] || <Sparkles className="h-4 w-4" />}
                       {selectedModelData.name}
                     </Button>
                   </div>
@@ -1039,50 +1058,17 @@ const FloatingPromptInputInner = (
                 <Paperclip className="h-4 w-4" />
               </Button>
               
-              {/* Model Picker */}
-              <Popover
-                trigger={
-                  <Button
-                    variant="outline"
-                    size="default"
-                    disabled={disabled}
-                    className="gap-2 min-w-[180px] justify-start"
-                  >
-                    {selectedModelData.icon}
-                    <span className="flex-1 text-left">{selectedModelData.name}</span>
-                    <ChevronUp className="h-4 w-4 opacity-50" />
-                  </Button>
-                }
-                content={
-                  <div className="w-[300px] p-1">
-                    {MODELS.map((model) => (
-                      <button
-                        key={model.id}
-                        onClick={() => {
-                          setSelectedModel(model.id);
-                          setModelPickerOpen(false);
-                        }}
-                        className={cn(
-                          "w-full flex items-start gap-3 p-3 rounded-md transition-colors text-left",
-                          "hover:bg-accent",
-                          selectedModel === model.id && "bg-accent"
-                        )}
-                      >
-                        <div className="mt-0.5">{model.icon}</div>
-                        <div className="flex-1 space-y-1">
-                          <div className="font-medium text-sm">{model.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {model.description}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                }
-                open={modelPickerOpen}
-                onOpenChange={setModelPickerOpen}
-                align="start"
-                side="top"
+              {/* Model Picker - Using new ModelSelector */}
+              <ModelSelector
+                value={selectedModel}
+                onChange={(modelId) => {
+                  setSelectedModel(modelId);
+                }}
+                disabled={disabled}
+                compact={false}
+                onGeminiApiKeyNeeded={() => {
+                  setShowGeminiApiKeyModal(true);
+                }}
               />
 
               {/* Thinking Mode Picker */}
@@ -1223,6 +1209,22 @@ const FloatingPromptInputInner = (
           </div>
         </div>
       </div>
+      
+      {/* Gemini API Key Modal */}
+      <GeminiApiKeyModal
+        isOpen={showGeminiApiKeyModal}
+        onClose={() => {
+          setShowGeminiApiKeyModal(false);
+          setPendingGeminiModel(null);
+        }}
+        onSuccess={() => {
+          setShowGeminiApiKeyModal(false);
+          if (pendingGeminiModel) {
+            setSelectedModel(pendingGeminiModel);
+            setPendingGeminiModel(null);
+          }
+        }}
+      />
     </>
   );
 };

@@ -1,6 +1,16 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import { api } from '../lib/api';
 
+// Ensure React is properly loaded
+if (!React || typeof React !== 'object') {
+  throw new Error('React is not properly imported in ThemeContext');
+}
+
+// Ensure React hooks are available
+if (!useState || !useContext || !useCallback || !useEffect) {
+  throw new Error('React hooks are not available in ThemeContext');
+}
+
 export type ThemeMode = 'dark' | 'gray' | 'light' | 'custom';
 
 export interface CustomThemeColors {
@@ -58,12 +68,23 @@ const DEFAULT_CUSTOM_COLORS: CustomThemeColors = {
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setThemeState] = useState<ThemeMode>('dark');
-  const [customColors, setCustomColorsState] = useState<CustomThemeColors>(DEFAULT_CUSTOM_COLORS);
-  const [isLoading, setIsLoading] = useState(true);
+  // Extra defensive checks for React hooks availability
+  if (!React) {
+    console.error('ThemeProvider: React is null or undefined');
+    return <div data-error="react-null">{children}</div>;
+  }
+  
+  if (typeof React.useState !== 'function') {
+    console.error('ThemeProvider: React.useState is not available');
+    return <div data-error="react-hooks-unavailable">{children}</div>;
+  }
+
+  const [theme, setThemeState] = React.useState<ThemeMode>('dark');
+  const [customColors, setCustomColorsState] = React.useState<CustomThemeColors>(DEFAULT_CUSTOM_COLORS);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   // Load theme preference and custom colors from storage
-  useEffect(() => {
+  React.useEffect(() => {
     const loadTheme = async () => {
       try {
         // Load theme preference
@@ -72,23 +93,35 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (savedTheme) {
           const themeMode = savedTheme as ThemeMode;
           setThemeState(themeMode);
-          applyTheme(themeMode, customColors);
-        }
-
-        // Load custom colors
-        const savedColors = await api.getSetting(CUSTOM_COLORS_STORAGE_KEY);
-        
-        if (savedColors) {
-          try {
-            const colors = JSON.parse(savedColors) as CustomThemeColors;
-            setCustomColorsState(colors);
-            if (theme === 'custom') {
-              applyTheme('custom', colors);
+          
+          // Load custom colors first before applying theme
+          const savedColors = await api.getSetting(CUSTOM_COLORS_STORAGE_KEY);
+          let colors = customColors;
+          
+          if (savedColors) {
+            try {
+              colors = JSON.parse(savedColors) as CustomThemeColors;
+              setCustomColorsState(colors);
+            } catch (error) {
+              console.error('Failed to parse saved theme colors:', error);
+              // Use default colors if parsing fails
+              colors = DEFAULT_CUSTOM_COLORS;
             }
-          } catch (error) {
-            console.error('Failed to parse saved theme colors:', error);
-            // Use default colors if parsing fails
-            localStorage.removeItem('custom-theme-colors');
+          }
+          
+          // Apply theme with correct colors
+          applyTheme(themeMode, colors);
+        } else {
+          // Load custom colors even if no theme is saved
+          const savedColors = await api.getSetting(CUSTOM_COLORS_STORAGE_KEY);
+          
+          if (savedColors) {
+            try {
+              const colors = JSON.parse(savedColors) as CustomThemeColors;
+              setCustomColorsState(colors);
+            } catch (error) {
+              console.error('Failed to parse saved theme colors:', error);
+            }
           }
         }
       } catch (error) {
@@ -102,7 +135,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   // Apply theme to document
-  const applyTheme = useCallback((themeMode: ThemeMode, colors: CustomThemeColors) => {
+  const applyTheme = React.useCallback((themeMode: ThemeMode, colors: CustomThemeColors) => {
     const root = document.documentElement;
     
     // Remove all theme classes
@@ -126,7 +159,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const setTheme = useCallback(async (newTheme: ThemeMode) => {
+  const setTheme = React.useCallback(async (newTheme: ThemeMode) => {
     try {
       setIsLoading(true);
       
@@ -143,7 +176,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [customColors, applyTheme]);
 
-  const setCustomColors = useCallback(async (colors: Partial<CustomThemeColors>) => {
+  const setCustomColors = React.useCallback(async (colors: Partial<CustomThemeColors>) => {
     try {
       setIsLoading(true);
       
@@ -172,15 +205,39 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     isLoading,
   };
 
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  // Wrap with error boundary protection
+  try {
+    return (
+      <ThemeContext.Provider value={value}>
+        {children}
+      </ThemeContext.Provider>
+    );
+  } catch (error) {
+    console.error('Error in ThemeProvider render:', error);
+    // Return children without theme context if there's an error
+    return <div data-error="theme-provider-error">{children}</div>;
+  }
 };
 
 export const useThemeContext = () => {
-  const context = useContext(ThemeContext);
+  // Ensure React hooks are available
+  if (!React || typeof React.useContext !== 'function') {
+    console.error('useThemeContext: React.useContext is not available. React may not be properly initialized.');
+    // Return emergency fallback
+    return {
+      theme: 'dark' as ThemeMode,
+      customColors: DEFAULT_CUSTOM_COLORS,
+      setTheme: async (theme: ThemeMode) => {
+        console.warn(`[Theme Emergency Fallback] setTheme called with: ${theme}`);
+      },
+      setCustomColors: async (_colors: Partial<CustomThemeColors>) => {
+        console.warn('[Theme Emergency Fallback] setCustomColors called');
+      },
+      isLoading: false,
+    } as ThemeContextType;
+  }
+
+  const context = React.useContext(ThemeContext);
   if (!context) {
     // Provide fallback to prevent React Error #130 in production
     console.warn('useThemeContext called outside ThemeProvider, providing fallback');

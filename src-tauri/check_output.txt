@@ -1,0 +1,825 @@
+warning: unused manifest key: target.cfg(target_os = "windows").bin
+    Checking claudia v0.2.2 (D:\claudia\src-tauri)
+warning: field `batch_timeout` is never read
+   --> src\commands\gemini_performance.rs:268:5
+    |
+265 | pub struct BatchAggregator {
+    |            --------------- field in this struct
+...
+268 |     batch_timeout: Duration,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: field `check_interval` is never read
+   --> src\commands\gemini_resilience.rs:445:5
+    |
+443 | pub struct HealthCheckManager {
+    |            ------------------ field in this struct
+444 |     checks: Arc<RwLock<HashMap<String, HealthStatus>>>,
+445 |     check_interval: Duration,
+    |     ^^^^^^^^^^^^^^
+
+warning: fields `connection_pool` and `batch_aggregator` are never read
+  --> src\commands\gemini_backend.rs:39:5
+   |
+33 | pub struct GeminiBackendService {
+   |            -------------------- fields in this struct
+...
+39 |     connection_pool: Arc<ConnectionPool>,
+   |     ^^^^^^^^^^^^^^^
+...
+42 |     batch_aggregator: Arc<BatchAggregator>,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: field `capability_validators` is never read
+  --> src\commands\gemini_model_manager.rs:41:5
+   |
+39 | pub struct CapabilityDetector {
+   |            ------------------ field in this struct
+40 |     test_prompts: HashMap<String, String>,
+41 |     capability_validators: HashMap<String, Box<dyn Fn(&str) -> bool + Send + Sync>>,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `update_interval` is never read
+   --> src\commands\gemini_model_manager.rs:193:5
+    |
+191 | pub struct DynamicModelLoader {
+    |            ------------------ field in this struct
+192 |     model_sources: Vec<Box<dyn ModelSource + Send + Sync>>,
+193 |     update_interval: std::time::Duration,
+    |     ^^^^^^^^^^^^^^^
+
+warning: variants `Flag` and `Transform` are never constructed
+  --> src\commands\gemini_request_validator.rs:58:5
+   |
+55 | enum FilterAction {
+   |      ------------ variants in this enum
+...
+58 |     Flag,
+   |     ^^^^
+59 |     Transform(String),
+   |     ^^^^^^^^^
+   |
+   = note: `FilterAction` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `name` is never read
+   --> src\commands\gemini_config_manager.rs:136:5
+    |
+135 | struct ConfigWatcher {
+    |        ------------- field in this struct
+136 |     name: String,
+    |     ^^^^
+    |
+    = note: `ConfigWatcher` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: constant `CREATE_NO_WINDOW` is never used
+ --> src\windows_command.rs:8:7
+  |
+8 | const CREATE_NO_WINDOW: u32 = 0x08000000;
+  |       ^^^^^^^^^^^^^^^^
+
+warning: constant `CREATE_NEW_PROCESS_GROUP` is never used
+  --> src\windows_command.rs:10:7
+   |
+10 | const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DETACHED_PROCESS` is never used
+  --> src\windows_command.rs:12:7
+   |
+12 | const DETACHED_PROCESS: u32 = 0x00000008;
+   |       ^^^^^^^^^^^^^^^^
+
+warning: `claudia` (lib) generated 10 warnings
+warning: struct `ClaudeIntegration` is never constructed
+   --> src\commands\ai_session_integrator.rs:315:12
+    |
+315 | pub struct ClaudeIntegration;
+    |            ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: associated functions `track_claude_execution` and `track_mcp_usage` are never used
+   --> src\commands\ai_session_integrator.rs:319:18
+    |
+317 | impl ClaudeIntegration {
+    | ---------------------- associated functions in this implementation
+318 |     /// Track Claude Code execution with AI usage
+319 |     pub async fn track_claude_execution(
+    |                  ^^^^^^^^^^^^^^^^^^^^^^
+...
+351 |     pub async fn track_mcp_usage(
+    |                  ^^^^^^^^^^^^^^^
+
+warning: function `infer_agent_type_from_command` is never used
+   --> src\commands\ai_session_integrator.rs:386:4
+    |
+386 | fn infer_agent_type_from_command(command: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `infer_mcp_server_from_command` is never used
+   --> src\commands\ai_session_integrator.rs:415:4
+    |
+415 | fn infer_mcp_server_from_command(command: &str) -> Option<String> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `load_stored_commands` is never used
+   --> src\commands\claude_sync.rs:625:14
+    |
+625 | pub async fn load_stored_commands(app: &AppHandle) -> Result<Vec<SlashCommand>> {
+    |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `paths_equal` is never used
+  --> src\commands\dashboard_utils.rs:57:8
+   |
+57 | pub fn paths_equal(path1: &str, path2: &str) -> bool {
+   |        ^^^^^^^^^^^
+
+warning: field `request_queue` is never read
+  --> src\commands\gemini_processor.rs:94:5
+   |
+89 | pub struct GeminiRequestProcessor {
+   |            ---------------------- field in this struct
+...
+94 |     request_queue: Arc<Mutex<Vec<QueuedRequest>>>,
+   |     ^^^^^^^^^^^^^
+
+warning: fields `id`, `request`, `priority`, and `created_at` are never read
+   --> src\commands\gemini_processor.rs:99:5
+    |
+98  | struct QueuedRequest {
+    |        ------------- fields in this struct
+99  |     id: String,
+    |     ^^
+100 |     request: ProcessRequest,
+    |     ^^^^^^^
+101 |     priority: RequestPriority,
+    |     ^^^^^^^^
+102 |     created_at: chrono::DateTime<chrono::Utc>,
+    |     ^^^^^^^^^^
+    |
+    = note: `QueuedRequest` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: field `priority` is never read
+   --> src\commands\gemini_processor.rs:121:9
+    |
+114 | pub struct ProcessRequest {
+    |            -------------- field in this struct
+...
+121 |     pub priority: RequestPriority,
+    |         ^^^^^^^^
+    |
+    = note: `ProcessRequest` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: methods `queue_request` and `process_batch` are never used
+   --> src\commands\gemini_processor.rs:555:18
+    |
+137 | impl GeminiRequestProcessor {
+    | --------------------------- methods in this implementation
+...
+555 |     pub async fn queue_request(&self, request: ProcessRequest) -> Result<String> {
+    |                  ^^^^^^^^^^^^^
+...
+577 |     pub async fn process_batch(&self, api_key: String, app_handle: AppHandle) -> Result<Vec<String>> {
+    |                  ^^^^^^^^^^^^^
+
+warning: fields `clients`, `max_size`, and `idle_timeout` are never read
+  --> src\commands\gemini_performance.rs:29:5
+   |
+28 | pub struct ConnectionPool {
+   |            -------------- fields in this struct
+29 |     clients: Arc<RwLock<Vec<(reqwest::Client, Instant)>>>,
+   |     ^^^^^^^
+30 |     max_size: usize,
+   |     ^^^^^^^^
+31 |     idle_timeout: Duration,
+   |     ^^^^^^^^^^^^
+
+warning: methods `get_client` and `return_client` are never used
+  --> src\commands\gemini_performance.rs:44:12
+   |
+34 | impl ConnectionPool {
+   | ------------------- methods in this implementation
+...
+44 |     pub fn get_client(&self) -> reqwest::Client {
+   |            ^^^^^^^^^^
+...
+69 |     pub fn return_client(&self, client: reqwest::Client) {
+   |            ^^^^^^^^^^^^^
+
+warning: method `put` is never used
+   --> src\commands\gemini_performance.rs:135:12
+    |
+86  | impl ResponseCache {
+    | ------------------ method in this implementation
+...
+135 |     pub fn put(&self, key: String, response: serde_json::Value, ttl_seconds: u64) {
+    |            ^^^
+
+warning: fields `requests_per_minute` and `tokens_per_day` are never read
+   --> src\commands\gemini_performance.rs:212:9
+    |
+211 | pub struct RateLimit {
+    |            --------- fields in this struct
+212 |     pub requests_per_minute: u32,
+    |         ^^^^^^^^^^^^^^^^^^^
+213 |     pub tokens_per_day: u32,
+    |         ^^^^^^^^^^^^^^
+    |
+    = note: `RateLimit` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `model` is never read
+   --> src\commands\gemini_performance.rs:261:9
+    |
+259 | pub struct RateLimitPermit {
+    |            --------------- field in this struct
+260 |     _permit: Option<tokio::sync::OwnedSemaphorePermit>,
+261 |     pub model: String,
+    |         ^^^^^
+
+warning: fields `batches`, `batch_size`, and `batch_timeout` are never read
+   --> src\commands\gemini_performance.rs:266:5
+    |
+265 | pub struct BatchAggregator {
+    |            --------------- fields in this struct
+266 |     batches: Arc<RwLock<HashMap<String, Vec<BatchRequest>>>>,
+    |     ^^^^^^^
+267 |     batch_size: usize,
+    |     ^^^^^^^^^^
+268 |     batch_timeout: Duration,
+    |     ^^^^^^^^^^^^^
+
+warning: field `callback` is never read
+   --> src\commands\gemini_performance.rs:275:9
+    |
+272 | pub struct BatchRequest {
+    |            ------------ field in this struct
+...
+275 |     pub callback: Arc<dyn Fn(Result<serde_json::Value>) + Send + Sync>,
+    |         ^^^^^^^^
+    |
+    = note: `BatchRequest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `add_request` is never used
+   --> src\commands\gemini_performance.rs:298:18
+    |
+288 | impl BatchAggregator {
+    | -------------------- method in this implementation
+...
+298 |     pub async fn add_request(
+    |                  ^^^^^^^^^^^
+
+warning: methods `avg_latency_ms`, `success_rate`, and `cache_hit_rate` are never used
+   --> src\commands\gemini_performance.rs:344:12
+    |
+343 | impl ModelMetrics {
+    | ----------------- methods in this implementation
+344 |     pub fn avg_latency_ms(&self) -> f64 {
+    |            ^^^^^^^^^^^^^^
+...
+352 |     pub fn success_rate(&self) -> f64 {
+    |            ^^^^^^^^^^^^
+...
+360 |     pub fn cache_hit_rate(&self) -> f64 {
+    |            ^^^^^^^^^^^^^^
+
+warning: method `get_metrics` is never used
+   --> src\commands\gemini_performance.rs:418:12
+    |
+370 | impl PerformanceMonitor {
+    | ----------------------- method in this implementation
+...
+418 |     pub fn get_metrics(&self, model: &str) -> Option<ModelMetrics> {
+    |            ^^^^^^^^^^^
+
+warning: fields `success_threshold` and `half_open_max_calls` are never read
+   --> src\commands\gemini_resilience.rs:236:9
+    |
+234 | pub struct CircuitBreakerConfig {
+    |            -------------------- fields in this struct
+235 |     pub failure_threshold: u32,
+236 |     pub success_threshold: u32,
+    |         ^^^^^^^^^^^^^^^^^
+237 |     pub timeout: Duration,
+238 |     pub half_open_max_calls: u32,
+    |         ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `CircuitBreakerConfig` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `get_state` is never used
+   --> src\commands\gemini_resilience.rs:327:12
+    |
+252 | impl CircuitBreaker {
+    | ------------------- method in this implementation
+...
+327 |     pub fn get_state(&self) -> CircuitState {
+    |            ^^^^^^^^^
+
+warning: method `set_fallback` is never used
+   --> src\commands\gemini_resilience.rs:368:12
+    |
+358 | impl ResilienceManager {
+    | ---------------------- method in this implementation
+...
+368 |     pub fn set_fallback(&self, model: String, strategy: FallbackStrategy) {
+    |            ^^^^^^^^^^^^
+
+warning: method `log_response` is never used
+   --> src\commands\gemini_monitoring.rs:451:12
+    |
+419 | impl GeminiLogger {
+    | ----------------- method in this implementation
+...
+451 |     pub fn log_response(
+    |            ^^^^^^^^^^^^
+
+warning: methods `detect_capabilities`, `test_capability`, `detect_token_limits`, `validate_function_call`, `validate_json_response`, and `validate_code_generation` are never used
+   --> src\commands\gemini_model_manager.rs:78:18
+    |
+61  | impl CapabilityDetector {
+    | ----------------------- methods in this implementation
+...
+78  |     pub async fn detect_capabilities(
+    |                  ^^^^^^^^^^^^^^^^^^^
+...
+125 |     async fn test_capability(&self, model_id: &str, api_key: &str, prompt: &str) -> Result<String> {
+    |              ^^^^^^^^^^^^^^^
+...
+158 |     async fn detect_token_limits(&self, model_id: &str, api_key: &str) -> Result<(u32, u32)> {
+    |              ^^^^^^^^^^^^^^^^^^^
+...
+177 |     fn validate_function_call(&self, response: &str) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+181 |     fn validate_json_response(&self, response: &str) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+185 |     fn validate_code_generation(&self, response: &str) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `DynamicModelLoader` is never constructed
+   --> src\commands\gemini_model_manager.rs:191:12
+    |
+191 | pub struct DynamicModelLoader {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: trait `ModelSource` is never used
+   --> src\commands\gemini_model_manager.rs:198:7
+    |
+198 | trait ModelSource {
+    |       ^^^^^^^^^^^
+
+warning: struct `GoogleAIStudioSource` is never constructed
+   --> src\commands\gemini_model_manager.rs:204:8
+    |
+204 | struct GoogleAIStudioSource {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `parse_model_metadata`, `estimate_pricing`, `determine_use_cases`, and `determine_limitations` are never used
+   --> src\commands\gemini_model_manager.rs:244:8
+    |
+243 | impl GoogleAIStudioSource {
+    | ------------------------- methods in this implementation
+244 |     fn parse_model_metadata(&self, json: &serde_json::Value) -> Result<ModelMetadata> {
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+308 |     fn estimate_pricing(&self, model_id: &str) -> ModelPricing {
+    |        ^^^^^^^^^^^^^^^^
+...
+333 |     fn determine_use_cases(&self, model_id: &str) -> Vec<String> {
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+359 |     fn determine_limitations(&self, model_id: &str) -> Vec<String> {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `EnhancedModelManager` is never constructed
+   --> src\commands\gemini_model_manager.rs:375:12
+    |
+375 | pub struct EnhancedModelManager {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `load_models`, `validate_model_config`, `get_model_config`, `update_model_config`, and `track_version_change` are never used
+   --> src\commands\gemini_model_manager.rs:383:12
+    |
+382 | impl EnhancedModelManager {
+    | ------------------------- associated items in this implementation
+383 |     pub fn new(api_key: String) -> Self {
+    |            ^^^
+...
+401 |     pub async fn load_models(&self) -> Result<Vec<ModelMetadata>> {
+    |                  ^^^^^^^^^^^
+...
+423 |     pub async fn validate_model_config(
+    |                  ^^^^^^^^^^^^^^^^^^^^^
+...
+463 |     pub async fn get_model_config(&self, model_id: &str) -> Option<ModelConfiguration> {
+    |                  ^^^^^^^^^^^^^^^^
+...
+468 |     pub async fn update_model_config(
+    |                  ^^^^^^^^^^^^^^^^^^^
+...
+484 |     pub async fn track_version_change(
+    |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `load_gemini_models_dynamic` is never used
+   --> src\commands\gemini_model_manager.rs:498:14
+    |
+498 | pub async fn load_gemini_models_dynamic(api_key: String) -> Result<Vec<ModelMetadata>, String> {
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_model_capabilities` is never used
+   --> src\commands\gemini_model_manager.rs:504:14
+    |
+504 | pub async fn validate_model_capabilities(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `update_model_configuration` is never used
+   --> src\commands\gemini_model_manager.rs:515:14
+    |
+515 | pub async fn update_model_configuration(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ContentFilter` is never constructed
+  --> src\commands\gemini_request_validator.rs:34:12
+   |
+34 | pub struct ContentFilter {
+   |            ^^^^^^^^^^^^^
+   |
+   = note: `ContentFilter` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `ContentFilterRule` is never constructed
+  --> src\commands\gemini_request_validator.rs:40:8
+   |
+40 | struct ContentFilterRule {
+   |        ^^^^^^^^^^^^^^^^^
+
+warning: struct `SensitivePattern` is never constructed
+  --> src\commands\gemini_request_validator.rs:48:8
+   |
+48 | struct SensitivePattern {
+   |        ^^^^^^^^^^^^^^^^
+
+warning: enum `FilterAction` is never used
+  --> src\commands\gemini_request_validator.rs:55:6
+   |
+55 | enum FilterAction {
+   |      ^^^^^^^^^^^^
+
+warning: associated items `new`, `filter_content`, and `apply_transform` are never used
+   --> src\commands\gemini_request_validator.rs:63:12
+    |
+62  | impl ContentFilter {
+    | ------------------ associated items in this implementation
+63  |     pub fn new() -> Self {
+    |            ^^^
+...
+111 |     pub fn filter_content(&self, content: &str) -> Result<FilterResult> {
+    |            ^^^^^^^^^^^^^^
+...
+174 |     fn apply_transform(&self, content: &str, transform: &str) -> String {
+    |        ^^^^^^^^^^^^^^^
+
+warning: struct `RequestSanitizer` is never constructed
+   --> src\commands\gemini_request_validator.rs:201:12
+    |
+201 | pub struct RequestSanitizer {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `sanitize_prompt`, `validate_files`, and `validate_file_content` are never used
+   --> src\commands\gemini_request_validator.rs:208:12
+    |
+207 | impl RequestSanitizer {
+    | --------------------- associated items in this implementation
+208 |     pub fn new() -> Self {
+    |            ^^^
+...
+225 |     pub fn sanitize_prompt(&self, prompt: &str) -> Result<String> {
+    |            ^^^^^^^^^^^^^^^
+...
+255 |     pub fn validate_files(
+    |            ^^^^^^^^^^^^^^
+...
+302 |     fn validate_file_content(&self, mime_type: &str, data: &[u8]) -> Result<()> {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RequestValidator` is never constructed
+   --> src\commands\gemini_request_validator.rs:336:12
+    |
+336 | pub struct RequestValidator {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `validate_request`, and `add_rule` are never used
+   --> src\commands\gemini_request_validator.rs:343:12
+    |
+342 | impl RequestValidator {
+    | --------------------- associated items in this implementation
+343 |     pub fn new() -> Self {
+    |            ^^^
+...
+375 |     pub async fn validate_request(
+    |                  ^^^^^^^^^^^^^^^^
+...
+516 |     pub fn add_rule(&mut self, rule: ValidationRule) {
+    |            ^^^^^^^^
+
+warning: function `validate_gemini_request` is never used
+   --> src\commands\gemini_request_validator.rs:553:14
+    |
+553 | pub async fn validate_gemini_request(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ConfigurationManager` is never constructed
+   --> src\commands\gemini_config_manager.rs:127:12
+    |
+127 | pub struct ConfigurationManager {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `ConfigWatcher` is never constructed
+   --> src\commands\gemini_config_manager.rs:135:8
+    |
+135 | struct ConfigWatcher {
+    |        ^^^^^^^^^^^^^
+
+warning: multiple associated items are never used
+   --> src\commands\gemini_config_manager.rs:141:12
+    |
+140 | impl ConfigurationManager {
+    | ------------------------- associated items in this implementation
+141 |     pub fn new(config_path: PathBuf, environment: String) -> Result<Self> {
+    |            ^^^
+...
+153 |     fn load_config(path: &PathBuf) -> Result<GeminiConfiguration> {
+    |        ^^^^^^^^^^^
+...
+167 |     fn default_config() -> GeminiConfiguration {
+    |        ^^^^^^^^^^^^^^
+...
+243 |     pub async fn get_config(&self) -> GeminiConfiguration {
+    |                  ^^^^^^^^^^
+...
+248 |     pub async fn get_environment_config(&self) -> Result<EnvironmentConfig> {
+    |                  ^^^^^^^^^^^^^^^^^^^^^^
+...
+256 |     pub async fn get_model_config(&self, model_id: &str) -> Result<ModelConfig> {
+    |                  ^^^^^^^^^^^^^^^^
+...
+275 |     pub async fn update_config<F>(&self, updater: F) -> Result<()>
+    |                  ^^^^^^^^^^^^^
+...
+295 |     async fn save_config(&self, config: &GeminiConfiguration) -> Result<()> {
+    |              ^^^^^^^^^^^
+...
+302 |     pub async fn reload(&self) -> Result<()> {
+    |                  ^^^^^^
+...
+317 |     pub async fn watch<F>(&self, name: String, callback: F)
+    |                  ^^^^^
+...
+330 |     pub async fn set_runtime_override(&self, key: String, value: serde_json::Value) -> Result<()> {
+    |                  ^^^^^^^^^^^^^^^^^^^^
+...
+337 |     pub async fn get_value<T>(&self, path: &str) -> Result<T>
+    |                  ^^^^^^^^^
+...
+364 |     pub async fn validate(&self) -> Result<Vec<ConfigValidationIssue>> {
+    |                  ^^^^^^^^
+
+warning: function `get_gemini_configuration` is never used
+   --> src\commands\gemini_config_manager.rs:425:14
+    |
+425 | pub async fn get_gemini_configuration(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `update_gemini_configuration` is never used
+   --> src\commands\gemini_config_manager.rs:441:14
+    |
+441 | pub async fn update_gemini_configuration(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_gemini_configuration` is never used
+   --> src\commands\gemini_config_manager.rs:460:14
+    |
+460 | pub async fn validate_gemini_configuration(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `MetricsCollector` is never constructed
+  --> src\commands\gemini_observability.rs:11:12
+   |
+11 | pub struct MetricsCollector {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: struct `ModelMetrics` is never constructed
+  --> src\commands\gemini_observability.rs:35:12
+   |
+35 | pub struct ModelMetrics {
+   |            ^^^^^^^^^^^^
+   |
+   = note: `ModelMetrics` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `ErrorMetrics` is never constructed
+  --> src\commands\gemini_observability.rs:44:12
+   |
+44 | pub struct ErrorMetrics {
+   |            ^^^^^^^^^^^^
+   |
+   = note: `ErrorMetrics` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: multiple associated items are never used
+   --> src\commands\gemini_observability.rs:51:12
+    |
+50  | impl MetricsCollector {
+    | --------------------- associated items in this implementation
+51  |     pub fn new() -> Result<Self> {
+    |            ^^^
+...
+108 |     pub fn record_request_start(&self) {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+114 |     pub fn record_request_complete(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+135 |     pub fn record_cache_access(&self, hit: bool) {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+144 |     pub fn update_queue_depth(&self, depth: usize) {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+149 |     pub fn update_circuit_breaker(&self, open: bool) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+154 |     pub async fn record_model_metrics(
+    |                  ^^^^^^^^^^^^^^^^^^^^
+...
+184 |     pub async fn record_error(&self, model: &str, error_type: &str) {
+    |                  ^^^^^^^^^^^^
+...
+198 |     pub fn export_metrics(&self) -> Result<String> {
+    |            ^^^^^^^^^^^^^^
+...
+207 |     pub async fn get_model_metrics(&self) -> HashMap<String, ModelMetrics> {
+    |                  ^^^^^^^^^^^^^^^^^
+...
+212 |     pub async fn get_error_metrics(&self) -> HashMap<String, ErrorMetrics> {
+    |                  ^^^^^^^^^^^^^^^^^
+
+warning: struct `TracingManager` is never constructed
+   --> src\commands\gemini_observability.rs:218:12
+    |
+218 | pub struct TracingManager {
+    |            ^^^^^^^^^^^^^^
+
+warning: associated items `new`, `start_span`, `end_span`, `get_span`, `get_trace_spans`, and `export_spans` are never used
+   --> src\commands\gemini_observability.rs:244:12
+    |
+243 | impl TracingManager {
+    | ------------------- associated items in this implementation
+244 |     pub fn new(max_spans: usize) -> Self {
+    |            ^^^
+...
+252 |     pub async fn start_span(
+    |                  ^^^^^^^^^^
+...
+303 |     pub async fn end_span(&self, span_id: &str, status: SpanStatus) {
+    |                  ^^^^^^^^
+...
+341 |     pub async fn get_span(&self, span_id: &str) -> Option<SpanInfo> {
+    |                  ^^^^^^^^
+...
+346 |     pub async fn get_trace_spans(&self, trace_id: &str) -> Vec<SpanInfo> {
+    |                  ^^^^^^^^^^^^^^^
+...
+355 |     pub async fn export_spans(&self) -> Vec<SpanInfo> {
+    |                  ^^^^^^^^^^^^
+
+warning: struct `HealthMonitor` is never constructed
+   --> src\commands\gemini_observability.rs:361:12
+    |
+361 | pub struct HealthMonitor {
+    |            ^^^^^^^^^^^^^
+
+warning: associated items `new`, `register_check`, `update_check`, `run_checks`, `get_status`, and `get_history` are never used
+   --> src\commands\gemini_observability.rs:393:12
+    |
+392 | impl HealthMonitor {
+    | ------------------ associated items in this implementation
+393 |     pub fn new(max_history: usize) -> Self {
+    |            ^^^
+...
+402 |     pub async fn register_check(&self, name: String, component: String) {
+    |                  ^^^^^^^^^^^^^^
+...
+416 |     pub async fn update_check(
+    |                  ^^^^^^^^^^^^
+...
+434 |     pub async fn run_checks(&self) -> HealthSnapshot {
+    |                  ^^^^^^^^^^
+...
+465 |     pub async fn get_status(&self) -> HealthSnapshot {
+    |                  ^^^^^^^^^^
+...
+486 |     pub async fn get_history(&self) -> Vec<HealthSnapshot> {
+    |                  ^^^^^^^^^^^
+
+warning: struct `AuditLogger` is never constructed
+   --> src\commands\gemini_observability.rs:492:12
+    |
+492 | pub struct AuditLogger {
+    |            ^^^^^^^^^^^
+
+warning: associated items `new`, `log`, and `query` are never used
+   --> src\commands\gemini_observability.rs:516:12
+    |
+515 | impl AuditLogger {
+    | ---------------- associated items in this implementation
+516 |     pub fn new(max_entries: usize) -> Self {
+    |            ^^^
+...
+524 |     pub async fn log(
+    |                  ^^^
+...
+584 |     pub async fn query(
+    |                  ^^^^^
+
+warning: struct `AuditFilter` is never constructed
+   --> src\commands\gemini_observability.rs:624:12
+    |
+624 | pub struct AuditFilter {
+    |            ^^^^^^^^^^^
+    |
+    = note: `AuditFilter` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `get_gemini_metrics` is never used
+   --> src\commands\gemini_observability.rs:633:14
+    |
+633 | pub async fn get_gemini_metrics() -> Result<String, String> {
+    |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `get_gemini_health_dashboard` is never used
+   --> src\commands\gemini_observability.rs:639:14
+    |
+639 | pub async fn get_gemini_health_dashboard() -> Result<HealthSnapshot, String> {
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_gemini_audit_logs` is never used
+   --> src\commands\gemini_observability.rs:651:14
+    |
+651 | pub async fn get_gemini_audit_logs(
+    |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `CREATE_NO_WINDOW` is never used
+ --> src\sidecar_wrapper.rs:9:7
+  |
+9 | const CREATE_NO_WINDOW: u32 = 0x08000000;
+  |       ^^^^^^^^^^^^^^^^
+
+warning: constant `CREATE_NEW_PROCESS_GROUP` is never used
+  --> src\sidecar_wrapper.rs:11:7
+   |
+11 | const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DETACHED_PROCESS` is never used
+  --> src\sidecar_wrapper.rs:13:7
+   |
+13 | const DETACHED_PROCESS: u32 = 0x00000008;
+   |       ^^^^^^^^^^^^^^^^
+
+warning: function `execute_hidden` is never used
+  --> src\sidecar_wrapper.rs:16:8
+   |
+16 | pub fn execute_hidden(program: &str, args: Vec<String>) -> std::io::Result<std::process::ExitStatus> {
+   |        ^^^^^^^^^^^^^^
+
+warning: function `create_batch_wrapper` is never used
+  --> src\sidecar_wrapper.rs:34:8
+   |
+34 | pub fn create_batch_wrapper(target_exe: &str, wrapper_path: &str) -> std::io::Result<()> {
+   |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_powershell_wrapper` is never used
+  --> src\sidecar_wrapper.rs:63:8
+   |
+63 | pub fn create_powershell_wrapper(target_exe: &str, wrapper_path: &str) -> std::io::Result<()> {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `execute_cmd_file_hidden` is never used
+  --> src\windows_command.rs:44:8
+   |
+44 | pub fn execute_cmd_file_hidden(cmd_path: &str, args: Vec<String>) -> std::process::Command {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_frontend_url` is never used
+  --> src\runtime_utils.rs:15:8
+   |
+15 | pub fn get_frontend_url() -> String {
+   |        ^^^^^^^^^^^^^^^^
+
+warning: function `resolve_path` is never used
+  --> src\runtime_utils.rs:24:8
+   |
+24 | pub fn resolve_path(relative_path: &str, app: &AppHandle) -> Result<String, String> {
+   |        ^^^^^^^^^^^^
+
+warning: `claudia` (bin "claudia") generated 79 warnings (6 duplicates)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 36.65s

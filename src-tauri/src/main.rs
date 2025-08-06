@@ -11,7 +11,6 @@ mod windows_command;
 mod runtime_utils;
 
 use checkpoint::state::CheckpointState;
-use std::sync::Arc;
 use commands::agents::{
     cleanup_finished_processes, create_agent, delete_agent, execute_agent, export_agent,
     export_agent_to_file, fetch_github_agent_content, fetch_github_agents, get_agent,
@@ -30,6 +29,7 @@ use commands::claude::{
     list_directory_contents, list_projects, list_running_claude_sessions, load_session_history,
     open_new_session, read_claude_md_file, restore_checkpoint, resume_claude_code,
     save_claude_md_file, save_claude_settings, save_system_prompt, search_files,
+    validate_session_exists, recover_session, load_session_history_claude_enhanced,
     track_checkpoint_message, track_session_messages, update_checkpoint_settings,
     get_hooks_config, update_hooks_config, validate_hook_command,
     ClaudeProcessState,
@@ -38,6 +38,42 @@ use commands::mcp::{
     mcp_add, mcp_add_from_claude_desktop, mcp_add_json, mcp_get, mcp_get_server_status, mcp_list,
     mcp_read_project_config, mcp_remove, mcp_reset_project_choices, mcp_save_project_config,
     mcp_serve, mcp_test_connection, mcp_update, mcp_export_json, mcp_export_all_json,
+};
+use commands::gemini::{
+    has_gemini_api_key, set_gemini_api_key, verify_gemini_api_key, execute_gemini_code,
+    get_gemini_api_key_command, test_gemini_events,
+};
+use commands::gemini_chat::{
+    send_gemini_chat_message,
+};
+use commands::gemini_enhanced::{
+    execute_gemini_code_enhanced,
+};
+use commands::gemini_models::{
+    get_gemini_model_info, list_gemini_models, recommend_gemini_model, validate_gemini_model,
+};
+use commands::gemini_processor::{
+    process_gemini_request,
+};
+use commands::gemini_performance::{
+    get_gemini_performance_metrics, get_gemini_cache_stats,
+};
+use commands::gemini_resilience::{
+    get_gemini_health_status,
+};
+use commands::gemini_monitoring::{
+    get_gemini_monitoring_metrics, get_gemini_analytics,
+};
+use commands::gemini_backend::{
+    execute_gemini_enhanced, get_gemini_backend_config, update_gemini_backend_config,
+    get_gemini_backend_status,
+};
+use commands::gemini_universal::{
+    discover_gemini_models, validate_gemini_model_universal, execute_gemini_universal,
+    get_gemini_fallback_chain,
+};
+use commands::gemini_test_suite::{
+    test_gemini_model_comprehensive, test_all_gemini_models,
 };
 
 use commands::usage::{
@@ -49,15 +85,25 @@ use commands::ai_usage_tracker::{
 use commands::ai_session_integrator::{
     ai_session_start, ai_session_track_message, ai_session_end, ai_session_get_active, ai_session_cleanup_expired,
 };
+use commands::auto_model_selection::{
+    get_auto_model_recommendation, analyze_task_requirements, update_latest_models_on_startup,
+    get_latest_models,
+};
 use commands::storage::{
     storage_list_tables, storage_read_table, storage_update_row, storage_delete_row,
     storage_insert_row, storage_execute_sql, storage_reset_database,
 };
 use commands::proxy::{get_proxy_settings, save_proxy_settings, apply_proxy_settings};
+use commands::session_manager::{load_session_history_enhanced, delete_session};
 use commands::claude_sync::{
     sync_claude_commands, get_claude_sync_state, set_claude_sync_enabled,
     get_synced_claude_commands, check_claude_availability, set_claude_sync_interval,
     force_refresh_claude_commands, get_next_sync_time, start_auto_sync, GlobalSyncState,
+};
+use commands::session_deduplication::{
+    check_message_duplicate, clear_session_deduplication, create_isolated_session,
+    validate_session_boundary, get_session_isolation_state, cleanup_old_sessions,
+    MessageDeduplicationManager, SessionIsolationManager,
 };
 use process::ProcessRegistryState;
 use std::sync::Mutex;
@@ -77,9 +123,13 @@ fn main() {
             // Initialize agents database
             let conn = init_database(&app.handle()).expect("Failed to initialize agents database");
             
+            // Store the connection in the AgentDb state
+            let db_state = commands::agents::AgentDb(Mutex::new(conn));
+            app.manage(db_state);
+            
             // Load and apply proxy settings from the database
             {
-                let db = AgentDb(Mutex::new(conn));
+                let db = app.state::<AgentDb>();
                 let proxy_settings = match db.0.lock() {
                     Ok(conn) => {
                         // Directly query proxy settings from the database
@@ -127,6 +177,20 @@ fn main() {
             let conn = init_database(&app.handle()).expect("Failed to initialize agents database");
             app.manage(AgentDb(Mutex::new(conn)));
 
+            // Update latest models on startup (spawn async task)
+            let db_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    let db_for_models = db_handle.state::<AgentDb>();
+                    if let Err(e) = update_latest_models_on_startup(db_for_models).await {
+                        log::warn!("Failed to update latest models on startup: {}", e);
+                    } else {
+                        log::info!("Successfully updated latest models on startup");
+                    }
+                });
+            });
+
             // Initialize checkpoint state
             let checkpoint_state = CheckpointState::new();
 
@@ -158,6 +222,10 @@ fn main() {
             let sync_state = GlobalSyncState::default();
             let sync_state_clone = sync_state.clone();
             app.manage(sync_state);
+            
+            // Initialize session deduplication and isolation managers
+            app.manage(MessageDeduplicationManager::new());
+            app.manage(SessionIsolationManager::new());
 
             // Start automatic Claude sync background task after setup is complete
             let app_handle = app.handle().clone();
@@ -189,6 +257,11 @@ fn main() {
             read_claude_md_file,
             save_claude_md_file,
             load_session_history,
+            load_session_history_enhanced,
+            load_session_history_claude_enhanced,
+            validate_session_exists,
+            recover_session,
+            delete_session,
             execute_claude_code,
             continue_claude_code,
             resume_claude_code,
@@ -201,6 +274,52 @@ fn main() {
             get_hooks_config,
             update_hooks_config,
             validate_hook_command,
+            
+            // Gemini Integration
+            has_gemini_api_key,
+            set_gemini_api_key,
+            verify_gemini_api_key,
+            execute_gemini_code,
+            get_gemini_api_key_command,
+            test_gemini_events,
+            
+            // Enhanced Gemini Features
+            execute_gemini_code_enhanced,
+            execute_gemini_enhanced,
+            
+            // Gemini Model Management
+            get_gemini_model_info,
+            list_gemini_models,
+            recommend_gemini_model,
+            validate_gemini_model,
+            
+            // Gemini Processing
+            process_gemini_request,
+            send_gemini_chat_message,
+            
+            // Gemini Performance
+            get_gemini_performance_metrics,
+            get_gemini_cache_stats,
+            
+            // Gemini Resilience
+            get_gemini_health_status,
+            
+            // Gemini Monitoring
+            get_gemini_monitoring_metrics,
+            get_gemini_analytics,
+            
+            // Gemini Backend
+            get_gemini_backend_config,
+            update_gemini_backend_config,
+            get_gemini_backend_status,
+            
+            // Gemini Universal Compatibility
+            discover_gemini_models,
+            validate_gemini_model_universal,
+            execute_gemini_universal,
+            get_gemini_fallback_chain,
+            test_gemini_model_comprehensive,
+            test_all_gemini_models,
             
             // Checkpoint Management
             create_checkpoint,
@@ -268,6 +387,12 @@ fn main() {
             ai_session_get_active,
             ai_session_cleanup_expired,
             
+            // Auto Model Selection
+            get_auto_model_recommendation,
+            analyze_task_requirements,
+            update_latest_models_on_startup,
+            get_latest_models,
+            
             // MCP (Model Context Protocol)
             mcp_add,
             mcp_list,
@@ -314,6 +439,14 @@ fn main() {
             set_claude_sync_interval,
             force_refresh_claude_commands,
             get_next_sync_time,
+            
+            // Session Deduplication & Isolation
+            check_message_duplicate,
+            clear_session_deduplication,
+            create_isolated_session,
+            validate_session_boundary,
+            get_session_isolation_state,
+            cleanup_old_sessions,
             
             // Intelligent Routing
             commands::intelligent_routing::analyze_chat_input,

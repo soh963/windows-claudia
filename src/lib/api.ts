@@ -1,5 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { HooksConfiguration } from '@/types/hooks';
+import {
+  GeminiError,
+  GeminiErrorCode,
+  type GeminiRequest,
+  type GeminiResponse,
+  type GeminiStreamChunk,
+  validateGeminiRequest,
+  validateGeminiResponse,
+  isGeminiError
+} from './api-types';
 
 /** Process type for tracking in ProcessRegistry */
 export type ProcessType = 
@@ -1192,10 +1202,56 @@ export const api = {
   },
 
   /**
-   * Loads the JSONL history for a specific session
+   * Loads the JSONL history for a specific session with retry logic
    */
-  async loadSessionHistory(sessionId: string, projectId: string): Promise<any[]> {
-    return invoke("load_session_history", { sessionId, projectId });
+  async loadSessionHistory(sessionId: string, projectId: string, maxRetries = 3): Promise<any[]> {
+    let lastError: Error | null = null;
+    
+    // First try the enhanced session loader that handles both Claude and Gemini
+    try {
+      return await invoke<any[]>("load_session_history_enhanced", { sessionId, projectId });
+    } catch (error) {
+      console.warn("Enhanced session loader failed, falling back to legacy approach:", error);
+      lastError = error as Error;
+    }
+    
+    // Fallback to legacy session loading
+    try {
+      const exists = await invoke<boolean>("validate_session_exists", { sessionId, projectId });
+      if (!exists) {
+        console.warn(`Session ${sessionId} not found, attempting recovery...`);
+        // Try recovery directly
+        return await invoke<any[]>("recover_session", { sessionId });
+      }
+    } catch (error) {
+      console.warn("Failed to validate session existence:", error);
+    }
+    
+    // Try loading with retries
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await invoke<any[]>("load_session_history", { sessionId, projectId });
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`Session load attempt ${attempt + 1} failed:`, error);
+        
+        if (attempt < maxRetries - 1) {
+          // Exponential backoff: 500ms, 1s, 2s
+          const delay = Math.pow(2, attempt) * 500;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    // If all retries failed, try recovery
+    console.error("All session load attempts failed, attempting recovery...");
+    try {
+      return await invoke<any[]>("recover_session", { sessionId });
+    } catch (recoveryError) {
+      console.error("Session recovery also failed:", recoveryError);
+      // Return empty array instead of throwing to prevent UI crashes
+      return [];
+    }
   },
 
   /**
@@ -2471,6 +2527,353 @@ export const api = {
       return await invoke<Project>('create_project_if_not_exists', { path, name });
     } catch (error) {
       console.error("Failed to create project:", error);
+      throw error;
+    }
+  },
+
+  // Gemini API methods
+
+  /**
+   * Check if Gemini API key is set
+   * @returns Promise resolving to whether the API key is set
+   */
+  async hasGeminiApiKey(): Promise<boolean> {
+    try {
+      return await invoke<boolean>('has_gemini_api_key');
+    } catch (error) {
+      console.error("Failed to check Gemini API key:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get the Gemini API key from storage
+   * @returns Promise resolving to the API key or empty string if not set
+   */
+  async getGeminiApiKey(): Promise<string> {
+    try {
+      return await invoke<string>('get_gemini_api_key_command');
+    } catch (error) {
+      console.error("Failed to get Gemini API key:", error);
+      return "";
+    }
+  },
+
+  /**
+   * Set the Gemini API key
+   * @param apiKey - The API key to set
+   * @returns Promise resolving when the key is saved
+   */
+  async setGeminiApiKey(apiKey: string): Promise<void> {
+    try {
+      // Validate API key format
+      if (!apiKey?.trim()) {
+        throw new Error('API key cannot be empty');
+      }
+      if (!apiKey.startsWith('AIza')) {
+        throw new Error('Invalid Gemini API key format. Keys should start with "AIza"');
+      }
+      
+      return await invoke<void>('set_gemini_api_key', { apiKey: apiKey.trim() });
+    } catch (error) {
+      console.error("Failed to set Gemini API key:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Verify a Gemini API key by making a test request
+   * @param apiKey - The API key to verify
+   * @returns Promise resolving to whether the key is valid
+   */
+  async verifyGeminiApiKey(apiKey: string): Promise<boolean> {
+    try {
+      return await invoke<boolean>('verify_gemini_api_key', { apiKey });
+    } catch (error) {
+      console.error("Failed to verify Gemini API key:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Execute Gemini model with enhanced error handling and validation
+   * @param prompt - The prompt to send
+   * @param model - The Gemini model ID
+   * @param projectPath - The project path
+   * @param options - Optional execution options
+   * @returns Promise resolving when execution starts
+   */
+  async executeGeminiCode(
+    prompt: string,
+    model: string,
+    projectPath: string,
+    options?: Partial<GeminiRequest>
+  ): Promise<void> {
+    try {
+      // Build and validate request
+      const request: GeminiRequest = {
+        prompt: prompt.trim(),
+        model: model.trim(),
+        ...options
+      };
+      
+      validateGeminiRequest(request);
+      
+      // Validate project path
+      if (!projectPath?.trim()) {
+        throw new GeminiError(
+          GeminiErrorCode.UNKNOWN_ERROR,
+          'Project path must be specified'
+        );
+      }
+      
+      return await invoke<void>('execute_gemini_code', { 
+        prompt: request.prompt,
+        model: request.model,
+        projectPath: projectPath.trim(),
+        temperature: request.temperature,
+        maxOutputTokens: request.maxOutputTokens,
+        topK: request.topK,
+        topP: request.topP,
+        stopSequences: request.stopSequences,
+        systemInstruction: request.systemInstruction
+      });
+    } catch (error) {
+      console.error("Failed to execute Gemini code:", error);
+      
+      // Transform error to typed error if needed
+      if (error instanceof Error && !isGeminiError(error)) {
+        throw new GeminiError(
+          GeminiErrorCode.UNKNOWN_ERROR,
+          error.message,
+          undefined,
+          error
+        );
+      }
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Execute Gemini model with streaming support (future enhancement)
+   * @param prompt - The prompt to send
+   * @param model - The Gemini model ID  
+   * @param projectPath - The project path
+   * @param options - Optional execution options
+   * @returns AsyncIterable for streaming responses
+   */
+  async *streamGeminiCode(
+    prompt: string,
+    model: string,
+    projectPath: string,
+    options?: Partial<GeminiRequest>
+  ): AsyncIterable<GeminiStreamChunk> {
+    // This is a placeholder for future streaming implementation
+    // Currently, the Rust backend doesn't support streaming for Gemini
+    throw new Error('Streaming is not yet implemented for Gemini models');
+  },
+
+  /**
+   * Get Gemini model capabilities and metadata
+   * @param modelId - The model ID to query
+   * @returns Promise resolving to model capabilities
+   */
+  async getGeminiModelCapabilities(modelId: string): Promise<{
+    supportsStreaming: boolean;
+    supportsTools: boolean;
+    supportsSystemInstructions: boolean;
+    maxInputTokens: number;
+    maxOutputTokens: number;
+    supportedImageTypes: string[];
+  }> {
+    // Model capability mapping
+    const capabilities = {
+      'gemini-2.0-flash-exp': {
+        supportsStreaming: true,
+        supportsTools: true,
+        supportsSystemInstructions: true,
+        maxInputTokens: 1048576,
+        maxOutputTokens: 8192,
+        supportedImageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+      },
+      'gemini-exp-1206': {
+        supportsStreaming: true,
+        supportsTools: true,
+        supportsSystemInstructions: true,
+        maxInputTokens: 2097152,
+        maxOutputTokens: 8192,
+        supportedImageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+      }
+    };
+
+    const capability = capabilities[modelId as keyof typeof capabilities];
+    if (!capability) {
+      throw new GeminiError(
+        GeminiErrorCode.MODEL_NOT_SUPPORTED,
+        `Unknown model: ${modelId}`
+      );
+    }
+
+    return capability;
+  },
+
+  /**
+   * Validate Gemini configuration including API key
+   * @returns Promise resolving to validation result
+   */
+  async validateGeminiConfig(): Promise<{
+    isValid: boolean;
+    hasApiKey: boolean;
+    isKeyValid?: boolean;
+    error?: string;
+  }> {
+    try {
+      const hasApiKey = await this.hasGeminiApiKey();
+      if (!hasApiKey) {
+        return {
+          isValid: false,
+          hasApiKey: false,
+          error: 'Gemini API key is not configured'
+        };
+      }
+
+      // Try to verify the key
+      const apiKey = await this.getGeminiApiKey();
+      if (!apiKey) {
+        return {
+          isValid: false,
+          hasApiKey: false,
+          error: 'Failed to retrieve API key'
+        };
+      }
+
+      const isKeyValid = await this.verifyGeminiApiKey(apiKey);
+      return {
+        isValid: isKeyValid,
+        hasApiKey: true,
+        isKeyValid,
+        error: isKeyValid ? undefined : 'API key verification failed'
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        hasApiKey: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  },
+
+  /**
+   * Send a message using Gemini API
+   * @param request - The Gemini request containing prompt, model, etc.
+   * @returns Promise resolving to the Gemini response
+   */
+  async sendGeminiMessage(request: GeminiRequest): Promise<GeminiResponse> {
+    try {
+      // Validate request
+      validateGeminiRequest(request);
+      
+      // Check if API key is configured
+      const hasApiKey = await this.hasGeminiApiKey();
+      if (!hasApiKey) {
+        throw new GeminiError(
+          GeminiErrorCode.API_KEY_MISSING,
+          'Gemini API key is not configured'
+        );
+      }
+      
+      // Send chat message through our new backend function
+      const response = await invoke<any>('send_gemini_chat_message', {
+        request: {
+          prompt: request.prompt,
+          model: request.model,
+          temperature: request.temperature,
+          maxOutputTokens: request.maxOutputTokens,
+          systemInstruction: request.systemInstruction
+        }
+      });
+      
+      // Convert backend response to our GeminiResponse format
+      const geminiResponse: GeminiResponse = {
+        text: response.text,
+        finishReason: response.finish_reason || 'STOP',
+        safetyRatings: response.safety_ratings || [],
+        usageMetadata: response.usage_metadata || {}
+      };
+      
+      // Validate response
+      validateGeminiResponse(geminiResponse);
+      
+      return geminiResponse;
+    } catch (error) {
+      console.error("Failed to send Gemini message:", error);
+      
+      // Transform error to typed error if needed
+      if (error instanceof Error && !isGeminiError(error)) {
+        throw new GeminiError(
+          GeminiErrorCode.UNKNOWN_ERROR,
+          error.message,
+          undefined,
+          error
+        );
+      }
+      
+      throw error;
+    }
+  },
+
+  /**
+   * Get auto model recommendation based on task analysis
+   * @param prompt - The user prompt to analyze
+   * @returns Promise resolving to model recommendation
+   */
+  async getAutoModelRecommendation(prompt: string): Promise<{
+    recommended_model: string;
+    confidence: number;
+    reasoning: string;
+    alternative_models: string[];
+    selection_criteria: {
+      context_weight: number;
+      intelligence_weight: number;
+      speed_weight: number;
+      cost_weight: number;
+    };
+  }> {
+    try {
+      return await invoke('get_auto_model_recommendation', { prompt });
+    } catch (error) {
+      console.error('Failed to get auto model recommendation:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Analyze task requirements without recommending a model
+   * @param prompt - The user prompt to analyze
+   * @returns Promise resolving to task analysis
+   */
+  async analyzeTaskRequirements(prompt: string): Promise<{
+    text_length: number;
+    complexity_score: number;
+    task_type: string;
+    context_requirements: {
+      needs_large_context: boolean;
+      estimated_tokens: number;
+      has_multiple_files: boolean;
+      context_score: number;
+    };
+    intelligence_requirements: {
+      needs_reasoning: boolean;
+      needs_creativity: boolean;
+      needs_precision: boolean;
+      intelligence_score: number;
+    };
+  }> {
+    try {
+      return await invoke('analyze_task_requirements', { prompt });
+    } catch (error) {
+      console.error('Failed to analyze task requirements:', error);
       throw error;
     }
   }

@@ -148,6 +148,12 @@ const StreamMessageComponent: React.FC<StreamMessageProps> = ({ message, classNa
                                   {children}
                                 </code>
                               );
+                            },
+                            p({ children }) {
+                              return <p className="whitespace-pre-wrap">{children}</p>;
+                            },
+                            br() {
+                              return <br />;
                             }
                           }}
                         >

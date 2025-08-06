@@ -6,6 +6,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "windows")]
+#[allow(unused_imports)]  // Used by creation_flags() method calls within Windows-specific conditional blocks
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Represents a custom slash command
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlashCommand {
@@ -702,8 +709,7 @@ pub async fn execute_claude_slash_command(
             cmd.arg("/c").arg(&full_command);
             
             // Hide console window
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd.creation_flags(CREATE_NO_WINDOW);
             cmd
         }
         #[cfg(not(target_os = "windows"))]
@@ -726,8 +732,7 @@ pub async fn execute_claude_slash_command(
         // Hide console window on Windows
         #[cfg(target_os = "windows")]
         {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd.creation_flags(CREATE_NO_WINDOW);
         }
         cmd
     };

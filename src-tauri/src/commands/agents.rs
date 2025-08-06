@@ -955,8 +955,6 @@ fn create_agent_system_command(
             cmd.arg(&full_command);
             
             // Apply CREATE_NO_WINDOW flag
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
             cmd.creation_flags(CREATE_NO_WINDOW);
             cmd
         }

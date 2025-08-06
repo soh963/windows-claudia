@@ -26,6 +26,7 @@ import { TabContent } from "@/components/TabContent";
 import { AgentsModal } from "@/components/AgentsModal";
 import DashboardMain from "@/components/dashboard/DashboardMain";
 import { useTabState } from "@/hooks/useTabState";
+import { ProgressMonitor } from "@/components/ProgressMonitor";
 
 type View = 
   | "welcome" 
@@ -501,6 +502,9 @@ function AppContent() {
         }}
         onError={(message) => showToast(message, "error")}
       />
+      
+      {/* Progress Monitor - Always visible */}
+      <ProgressMonitor />
     </div>
   );
 }

@@ -1,0 +1,114 @@
+{
+  "version": "1.0.0",
+  "categories": {
+    "backend": {
+      "patterns": ["src-tauri/**/*.rs", "Cargo.toml", "Cargo.lock"],
+      "prefix": "backend",
+      "emoji": "🔧",
+      "defaultType": "feat",
+      "testCommand": "cd src-tauri && cargo test"
+    },
+    "frontend": {
+      "patterns": ["src/**/*.tsx", "src/**/*.ts", "!src/**/*.test.*"],
+      "prefix": "frontend",
+      "emoji": "🎨",
+      "defaultType": "feat",
+      "testCommand": "npm test"
+    },
+    "components": {
+      "patterns": ["src/components/**/*"],
+      "prefix": "components",
+      "emoji": "🧩",
+      "defaultType": "feat"
+    },
+    "docs": {
+      "patterns": ["doc/**/*", "docs/**/*", "*.md", "!node_modules/**"],
+      "prefix": "docs",
+      "emoji": "📚",
+      "defaultType": "docs"
+    },
+    "config": {
+      "patterns": ["package.json", "tsconfig.json", "vite.config.ts", ".gitignore", "*.config.*"],
+      "prefix": "config",
+      "emoji": "⚙️",
+      "defaultType": "build"
+    },
+    "test": {
+      "patterns": ["**/*.test.*", "**/*.spec.*", "__tests__/**"],
+      "prefix": "test",
+      "emoji": "🧪",
+      "defaultType": "test"
+    },
+    "monitoring": {
+      "patterns": ["**/monitoring/**", "**/observability/**", "**/gemini_monitoring*", "**/Monitor*", "**/Progress*"],
+      "prefix": "monitoring",
+      "emoji": "📊",
+      "defaultType": "feat"
+    },
+    "gemini": {
+      "patterns": ["**/gemini*", "**/Gemini*"],
+      "prefix": "gemini",
+      "emoji": "🤖",
+      "defaultType": "feat"
+    },
+    "error-handling": {
+      "patterns": ["**/Error*", "**/error*"],
+      "prefix": "error-handling",
+      "emoji": "🚨",
+      "defaultType": "fix"
+    }
+  },
+  "breakingPatterns": [
+    "remove|delete|breaking|incompatible",
+    "major\\s+change",
+    "api\\s+change",
+    "schema\\s+change",
+    "migration\\s+required"
+  ],
+  "sensitivePatterns": [
+    "api[_-]?key",
+    "secret",
+    "password",
+    "token",
+    "private[_-]?key",
+    "\\.env$",
+    "credentials"
+  ],
+  "commitRules": {
+    "maxSubjectLength": 50,
+    "maxBodyLineLength": 72,
+    "requireBody": false,
+    "requireIssueReference": false,
+    "allowedTypes": [
+      "feat", "fix", "docs", "style", "refactor", 
+      "perf", "test", "build", "ci", "chore", "revert"
+    ]
+  },
+  "automation": {
+    "runTests": true,
+    "createBackup": true,
+    "validateSensitiveData": true,
+    "checkBreakingChanges": true,
+    "autoStage": true,
+    "parallelCommits": false
+  },
+  "hooks": {
+    "pre-commit": [
+      "npm run check",
+      "git-workflow-validate"
+    ],
+    "commit-msg": [
+      "git-workflow-msg-validate"
+    ],
+    "post-commit": [
+      "git-workflow-log"
+    ]
+  },
+  "aliases": {
+    "wf": "workflow",
+    "wfs": "workflow status",
+    "wfb": "workflow backup",
+    "wfa": "workflow auto",
+    "wfc": "workflow commit-current"
+  }
+}

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   FileText,
   BookOpen,
@@ -12,20 +14,51 @@ import {
   Users,
   Globe,
   Star,
-  TrendingUp
+  TrendingUp,
+  Filter,
+  RefreshCw,
+  Eye,
+  Edit,
+  Search,
+  Calendar,
+  BarChart3,
+  Target,
+  ArrowUpDown,
+  ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DocumentationStatus as DocStatus } from '@/lib/api';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface DocumentationStatusProps {
   docs: DocStatus[];
   loading?: boolean;
+  compact?: boolean;
+  onDocUpdate?: (doc: DocStatus) => void;
+  onRefresh?: () => void;
+  showFilters?: boolean;
 }
 
+// Filter and sort options
+interface DocFilters {
+  docType?: string;
+  completionRange?: string;
+  qualityRange?: string;
+}
+
+type SortOption = 'completion-desc' | 'completion-asc' | 'quality-desc' | 'quality-asc' | 'updated-desc' | 'updated-asc';
+
 const DocumentationStatus: React.FC<DocumentationStatusProps> = ({ 
-  docs,
-  loading = false 
+  docs = [],
+  loading = false,
+  compact = false,
+  onDocUpdate,
+  onRefresh,
+  showFilters = true
 }) => {
+  const [filters, setFilters] = useState<DocFilters>({});
+  const [sortBy, setSortBy] = useState<SortOption>('completion-desc');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const getCompletionColor = (percentage: number) => {
     if (percentage >= 90) return 'text-green-600';
     if (percentage >= 70) return 'text-blue-600';
@@ -97,6 +130,53 @@ const DocumentationStatus: React.FC<DocumentationStatusProps> = ({
     );
   }
 
+  // Filter and sort documents
+  const filteredAndSortedDocs = useMemo(() => {
+    let filtered = docs.filter(doc => {
+      if (filters.docType && doc.doc_type !== filters.docType) return false;
+      if (filters.completionRange) {
+        const completion = doc.completion_percentage || 0;
+        switch (filters.completionRange) {
+          case 'high': return completion >= 80;
+          case 'medium': return completion >= 50 && completion < 80;
+          case 'low': return completion < 50;
+        }
+      }
+      if (filters.qualityRange) {
+        const quality = doc.quality_score || 0;
+        switch (filters.qualityRange) {
+          case 'excellent': return quality >= 85;
+          case 'good': return quality >= 70 && quality < 85;
+          case 'fair': return quality >= 55 && quality < 70;
+          case 'poor': return quality < 55;
+        }
+      }
+      return true;
+    });
+
+    // Sort documents
+    filtered.sort((a, b) => {
+      const aCompletion = a.completion_percentage || 0;
+      const bCompletion = b.completion_percentage || 0;
+      const aQuality = a.quality_score || 0;
+      const bQuality = b.quality_score || 0;
+      const aUpdated = a.last_updated;
+      const bUpdated = b.last_updated;
+
+      switch (sortBy) {
+        case 'completion-desc': return bCompletion - aCompletion;
+        case 'completion-asc': return aCompletion - bCompletion;
+        case 'quality-desc': return bQuality - aQuality;
+        case 'quality-asc': return aQuality - bQuality;
+        case 'updated-desc': return bUpdated - aUpdated;
+        case 'updated-asc': return aUpdated - bUpdated;
+        default: return bCompletion - aCompletion;
+      }
+    });
+
+    return filtered;
+  }, [docs, filters, sortBy]);
+
   if (docs.length === 0) {
     return (
       <Card>
@@ -124,8 +204,217 @@ const DocumentationStatus: React.FC<DocumentationStatusProps> = ({
   const incompleteDocsCount = docs.filter(doc => (doc.completion_percentage || 0) < 90).length;
   const poorQualityDocsCount = docs.filter(doc => (doc.quality_score || 0) < 70).length;
 
+  if (compact) {
+    return (
+      <div className="space-y-4">
+        {/* Compact Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <motion.div 
+            className="text-center p-3 bg-blue-50 rounded-lg"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="text-2xl font-bold text-blue-600">{overallCompletion.toFixed(1)}%</div>
+            <div className="text-sm text-muted-foreground">Overall Completion</div>
+          </motion.div>
+          <motion.div 
+            className="text-center p-3 bg-green-50 rounded-lg"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="text-2xl font-bold text-green-600">{averageQuality.toFixed(1)}</div>
+            <div className="text-sm text-muted-foreground">Avg Quality</div>
+          </motion.div>
+          <motion.div 
+            className="text-center p-3 bg-purple-50 rounded-lg"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="text-2xl font-bold text-purple-600">{completeDocsCount}</div>
+            <div className="text-sm text-muted-foreground">Complete Docs</div>
+          </motion.div>
+          <motion.div 
+            className="text-center p-3 bg-red-50 rounded-lg"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="text-2xl font-bold text-red-600">{incompleteDocsCount}</div>
+            <div className="text-sm text-muted-foreground">Need Attention</div>
+          </motion.div>
+        </div>
+
+        {/* Top Documentation Issues */}
+        <div className="space-y-2">
+          <AnimatePresence>
+            {filteredAndSortedDocs
+              .filter(doc => (doc.completion_percentage || 0) < 90 || (doc.quality_score || 0) < 70)
+              .slice(0, 3)
+              .map((doc, index) => {
+                const completionPercentage = doc.completion_percentage || 0;
+                const qualityScore = doc.quality_score || 0;
+                const priority = completionPercentage < 50 || qualityScore < 55 ? 'high' : 'medium';
+                
+                return (
+                  <motion.div 
+                    key={doc.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="flex items-center space-x-3 p-3 border rounded-lg hover:shadow-md transition-all cursor-pointer"
+                    onClick={() => onDocUpdate?.(doc)}
+                  >
+                    <div className="flex-shrink-0">
+                      <div className={cn(
+                        "p-2 rounded-full",
+                        getDocTypeColor(doc.doc_type).replace('text-', 'bg-') + '-100'
+                      )}>
+                        {getDocTypeIcon(doc.doc_type)}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-medium truncate">
+                          {doc.doc_type.charAt(0).toUpperCase() + 
+                           doc.doc_type.slice(1).replace('_', ' ')} Documentation
+                        </h4>
+                        <Badge variant={priority === 'high' ? 'destructive' : 'secondary'}>
+                          {priority === 'high' ? 'Urgent' : 'Review'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                        <span>Completion: {completionPercentage.toFixed(1)}%</span>
+                        <span>Quality: {qualityScore.toFixed(1)}</span>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      {completionPercentage >= 90 && qualityScore >= 85 ? (
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                      ) : completionPercentage >= 50 ? (
+                        <AlertCircle className="h-5 w-5 text-yellow-500" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-500" />
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+          </AnimatePresence>
+        </div>
+        
+        {/* Quick Actions */}
+        <div className="flex items-center justify-between">
+          <Button variant="outline" size="sm" onClick={() => setViewMode('list')}>
+            <Eye className="h-4 w-4 mr-2" />
+            View All
+          </Button>
+          {onRefresh && (
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header with Controls */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center">
+            <FileText className="h-6 w-6 mr-2" />
+            Documentation Status
+          </h2>
+          <p className="text-muted-foreground">
+            Track documentation completeness and quality across your project
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          {showFilters && (
+            <>
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+                <SelectTrigger className="w-40">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completion-desc">Completion ↓</SelectItem>
+                  <SelectItem value="completion-asc">Completion ↑</SelectItem>
+                  <SelectItem value="quality-desc">Quality ↓</SelectItem>
+                  <SelectItem value="quality-asc">Quality ↑</SelectItem>
+                  <SelectItem value="updated-desc">Recently Updated</SelectItem>
+                  <SelectItem value="updated-asc">Oldest Updated</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
+                <BarChart3 className="h-4 w-4 mr-2" />
+                {viewMode === 'grid' ? 'List' : 'Grid'}
+              </Button>
+            </>
+          )}
+          {onRefresh && (
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Filters */}
+      {showFilters && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Filters:</span>
+              </div>
+              <Select value={filters.docType || ''} onValueChange={(value) => setFilters(prev => ({ ...prev, docType: value || undefined }))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="readme">README</SelectItem>
+                  <SelectItem value="api">API</SelectItem>
+                  <SelectItem value="user_guide">User Guide</SelectItem>
+                  <SelectItem value="developer">Developer</SelectItem>
+                  <SelectItem value="deployment">Deployment</SelectItem>
+                  <SelectItem value="changelog">Changelog</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filters.completionRange || ''} onValueChange={(value) => setFilters(prev => ({ ...prev, completionRange: value || undefined }))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Completion" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Levels</SelectItem>
+                  <SelectItem value="high">80-100%</SelectItem>
+                  <SelectItem value="medium">50-79%</SelectItem>
+                  <SelectItem value="low">&lt;50%</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filters.qualityRange || ''} onValueChange={(value) => setFilters(prev => ({ ...prev, qualityRange: value || undefined }))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Quality" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Quality</SelectItem>
+                  <SelectItem value="excellent">Excellent (85+)</SelectItem>
+                  <SelectItem value="good">Good (70-84)</SelectItem>
+                  <SelectItem value="fair">Fair (55-69)</SelectItem>
+                  <SelectItem value="poor">Poor (&lt;55)</SelectItem>
+                </SelectContent>
+              </Select>
+              {(filters.docType || filters.completionRange || filters.qualityRange) && (
+                <Button variant="ghost" size="sm" onClick={() => setFilters({})}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {/* Documentation Overview */}
       <Card>
         <CardHeader>
@@ -183,10 +472,12 @@ const DocumentationStatus: React.FC<DocumentationStatusProps> = ({
       </Card>
 
       {/* Documentation List */}
-      <div className="space-y-4">
-        {docs
-          .sort((a, b) => (b.completion_percentage || 0) - (a.completion_percentage || 0))
-          .map((doc) => {
+      <div className={cn(
+        "space-y-4",
+        viewMode === 'grid' && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 space-y-0"
+      )}>
+        <AnimatePresence>
+          {filteredAndSortedDocs.map((doc, index) => {
             const completionPercentage = doc.completion_percentage || 0;
             const qualityScore = doc.quality_score || 0;
             const missingSections = doc.missing_sections ? 
@@ -213,34 +504,55 @@ const DocumentationStatus: React.FC<DocumentationStatusProps> = ({
               ) : [];
             
             return (
-              <Card key={doc.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className={getDocTypeColor(doc.doc_type)}>
-                        {getDocTypeIcon(doc.doc_type)}
+              <motion.div
+                key={doc.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ delay: index * 0.05 }}
+                className={cn(
+                  viewMode === 'grid' ? "" : "w-full"
+                )}
+              >
+                <Card className="hover:shadow-md transition-shadow h-full">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={getDocTypeColor(doc.doc_type)}>
+                          {getDocTypeIcon(doc.doc_type)}
+                        </div>
+                        <div>
+                          <CardTitle className={cn(
+                            viewMode === 'grid' ? "text-base" : "text-lg"
+                          )}>
+                            {doc.doc_type.charAt(0).toUpperCase() + 
+                             doc.doc_type.slice(1).replace('_', ' ')} Documentation
+                          </CardTitle>
+                          <CardDescription>
+                            {doc.completed_sections || 0} of {doc.total_sections || 0} sections complete
+                          </CardDescription>
+                        </div>
                       </div>
-                      <div>
-                        <CardTitle className="text-lg">
-                          {doc.doc_type.charAt(0).toUpperCase() + 
-                           doc.doc_type.slice(1).replace('_', ' ')} Documentation
-                        </CardTitle>
-                        <CardDescription>
-                          {doc.completed_sections || 0} of {doc.total_sections || 0} sections complete
-                        </CardDescription>
+                      <div className="flex items-center space-x-2">
+                        {completionPercentage >= 90 ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : completionPercentage >= 50 ? (
+                          <AlertCircle className="h-5 w-5 text-yellow-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                        {onDocUpdate && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => onDocUpdate(doc)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {completionPercentage >= 90 ? (
-                        <CheckCircle className="h-5 w-5 text-green-500" />
-                      ) : completionPercentage >= 50 ? (
-                        <AlertCircle className="h-5 w-5 text-yellow-500" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-500" />
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
+                  </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Completion and Quality Metrics */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -313,7 +625,10 @@ const DocumentationStatus: React.FC<DocumentationStatusProps> = ({
 
                   {/* Metadata */}
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                    <span>Last updated: {formatDate(doc.last_updated)}</span>
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-3 w-3" />
+                      <span>Updated: {formatDate(doc.last_updated)}</span>
+                    </div>
                     {qualityScore >= 85 && completionPercentage >= 90 && (
                       <div className="flex items-center space-x-1 text-green-600">
                         <Star className="h-3 w-3" />
@@ -323,8 +638,10 @@ const DocumentationStatus: React.FC<DocumentationStatusProps> = ({
                   </div>
                 </CardContent>
               </Card>
+            </motion.div>
             );
           })}
+        </AnimatePresence>
       </div>
 
       {/* Documentation Insights */}

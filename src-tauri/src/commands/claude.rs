@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::{Context, Result};
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -977,11 +978,26 @@ pub async fn load_session_history(
 
     // If not found, try searching in all project directories as fallback
     if !session_path.exists() {
-        log::warn!("Session file not found at expected path, searching all projects...");
+        log::warn!("Session file not found at expected path: {:?}", session_path);
+        log::info!("Expected path: {:?}", session_path.display());
         
         let projects_dir = claude_dir.join("projects");
         if projects_dir.exists() {
+            // List all files in the expected project directory for debugging
+            let project_dir = claude_dir.join("projects").join(&project_id);
+            if project_dir.exists() {
+                log::debug!("Files in project directory {:?}:", project_dir);
+                if let Ok(entries) = std::fs::read_dir(&project_dir) {
+                    for entry in entries.flatten() {
+                        log::debug!("  - {:?}", entry.file_name());
+                    }
+                }
+            } else {
+                log::warn!("Project directory does not exist: {:?}", project_dir);
+            }
+            
             // Search all project directories for the session file
+            log::info!("Searching all project directories for session: {}", session_id);
             if let Ok(entries) = std::fs::read_dir(&projects_dir) {
                 for entry in entries.flatten() {
                     if entry.path().is_dir() {
@@ -994,11 +1010,18 @@ pub async fn load_session_history(
                     }
                 }
             }
+        } else {
+            log::error!("Projects directory does not exist: {:?}", projects_dir);
         }
         
-        // If still not found, return error
+        // If still not found, return detailed error
         if !session_path.exists() {
-            return Err(format!("Session file not found: {}", session_id));
+            return Err(format!(
+                "No conversation found with session ID: {}. Expected path: {} (project: {})",
+                session_id,
+                session_path.display(),
+                project_id
+            ));
         }
     }
 
@@ -1017,6 +1040,96 @@ pub async fn load_session_history(
     }
 
     Ok(messages)
+}
+
+/// Validates if a session exists before attempting to load it
+#[tauri::command]
+pub async fn validate_session_exists(
+    session_id: String,
+    project_id: String,
+) -> Result<bool, String> {
+    log::info!(
+        "Validating session existence: {} in project: {}",
+        session_id,
+        project_id
+    );
+
+    let claude_dir = get_claude_dir().map_err(|e| e.to_string())?;
+    let session_path = claude_dir
+        .join("projects")
+        .join(&project_id)
+        .join(format!("{}.jsonl", session_id));
+    
+    // Check primary location first
+    if session_path.exists() {
+        return Ok(true);
+    }
+    
+    // If not found, search all project directories
+    let projects_dir = claude_dir.join("projects");
+    if projects_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&projects_dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    let potential_path = entry.path().join(format!("{}.jsonl", session_id));
+                    if potential_path.exists() {
+                        log::info!("Session found in alternate location: {:?}", entry.path());
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(false)
+}
+
+/// Recover a session by finding it in any project directory
+#[tauri::command]
+pub async fn recover_session(
+    session_id: String,
+) -> Result<Vec<serde_json::Value>, String> {
+    log::info!("Attempting to recover session: {}", session_id);
+
+    let claude_dir = get_claude_dir().map_err(|e| e.to_string())?;
+    let projects_dir = claude_dir.join("projects");
+    
+    if !projects_dir.exists() {
+        return Err("Projects directory does not exist".to_string());
+    }
+    
+    // Search all project directories for the session file
+    if let Ok(entries) = std::fs::read_dir(&projects_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let potential_path = entry.path().join(format!("{}.jsonl", session_id));
+                if potential_path.exists() {
+                    log::info!("Recovering session from: {:?}", entry.path());
+                    
+                    // Read the session file
+                    let file = fs::File::open(&potential_path)
+                        .map_err(|e| format!("Failed to open recovered session file: {}", e))?;
+                    
+                    let reader = BufReader::new(file);
+                    let mut messages = Vec::new();
+                    
+                    for line in reader.lines() {
+                        match line {
+                            Ok(json_str) => match serde_json::from_str::<serde_json::Value>(&json_str) {
+                                Ok(json) => messages.push(json),
+                                Err(e) => log::warn!("Failed to parse JSON line: {}", e),
+                            },
+                            Err(e) => log::warn!("Failed to read line: {}", e),
+                        }
+                    }
+                    
+                    return Ok(messages);
+                }
+            }
+        }
+    }
+    
+    Err(format!("Failed to recover session: {}", session_id))
 }
 
 
@@ -1100,6 +1213,38 @@ pub async fn resume_claude_code(
         project_path,
         model
     );
+
+    // First validate that the session exists
+    let claude_dir = get_claude_dir().map_err(|e| e.to_string())?;
+    let projects_dir = claude_dir.join("projects");
+    
+    // Search for the session file across all project directories
+    let mut session_found = false;
+    let mut actual_project_id = None;
+    
+    if projects_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&projects_dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    let potential_path = entry.path().join(format!("{}.jsonl", session_id));
+                    if potential_path.exists() {
+                        session_found = true;
+                        actual_project_id = entry.file_name().to_str().map(|s| s.to_string());
+                        log::info!("Found session {} in project directory: {:?}", session_id, entry.path());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    if !session_found {
+        log::error!("Session {} not found in any project directory", session_id);
+        return Err(format!(
+            "Session '{}' not found. The session may have been deleted or the ID is incorrect.",
+            session_id
+        ));
+    }
 
     let claude_path = find_claude_binary(&app)?;
     
@@ -2172,6 +2317,83 @@ pub async fn track_session_messages(
     }
 
     Ok(())
+}
+
+/// Enhanced session history loader that handles both Claude and Gemini sessions
+#[tauri::command]
+pub async fn load_session_history_claude_enhanced(
+    session_id: String,
+    project_id: String,
+) -> Result<Vec<serde_json::Value>, String> {
+    log::info!(
+        "Loading enhanced session history for session: {} in project: {}",
+        session_id,
+        project_id
+    );
+
+    // Handle Gemini sessions which are stored in the unified chat store
+    if session_id.starts_with("gemini-") {
+        log::info!("Detected Gemini session, loading from unified store");
+        // For Gemini sessions, we need to return an empty array as they're managed by the frontend
+        // The actual messages are stored in the frontend's unified chat store
+        return Ok(Vec::new());
+    }
+
+    // For Claude sessions, use the existing logic
+    let claude_dir = get_claude_dir().map_err(|e| e.to_string())?;
+    let mut session_path = claude_dir
+        .join("projects")
+        .join(&project_id)
+        .join(format!("{}.jsonl", session_id));
+
+    // If not found, try searching in all project directories as fallback
+    if !session_path.exists() {
+        log::warn!("Session file not found at expected path: {:?}", session_path);
+        
+        let projects_dir = claude_dir.join("projects");
+        if projects_dir.exists() {
+            // Search all project directories for the session file
+            log::info!("Searching all project directories for session: {}", session_id);
+            if let Ok(entries) = std::fs::read_dir(&projects_dir) {
+                for entry in entries.flatten() {
+                    if entry.path().is_dir() {
+                        let potential_path = entry.path().join(format!("{}.jsonl", session_id));
+                        if potential_path.exists() {
+                            log::info!("Found session file in: {:?}", entry.path());
+                            session_path = potential_path;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If still not found, return empty array instead of error
+        // This allows the frontend to handle missing sessions gracefully
+        if !session_path.exists() {
+            log::warn!(
+                "Session {} not found in any location, returning empty history",
+                session_id
+            );
+            return Ok(Vec::new());
+        }
+    }
+
+    let file =
+        fs::File::open(&session_path).map_err(|e| format!("Failed to open session file: {}", e))?;
+
+    let reader = BufReader::new(file);
+    let mut messages = Vec::new();
+
+    for line in reader.lines() {
+        if let Ok(line) = line {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                messages.push(json);
+            }
+        }
+    }
+
+    Ok(messages)
 }
 
 /// Gets hooks configuration from settings at specified scope

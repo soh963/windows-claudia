@@ -7,6 +7,10 @@ import {
   Save, 
   AlertCircle,
   Loader2,
+  Zap,
+  Sparkles,
+  Star,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +32,11 @@ import { HooksEditor } from "./HooksEditor";
 import { SlashCommandsManager } from "./SlashCommandsManager";
 import { ProxySettings } from "./ProxySettings";
 import ClaudeSyncStatus from "./ClaudeSyncStatus";
+import { ModelSelector } from "./ModelSelector";
+import { ModelConfiguration } from "./ModelConfiguration";
+import { GeminiApiKeyModal } from "./GeminiApiKeyModal";
 import { useTheme } from "@/hooks";
+import { ALL_MODELS, type ModelConfiguration as ModelConfig } from "@/lib/models";
 
 interface SettingsProps {
   /**
@@ -69,6 +77,12 @@ export const Settings: React.FC<SettingsProps> = ({
   const [selectedInstallation, setSelectedInstallation] = useState<ClaudeInstallation | null>(null);
   const [binaryPathChanged, setBinaryPathChanged] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [verifyingApiKey, setVerifyingApiKey] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("sonnet");
+  const [modelConfigs, setModelConfigs] = useState<Record<string, ModelConfig>>({});
+  const [showModelConfig, setShowModelConfig] = useState(false);
+  const [showGeminiApiKeyModal, setShowGeminiApiKeyModal] = useState(false);
   
   // Permission rules state
   const [allowRules, setAllowRules] = useState<PermissionRule[]>([]);
@@ -92,7 +106,19 @@ export const Settings: React.FC<SettingsProps> = ({
   useEffect(() => {
     loadSettings();
     loadClaudeBinaryPath();
+    loadGeminiApiKey();
   }, []);
+
+  const loadGeminiApiKey = async () => {
+    try {
+      const key = await api.getGeminiApiKey();
+      setGeminiApiKey(key || "");
+    } catch (err) {
+      console.error("Failed to load Gemini API key:", err);
+      setGeminiApiKey("");
+      // Don't show error to user for missing key - it's expected initially
+    }
+  };
 
   /**
    * Loads the current Claude binary path
@@ -210,6 +236,24 @@ export const Settings: React.FC<SettingsProps> = ({
         setProxySettingsChanged(false);
       }
 
+      // Save Gemini API key with validation
+      try {
+        if (geminiApiKey?.trim()) {
+          await api.setGeminiApiKey(geminiApiKey.trim());
+        } else {
+          // Clear the API key if empty
+          await api.setGeminiApiKey("");
+        }
+      } catch (keyError) {
+        console.error("Failed to save Gemini API key:", keyError);
+        // Continue with other settings but show a specific error
+        setToast({ 
+          message: `Settings saved, but Gemini API key error: ${keyError instanceof Error ? keyError.message : 'Unknown error'}`, 
+          type: "error" 
+        });
+        return;
+      }
+
       setToast({ message: "Settings saved successfully!", type: "success" });
     } catch (err) {
       console.error("Failed to save settings:", err);
@@ -305,6 +349,31 @@ export const Settings: React.FC<SettingsProps> = ({
     setBinaryPathChanged(installation.path !== currentBinaryPath);
   };
 
+  /**
+   * Verify the Gemini API key
+   */
+  const verifyGeminiApiKey = async () => {
+    if (!geminiApiKey?.trim()) {
+      setToast({ message: "Please enter an API key first", type: "error" });
+      return;
+    }
+
+    setVerifyingApiKey(true);
+    try {
+      const isValid = await api.verifyGeminiApiKey(geminiApiKey.trim());
+      if (isValid) {
+        setToast({ message: "API key is valid!", type: "success" });
+      } else {
+        setToast({ message: "API key is invalid or expired", type: "error" });
+      }
+    } catch (err) {
+      console.error("Failed to verify API key:", err);
+      setToast({ message: "Failed to verify API key", type: "error" });
+    } finally {
+      setVerifyingApiKey(false);
+    }
+  };
+
   return (
     <div className={cn("flex flex-col h-full bg-background text-foreground", className)}>
       <div className="max-w-4xl mx-auto w-full flex flex-col h-full">
@@ -375,8 +444,9 @@ export const Settings: React.FC<SettingsProps> = ({
       ) : (
         <div className="flex-1 overflow-y-auto p-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid grid-cols-9 w-full">
+            <TabsList className="grid grid-cols-10 w-full">
               <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="models">Models</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
               <TabsTrigger value="environment">Environment</TabsTrigger>
               <TabsTrigger value="advanced">Advanced</TabsTrigger>
@@ -615,6 +685,141 @@ export const Settings: React.FC<SettingsProps> = ({
               </Card>
             </TabsContent>
             
+            {/* Models Settings */}
+            <TabsContent value="models" className="space-y-6">
+              <Card className="p-6">
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-base font-semibold mb-4">Model Selection & Configuration</h3>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Choose your preferred AI model and customize its parameters for optimal performance
+                    </p>
+                  </div>
+
+                  {/* Model Selector */}
+                  <div className="space-y-4">
+                    <Label>Default Model</Label>
+                    <ModelSelector
+                      value={selectedModel}
+                      onChange={setSelectedModel}
+                      allowConfiguration={true}
+                      onGeminiApiKeyNeeded={() => setShowGeminiApiKeyModal(true)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This will be the default model for new chat sessions
+                    </p>
+                  </div>
+
+                  {/* Model Configuration */}
+                  {selectedModel && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex items-center justify-between">
+                        <Label>Model Configuration</Label>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowModelConfig(!showModelConfig)}
+                        >
+                          {showModelConfig ? "Hide" : "Show"} Configuration
+                        </Button>
+                      </div>
+                      
+                      <AnimatePresence>
+                        {showModelConfig && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ModelConfiguration
+                              modelId={selectedModel}
+                              configuration={modelConfigs[selectedModel] || {}}
+                              onChange={(config) => {
+                                setModelConfigs((prev) => ({
+                                  ...prev,
+                                  [selectedModel]: config,
+                                }));
+                              }}
+                              mode="inline"
+                              className="mt-4"
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Model Presets */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <Label>Quick Presets</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedModel("sonnet");
+                          setModelConfigs((prev) => ({
+                            ...prev,
+                            sonnet: { temperature: 0.7, maxOutputTokens: 4096 },
+                          }));
+                        }}
+                        className="justify-start gap-2"
+                      >
+                        <Zap className="h-4 w-4" />
+                        Fast & Efficient
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedModel("opus");
+                          setModelConfigs((prev) => ({
+                            ...prev,
+                            opus: { temperature: 0.8, maxOutputTokens: 8192 },
+                          }));
+                        }}
+                        className="justify-start gap-2"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Complex Tasks
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedModel("gemini-2.0-flash-exp");
+                          setModelConfigs((prev) => ({
+                            ...prev,
+                            "gemini-2.0-flash-exp": { temperature: 0.7, maxOutputTokens: 8192 },
+                          }));
+                        }}
+                        className="justify-start gap-2"
+                      >
+                        <Star className="h-4 w-4" />
+                        Gemini Flash
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedModel("gemini-exp-1206");
+                          setModelConfigs((prev) => ({
+                            ...prev,
+                            "gemini-exp-1206": { temperature: 0.8, maxOutputTokens: 8192 },
+                          }));
+                        }}
+                        className="justify-start gap-2"
+                      >
+                        <Brain className="h-4 w-4" />
+                        Gemini Advanced
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </TabsContent>
+            
             {/* Permissions Settings */}
             <TabsContent value="permissions" className="space-y-6">
               <Card className="p-6">
@@ -834,6 +1039,48 @@ export const Settings: React.FC<SettingsProps> = ({
                       Custom script to generate auth values for API requests
                     </p>
                   </div>
+
+                  {/* Gemini API Key */}
+                  <div className="space-y-2">
+                    <Label htmlFor="geminiApiKey">Gemini API Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="geminiApiKey"
+                        type="password"
+                        placeholder="Enter your Gemini API key (starts with AIza...)"
+                        value={geminiApiKey}
+                        onChange={(e) => setGeminiApiKey(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={verifyGeminiApiKey}
+                        disabled={verifyingApiKey || !geminiApiKey?.trim()}
+                        className="shrink-0"
+                      >
+                        {verifyingApiKey ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Verifying...
+                          </>
+                        ) : (
+                          'Verify'
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Your Gemini API key is stored locally and encrypted. Get your API key from{' '}
+                      <a 
+                        href="https://aistudio.google.com/app/apikey" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        Google AI Studio
+                      </a>
+                    </p>
+                  </div>
                   
                   {/* Raw JSON Editor */}
                   <div className="space-y-2">
@@ -919,6 +1166,18 @@ export const Settings: React.FC<SettingsProps> = ({
           />
         )}
       </ToastContainer>
+      
+      {/* Gemini API Key Modal */}
+      {showGeminiApiKeyModal && (
+        <GeminiApiKeyModal
+          isOpen={showGeminiApiKeyModal}
+          onClose={() => setShowGeminiApiKeyModal(false)}
+          onApiKeySet={() => {
+            setShowGeminiApiKeyModal(false);
+            loadGeminiApiKey();
+          }}
+        />
+      )}
     </div>
   );
 }; 

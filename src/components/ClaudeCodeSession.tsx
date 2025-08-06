@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Popover } from "@/components/ui/popover";
 import { api, type Session } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { isGeminiModel, getClaudeModelId } from "@/lib/models";
 import { open } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { StreamMessage } from "./StreamMessage";
@@ -34,6 +35,7 @@ import { WebviewPreview } from "./WebviewPreview";
 import type { ClaudeStreamMessage } from "./AgentExecution";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { IntelligentChat } from "./IntelligentChat";
+import { useMessageDeduplication, useSessionIsolation } from "@/hooks/useMessageDeduplication";
 
 interface ClaudeCodeSessionProps {
   /**
@@ -95,7 +97,7 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
   const [forkSessionName, setForkSessionName] = useState("");
   
   // Queued prompts state
-  const [queuedPrompts, setQueuedPrompts] = useState<Array<{ id: string; prompt: string; model: "sonnet" | "opus" }>>([]);
+  const [queuedPrompts, setQueuedPrompts] = useState<Array<{ id: string; prompt: string; model: string }>>([]);
   
   // New state for preview feature
   const [showPreview, setShowPreview] = useState(false);
@@ -111,7 +113,7 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
   const unlistenRefs = useRef<UnlistenFn[]>([]);
   const hasActiveSessionRef = useRef(false);
   const floatingPromptRef = useRef<FloatingPromptInputRef>(null);
-  const queuedPromptsRef = useRef<Array<{ id: string; prompt: string; model: "sonnet" | "opus" }>>([]);
+  const queuedPromptsRef = useRef<Array<{ id: string; prompt: string; model: string }>>([]);
   const isMountedRef = useRef(true);
   const isListeningRef = useRef(false);
 
@@ -399,7 +401,7 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
     }
   };
 
-  const handleSendPrompt = async (prompt: string, model: "sonnet" | "opus") => {
+  const handleSendPrompt = async (prompt: string, model: string) => {
     console.log('[ClaudeCodeSession] handleSendPrompt called with:', { prompt, model, projectPath, claudeSessionId, effectiveSession });
     
     if (!projectPath) {
@@ -594,18 +596,42 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
         setMessages(prev => [...prev, userMessage]);
 
         // Execute the appropriate command
-        if (effectiveSession && !isFirstPrompt) {
-          console.log('[ClaudeCodeSession] Resuming session:', effectiveSession.id);
-          await api.resumeClaudeCode(projectPath, effectiveSession.id, prompt, model);
+        if (isGeminiModel(model)) {
+          // For Gemini models, check API key first
+          const hasKey = await api.hasGeminiApiKey();
+          if (!hasKey) {
+            // Should trigger API key modal in FloatingPromptInput
+            console.error('[ClaudeCodeSession] No Gemini API key found');
+            setError("Gemini API key is required. Please select a Gemini model again to enter your API key.");
+            setIsLoading(false);
+            hasActiveSessionRef.current = false;
+            return;
+          }
+          console.log('[ClaudeCodeSession] Executing with Gemini model:', model);
+          // For now, Gemini doesn't support session continuation like Claude
+          // Each call is independent
+          await api.executeGeminiCode(prompt, model, projectPath);
+          // Mark that we've started a conversation
+          if (isFirstPrompt) {
+            setIsFirstPrompt(false);
+          }
         } else {
-          console.log('[ClaudeCodeSession] Starting new session');
-          setIsFirstPrompt(false);
-          await api.executeClaudeCode(projectPath, prompt, model);
+          // For Claude models, use existing Claude execution
+          const claudeModel = getClaudeModelId(model);
+          if (effectiveSession && !isFirstPrompt) {
+            console.log('[ClaudeCodeSession] Resuming Claude session:', effectiveSession.id);
+            await api.resumeClaudeCode(projectPath, effectiveSession.id, prompt, claudeModel);
+          } else {
+            console.log('[ClaudeCodeSession] Starting new Claude session');
+            setIsFirstPrompt(false);
+            await api.executeClaudeCode(projectPath, prompt, claudeModel);
+          }
         }
       }
     } catch (err) {
       console.error("Failed to send prompt:", err);
-      setError("Failed to send prompt");
+      const errorMessage = err instanceof Error ? err.message : "Failed to send prompt";
+      setError(`Error: ${errorMessage}`);
       setIsLoading(false);
       hasActiveSessionRef.current = false;
     }

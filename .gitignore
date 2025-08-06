@@ -39,3 +39,12 @@ nul
 
 # Auto-generated analysis files
 src-tauri/_claudia_*.json
+
+# Crush-specific files
+.crush/
+
+# Git workflow backups
+.git-backups/
+
+# Temporary workflow files
+.git-workflow-temp/
