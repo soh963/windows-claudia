@@ -41,6 +41,7 @@ import {
   Bar
 } from 'recharts';
 import { cn } from '@/lib/utils';
+import { useMonitoringStore } from '@/stores/monitoringStore';
 
 export interface TaskSummary {
   id: string;
@@ -91,8 +92,67 @@ const TaskTimeline: React.FC<TaskTimelineProps> = ({ className, onClose }) => {
   const [selectedTimeRange, setSelectedTimeRange] = useState<'today' | 'week' | 'month'>('today');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const [productivityData, setProductivityData] = useState<ProductivityMetric[]>([]);
+  
+  // Connect to monitoring store for real-time updates
+  const { operations, activeOperations, getOverallProgress } = useMonitoringStore();
+  
+  // Convert monitoring store operations to session summaries for real-time updates
+  const realtimeSessionData = React.useMemo(() => {
+    const sessionMap = new Map<string, SessionSummary>();
+    
+    operations.forEach((op, opId) => {
+      if (op.type === 'claude_request' || op.type === 'gemini_request') {
+        const sessionId = op.metadata?.sessionId || 'current-session';
+        
+        if (!sessionMap.has(sessionId)) {
+          sessionMap.set(sessionId, {
+            session_id: sessionId,
+            timestamp: new Date(op.startTime),
+            duration: 0,
+            primary_model: op.metadata?.model || 'unknown',
+            supporting_models: [],
+            tasks_completed: 0,
+            tasks_failed: 0,
+            code_generated: 0,
+            documents_analyzed: 0,
+            success_rate: 0,
+            average_response_time: 0,
+            user_satisfaction: 0,
+            major_completions: [],
+            issues_resolved: [],
+            new_features_added: [],
+            tasks: []
+          });
+        }
+        
+        const session = sessionMap.get(sessionId)!;
+        const task: TaskSummary = {
+          id: opId,
+          title: op.name,
+          model_used: op.metadata?.model || 'unknown',
+          duration: op.endTime ? op.endTime - op.startTime : Date.now() - op.startTime,
+          status: op.status === 'completed' ? 'completed' : op.status === 'error' ? 'failed' : 'partial',
+          complexity: 'medium',
+          tokens_used: op.metadata?.tokenCount || 0,
+          timestamp: new Date(op.startTime),
+          achievements: []
+        };
+        
+        session.tasks.push(task);
+        if (task.status === 'completed') session.tasks_completed++;
+        if (task.status === 'failed') session.tasks_failed++;
+        session.duration = Math.max(session.duration, task.duration);
+        
+        // Update success rate
+        const total = session.tasks_completed + session.tasks_failed;
+        session.success_rate = total > 0 ? (session.tasks_completed / total) * 100 : 0;
+      }
+    });
+    
+    return Array.from(sessionMap.values());
+  }, [operations]);
 
-  // Mock data - replace with real data from your store/API
+  // Combine mock data with real-time data
   useEffect(() => {
     const mockSessions: SessionSummary[] = [
       {
@@ -205,9 +265,11 @@ const TaskTimeline: React.FC<TaskTimelineProps> = ({ className, onClose }) => {
       { date: '14:00', tasks_completed: 25, success_rate: 97, avg_response_time: 1380, models_used: 6 }
     ];
 
-    setSessions(mockSessions);
+    // Combine mock sessions with real-time sessions
+    const combinedSessions = [...realtimeSessionData, ...mockSessions];
+    setSessions(combinedSessions);
     setProductivityData(mockProductivityData);
-  }, []);
+  }, [realtimeSessionData]);
 
   const filteredSessions = sessions.filter(session => {
     const now = new Date();

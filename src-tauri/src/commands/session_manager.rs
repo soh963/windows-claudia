@@ -4,9 +4,41 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
-use log::{info, warn, error};
+use log::{info, warn};
+use uuid::Uuid;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use super::agents::AgentDb;
+
+/// Generate secure session ID using UUID v4 + timestamp + salt
+fn generate_secure_session_id(project_id: &str) -> String {
+    let uuid = Uuid::new_v4();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    
+    // Create salt from project_id and current time for uniqueness
+    let mut hasher = DefaultHasher::new();
+    project_id.hash(&mut hasher);
+    timestamp.hash(&mut hasher);
+    let salt = hasher.finish();
+    
+    // Combine UUID, timestamp, and salt for maximum uniqueness
+    format!("{}-{}-{:x}", uuid, timestamp, salt)
+}
+
+/// Generate secure message ID for deduplication
+fn generate_message_id(session_id: &str, sequence_number: i64, content_hash: u64) -> String {
+    let uuid = Uuid::new_v4();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    
+    format!("{}-{}-{}-{:x}", uuid, session_id, sequence_number, content_hash)
+}
 
 /// Represents a session message for storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -491,4 +523,84 @@ pub async fn load_session_history_enhanced(
             Ok(Vec::new())
         }
     }
+}
+
+/// Create a new secure session with UUID v4 + timestamp + salt ID
+#[tauri::command]
+pub async fn create_secure_session(
+    project_id: String,
+    project_path: String,
+    is_gemini: bool,
+    db: State<'_, AgentDb>,
+) -> Result<String, String> {
+    let session_id = generate_secure_session_id(&project_id);
+    
+    info!("Creating secure session {} for project {}", session_id, project_id);
+    
+    create_empty_session(&session_id, &project_id, &project_path, is_gemini, &db).await?;
+    
+    Ok(session_id)
+}
+
+/// Add a message with deduplication
+#[tauri::command]
+pub async fn add_secure_message(
+    session_id: String,
+    project_id: String,
+    message_type: String,
+    content: JsonValue,
+    model_used: Option<String>,
+    tokens_used: Option<i32>,
+    is_gemini: bool,
+    db: State<'_, AgentDb>,
+) -> Result<String, String> {
+    // Generate content hash for deduplication
+    let content_str = serde_json::to_string(&content).unwrap_or_default();
+    let mut hasher = DefaultHasher::new();
+    content_str.hash(&mut hasher);
+    let content_hash = hasher.finish();
+    
+    // Get next sequence number and check for duplicates in a scope
+    let (sequence_number, existing_id) = {
+        let conn = db.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        
+        // Get next sequence number
+        let sequence_number = conn.query_row(
+            "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM session_messages WHERE session_id = ?",
+            params![&session_id],
+            |row| row.get::<_, i64>(0)
+        ).unwrap_or(1);
+        
+        // Check for duplicate messages based on content hash
+        let existing_id = conn.query_row(
+            "SELECT id FROM session_messages WHERE session_id = ? AND content = ?",
+            params![&session_id, &content_str],
+            |row| row.get::<_, String>(0)
+        ).ok();
+        
+        (sequence_number, existing_id)
+    }; // conn is dropped here before any await
+    
+    // If we found a duplicate, return the existing message ID
+    if let Some(existing_id) = existing_id {
+        info!("Duplicate message detected, returning existing ID: {}", existing_id);
+        return Ok(existing_id);
+    }
+    
+    let message_id = generate_message_id(&session_id, sequence_number, content_hash);
+    
+    // Add the message using existing function
+    store_session_message(
+        &session_id,
+        &project_id,
+        &project_id, // Use project_id as project_path
+        &message_type,
+        content,
+        model_used,
+        tokens_used,
+        is_gemini,
+        &db,
+    ).await?;
+    
+    Ok(message_id)
 }

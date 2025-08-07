@@ -9,6 +9,7 @@ import { SessionList } from '@/components/SessionList';
 import { RunningClaudeSessions } from '@/components/RunningClaudeSessions';
 import { Button } from '@/components/ui/button';
 import { SkeletonList } from '@/components/ui/skeleton';
+import { ThreePanelLayout } from '@/components/ThreePanelLayout';
 import { pageVariants, slideVariants, staggerContainer, staggerItem, buttonVariants } from '@/lib/animations';
 
 // Lazy load heavy components - Production-safe imports with fallbacks
@@ -441,6 +442,21 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
     }
   };
 
+  // Determine if panels should be visible based on tab type
+  const shouldShowPanels = ['chat', 'projects', 'dashboard'].includes(tab.type);
+
+  const content = (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      {renderContent()}
+    </Suspense>
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -449,15 +465,16 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
       transition={{ duration: 0.2 }}
       className={`h-full w-full ${panelVisibilityClass}`}
     >
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          </div>
-        }
-      >
-        {renderContent()}
-      </Suspense>
+      {shouldShowPanels ? (
+        <ThreePanelLayout
+          leftPanelVisible={tab.type === 'chat' || tab.type === 'dashboard'}
+          rightPanelVisible={tab.type === 'chat' || tab.type === 'projects'}
+        >
+          {content}
+        </ThreePanelLayout>
+      ) : (
+        content
+      )}
     </motion.div>
   );
 };

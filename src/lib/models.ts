@@ -73,29 +73,29 @@ export const CLAUDE_MODELS: Model[] = [
     id: 'auto',
     name: 'Auto (Smart Selection)',
     provider: 'claude',
-    description: 'Automatically selects the best model: Claude for intelligence, Gemini for large context',
-    contextWindow: 2097152, // Max available (Gemini's context)
+    description: 'Claude 4.1 Opus 기반 지능형 모델 선택 - 기본 질문은 Claude 4.1 Opus, 프로젝트 진행시 최적 모델 분배',
+    contextWindow: 2097152, // Max available across all models
     supportsVision: true,
     capabilities: {
       streaming: true,
       functionCalling: true,
       systemInstructions: true,
       multimodal: true,
-      codeExecution: false,
-      webBrowsing: false,
+      codeExecution: true,      // Enhanced capabilities
+      webBrowsing: true,        // Enhanced capabilities
       maxOutputTokens: 8192,
       supportedImageTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
       supportedFileTypes: ['text/plain', 'application/json', 'text/markdown'],
-      // Auto-selection adaptive characteristics
-      intelligence: 95,          // Highest intelligence (varies by task)
-      speed: 85,                // Good speed (varies by model selected)
-      codingExcellence: 95,     // Excellent coding (uses best available)
-      analysisDepth: 95,        // Deep analysis capability
-      creativeWriting: 90,      // High creativity
-      technicalPrecision: 95,   // Highest precision
-      costPerToken: 0.015,      // Variable cost (depends on selection)
-      averageResponseTime: 1500, // Adaptive response time
-      successRate: 99.5         // Highest success rate through optimization
+      // Supreme auto-selection characteristics with Claude 4.1 Opus as default
+      intelligence: 100,         // Maximum intelligence (Claude 4.1 Opus default)
+      speed: 90,                // Optimized speed through intelligent routing
+      codingExcellence: 100,    // Maximum coding (Claude 4.1 Opus default)
+      analysisDepth: 100,       // Maximum analysis depth
+      creativeWriting: 98,      // Near-maximum creativity
+      technicalPrecision: 100,  // Maximum precision
+      costPerToken: 0.050,      // Premium for intelligence (default to best)
+      averageResponseTime: 2000, // Slight delay for superior thinking
+      successRate: 99.9         // Maximum success rate through Claude 4.1 Opus default
     },
     defaultConfig: {
       temperature: 0.7,

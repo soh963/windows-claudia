@@ -11,8 +11,12 @@ mod windows_command;
 mod runtime_utils;
 
 use checkpoint::state::CheckpointState;
+use commands::execution_control::{
+    ExecutionControlState, stop_execution, continue_execution, reset_execution,
+    get_execution_status, update_execution_metrics,
+};
 use commands::agents::{
-    cleanup_finished_processes, create_agent, delete_agent, execute_agent, export_agent,
+    cleanup_finished_processes, create_agent, delete_agent, export_agent,
     export_agent_to_file, fetch_github_agent_content, fetch_github_agents, get_agent,
     get_agent_run, get_agent_run_with_real_time_metrics, get_claude_binary_path,
     get_live_session_output, get_session_output, get_session_status, import_agent,
@@ -75,6 +79,10 @@ use commands::gemini_universal::{
 use commands::gemini_test_suite::{
     test_gemini_model_comprehensive, test_all_gemini_models,
 };
+use commands::ollama::{
+    check_ollama_status, get_ollama_models, execute_ollama_request,
+    pull_ollama_model, delete_ollama_model, get_ollama_model_info,
+};
 
 use commands::usage::{
     get_session_stats, get_usage_by_date_range, get_usage_details, get_usage_stats,
@@ -85,16 +93,31 @@ use commands::ai_usage_tracker::{
 use commands::ai_session_integrator::{
     ai_session_start, ai_session_track_message, ai_session_end, ai_session_get_active, ai_session_cleanup_expired,
 };
-use commands::auto_model_selection::{
-    get_auto_model_recommendation, analyze_task_requirements, update_latest_models_on_startup,
-    get_latest_models,
+// Temporarily disabled due to compilation issues
+// use commands::auto_model_selection::{
+//     get_auto_model_recommendation, analyze_task_requirements, update_latest_models_on_startup,
+//     get_latest_models,
+// };
+use commands::ai_benchmark_system::{
+    collect_ai_model_benchmarks, update_benchmarks_from_web, intelligent_model_selection,
+    save_benchmark_data, get_latest_benchmark_data,
 };
 use commands::storage::{
     storage_list_tables, storage_read_table, storage_update_row, storage_delete_row,
     storage_insert_row, storage_execute_sql, storage_reset_database,
 };
 use commands::proxy::{get_proxy_settings, save_proxy_settings, apply_proxy_settings};
-use commands::session_manager::{load_session_history_enhanced, delete_session};
+use commands::session_manager::{load_session_history_enhanced, delete_session, create_secure_session, add_secure_message};
+use commands::error_tracker::{record_error, get_error, list_errors, resolve_error, get_error_stats};
+use commands::debug_system::{
+    log_debug_entry, start_operation_trace, add_trace_step, complete_operation_trace,
+    record_performance_metrics, get_debug_logs, get_operation_traces, get_performance_metrics,
+    set_debug_level, cleanup_old_debug_entries
+};
+use commands::universal_mcp::{
+    get_universal_mcp_config, save_universal_mcp_config, execute_with_universal_mcp,
+    get_supported_mcp_servers, test_universal_mcp_integration
+};
 use commands::claude_sync::{
     sync_claude_commands, get_claude_sync_state, set_claude_sync_enabled,
     get_synced_claude_commands, check_claude_availability, set_claude_sync_interval,
@@ -104,6 +127,13 @@ use commands::session_deduplication::{
     check_message_duplicate, clear_session_deduplication, create_isolated_session,
     validate_session_boundary, get_session_isolation_state, cleanup_old_sessions,
     MessageDeduplicationManager, SessionIsolationManager,
+};
+use commands::universal_model_executor::{
+    execute_with_universal_tools, get_universal_model_capabilities, 
+    test_universal_model_execution, get_realtime_model_performance,
+};
+use commands::simple_model_validator::{
+    validate_all_models, test_specific_model, test_auto_selection, system_health_check,
 };
 use process::ProcessRegistryState;
 use std::sync::Mutex;
@@ -177,16 +207,47 @@ fn main() {
             let conn = init_database(&app.handle()).expect("Failed to initialize agents database");
             app.manage(AgentDb(Mutex::new(conn)));
 
+            // Initialize error tracking tables
+            let db_for_errors = app.state::<AgentDb>();
+            if let Err(e) = tauri::async_runtime::block_on(commands::error_tracker::init_error_tables(&db_for_errors)) {
+                log::warn!("Failed to initialize error tracking tables: {}", e);
+            } else {
+                log::info!("Error tracking system initialized");
+            }
+
+            // Initialize debug system tables
+            if let Err(e) = tauri::async_runtime::block_on(commands::debug_system::init_debug_tables(&db_for_errors)) {
+                log::warn!("Failed to initialize debug system tables: {}", e);
+            } else {
+                log::info!("Debug system initialized");
+            }
+
+            // Initialize universal MCP tables
+            if let Err(e) = tauri::async_runtime::block_on(commands::universal_mcp::init_universal_mcp_tables(&db_for_errors)) {
+                log::warn!("Failed to initialize universal MCP tables: {}", e);
+            } else {
+                log::info!("Universal MCP system initialized");
+            }
+
             // Update latest models on startup (spawn async task)
             let db_handle = app.handle().clone();
             std::thread::spawn(move || {
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                     let db_for_models = db_handle.state::<AgentDb>();
-                    if let Err(e) = update_latest_models_on_startup(db_for_models).await {
-                        log::warn!("Failed to update latest models on startup: {}", e);
+                    // TODO: Re-enable when auto_model_selection is fixed
+                    // Update latest models on startup
+                    // if let Err(e) = update_latest_models_on_startup(db_for_models.clone()).await {
+                    //     log::warn!("Failed to update latest models on startup: {}", e);
+                    // } else {
+                    //     log::info!("Successfully updated latest models on startup");
+                    // }
+                    
+                    // Initialize and save benchmark data on startup
+                    if let Err(e) = save_benchmark_data(db_for_models.clone()).await {
+                        log::warn!("Failed to save benchmark data on startup: {}", e);
                     } else {
-                        log::info!("Successfully updated latest models on startup");
+                        log::info!("Successfully initialized benchmark data on startup");
                     }
                 });
             });
@@ -217,6 +278,8 @@ fn main() {
 
             // Initialize Claude process state
             app.manage(ClaudeProcessState::default());
+            // Initialize Execution Control state
+            app.manage(ExecutionControlState::default());
 
             // Initialize Claude sync state
             let sync_state = GlobalSyncState::default();
@@ -240,6 +303,16 @@ fn main() {
                 });
             });
 
+            // Start daily knowledge base update task
+            let db_path = app.path().app_data_dir().unwrap().join("claudia.sqlite");
+            let db_path_str = db_path.to_str().unwrap().to_string();
+            let db_path_arc = std::sync::Arc::new(db_path_str);
+
+            // TODO: Re-enable when model_knowledge_base compilation is fixed
+            // tauri::async_runtime::spawn(async move {
+            //     commands::model_knowledge_base::daily_knowledge_update_task(db_path_arc).await;
+            // });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -262,6 +335,35 @@ fn main() {
             validate_session_exists,
             recover_session,
             delete_session,
+            create_secure_session,
+            add_secure_message,
+            
+            // Error Knowledge Base
+            record_error,
+            get_error,
+            list_errors,
+            resolve_error,
+            get_error_stats,
+            
+            // Debug System & Tracing
+            log_debug_entry,
+            start_operation_trace,
+            add_trace_step,
+            complete_operation_trace,
+            record_performance_metrics,
+            get_debug_logs,
+            get_operation_traces,
+            get_performance_metrics,
+            set_debug_level,
+            cleanup_old_debug_entries,
+            
+            // Universal MCP Integration
+            get_universal_mcp_config,
+            save_universal_mcp_config,
+            execute_with_universal_mcp,
+            get_supported_mcp_servers,
+            test_universal_mcp_integration,
+            
             execute_claude_code,
             continue_claude_code,
             resume_claude_code,
@@ -321,6 +423,14 @@ fn main() {
             test_gemini_model_comprehensive,
             test_all_gemini_models,
             
+            // Ollama Integration
+            check_ollama_status,
+            get_ollama_models,
+            execute_ollama_request,
+            pull_ollama_model,
+            delete_ollama_model,
+            get_ollama_model_info,
+            
             // Checkpoint Management
             create_checkpoint,
             restore_checkpoint,
@@ -343,7 +453,6 @@ fn main() {
             update_agent,
             delete_agent,
             get_agent,
-            execute_agent,
             list_agent_runs,
             get_agent_run,
             list_agent_runs_with_metrics,
@@ -387,11 +496,18 @@ fn main() {
             ai_session_get_active,
             ai_session_cleanup_expired,
             
-            // Auto Model Selection
-            get_auto_model_recommendation,
-            analyze_task_requirements,
-            update_latest_models_on_startup,
-            get_latest_models,
+            // Auto Model Selection - temporarily disabled
+            // get_auto_model_recommendation,
+            // analyze_task_requirements,
+            // update_latest_models_on_startup,
+            // get_latest_models,
+            
+            // AI Benchmark System
+            collect_ai_model_benchmarks,
+            update_benchmarks_from_web,
+            intelligent_model_selection,
+            save_benchmark_data,
+            get_latest_benchmark_data,
             
             // MCP (Model Context Protocol)
             mcp_add,
@@ -451,6 +567,22 @@ fn main() {
             // Intelligent Routing
             commands::intelligent_routing::analyze_chat_input,
             commands::intelligent_routing::parse_mcp_install_request,
+            commands::intelligent_routing::get_intelligent_model_recommendation,
+            commands::intelligent_routing::update_model_performance_metrics,
+            commands::intelligent_routing::update_model_benchmarks_from_web,
+            commands::intelligent_routing::get_model_analytics,
+            
+            // Universal Model Execution
+            execute_with_universal_tools,
+            get_universal_model_capabilities,
+            test_universal_model_execution,
+            get_realtime_model_performance,
+            
+            // Model Validation & Testing
+            validate_all_models,
+            test_specific_model,
+            test_auto_selection,
+            system_health_check,
             
             // Image Handler
             commands::image_handler::save_base64_image,
@@ -474,6 +606,13 @@ fn main() {
             commands::dashboard_utils::get_current_working_project,
             commands::dashboard_utils::get_recent_projects,
             commands::dashboard_utils::create_project_if_not_exists,
+            
+            // Execution Control
+            stop_execution,
+            continue_execution,
+            reset_execution,
+            get_execution_status,
+            update_execution_metrics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

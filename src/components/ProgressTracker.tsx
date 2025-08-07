@@ -48,7 +48,6 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({ className, onC
   const {
     operations,
     activeOperations,
-    isProgressTrackerVisible,
     selectedOperationId,
     selectOperation,
     clearCompletedOperations,
@@ -177,16 +176,14 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({ className, onC
     });
   };
 
-  if (!isProgressTrackerVisible) return null;
-
   return (
     <motion.div
-      initial={{ x: -320, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: -320, opacity: 0 }}
-      transition={{ type: 'spring', damping: 20 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
       className={cn(
-        "fixed left-0 top-0 h-full w-80 bg-background border-r shadow-lg z-40",
+        "h-full w-full bg-background border-r",
         className
       )}
     >

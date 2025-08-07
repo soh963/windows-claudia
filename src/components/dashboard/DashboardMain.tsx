@@ -20,6 +20,7 @@ import RiskAssessment from './RiskAssessment';
 import DocumentationStatus from './DocumentationStatus';
 import WorkflowVisualization from './WorkflowVisualization';
 import ProjectGoals from './ProjectGoals';
+import { SessionDashboard } from './SessionDashboard';
 
 interface DashboardMainProps {
   projectId: string;
@@ -255,7 +256,7 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <TabsList className="grid w-full grid-cols-6 mb-6">
+            <TabsList className="grid w-full grid-cols-7 mb-6">
               <TabsTrigger value="overview" className="relative">
                 Overview
                 {activeTab === 'overview' && (
@@ -309,6 +310,16 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
               <TabsTrigger value="ai" className="relative">
                 AI Usage
                 {activeTab === 'ai' && (
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="sessions" className="relative">
+                Sessions
+                {activeTab === 'sessions' && (
                   <motion.div
                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
                     layoutId="activeTab"
@@ -433,6 +444,15 @@ function DashboardMain({ projectId, projectPath, onBack }: DashboardMainProps) {
               <TabsContent value="ai" className="space-y-4">
                 <motion.div variants={dashboardVariants.item}>
                   <AIAnalytics usage={data?.ai_usage || []} loading={loading} />
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="sessions" className="space-y-4">
+                <motion.div variants={dashboardVariants.item}>
+                  <SessionDashboard 
+                    projectId={projectId} 
+                    projectPath={projectPath}
+                  />
                 </motion.div>
               </TabsContent>
             </motion.div>

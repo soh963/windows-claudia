@@ -27,6 +27,8 @@ import { AgentsModal } from "@/components/AgentsModal";
 import DashboardMain from "@/components/dashboard/DashboardMain";
 import { useTabState } from "@/hooks/useTabState";
 import { ProgressMonitor } from "@/components/ProgressMonitor";
+import TaskProgress from "@/components/TaskProgress"; // Import TaskProgress
+import SessionSummary from "@/components/SessionSummary"; // Import SessionSummary
 
 type View = 
   | "welcome" 
@@ -420,8 +422,10 @@ function AppContent() {
         return (
           <div className="h-full flex flex-col">
             <TabManager className="flex-shrink-0" />
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden flex">
+              <TaskProgress />
               <TabContent />
+              <SessionSummary />
             </div>
           </div>
         );

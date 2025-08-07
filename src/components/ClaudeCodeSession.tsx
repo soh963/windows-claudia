@@ -11,7 +11,9 @@ import {
   ChevronUp,
   X,
   Hash,
-  Command
+  Command,
+  Activity,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +38,10 @@ import type { ClaudeStreamMessage } from "./AgentExecution";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { IntelligentChat } from "./IntelligentChat";
 import { useMessageDeduplication, useSessionIsolation } from "@/hooks/useMessageDeduplication";
+import { ThreePanelLayout } from "./ThreePanelLayout";
+import { useMonitoringStore } from "@/stores/monitoringStore";
+import { useExecutionControl } from "@/lib/executionControl";
+import { ExecutionControlBar } from "./ExecutionControlBar";
 
 interface ClaudeCodeSessionProps {
   /**
@@ -99,6 +105,15 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
   // Queued prompts state
   const [queuedPrompts, setQueuedPrompts] = useState<Array<{ id: string; prompt: string; model: string }>>([]);
   
+  // Connect to monitoring store for real-time progress tracking
+  const { startOperation, updateOperation, completeOperation, cancelOperation } = useMonitoringStore();
+  const [currentOperationId, setCurrentOperationId] = useState<string | null>(null);
+  
+  // Execution control integration
+  const executionControl = useExecutionControl(claudeSessionId);
+  const [executionStartTime, setExecutionStartTime] = useState<number>(0);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  
   // New state for preview feature
   const [showPreview, setShowPreview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -108,6 +123,10 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
   
   // Add collapsed state for queued prompts
   const [queuedPromptsCollapsed, setQueuedPromptsCollapsed] = useState(false);
+  
+  // Panel visibility states for three-panel layout
+  const [leftPanelVisible, setLeftPanelVisible] = useState(false); // Start hidden
+  const [rightPanelVisible, setRightPanelVisible] = useState(false); // Start hidden
   
   const parentRef = useRef<HTMLDivElement>(null);
   const unlistenRefs = useRef<UnlistenFn[]>([]);
@@ -263,6 +282,23 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
     setTotalTokens(tokens);
   }, [messages]);
 
+  // Update elapsed time when execution is running
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (isLoading && executionStartTime > 0) {
+      interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - executionStartTime) / 1000));
+      }, 1000);
+    } else if (!isLoading && interval) {
+      clearInterval(interval);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLoading, executionStartTime]);
+
   const loadSessionHistory = async () => {
     if (!session) return;
     
@@ -409,7 +445,7 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
       return;
     }
 
-    // If already loading, queue the prompt
+    // If already loading, queue the prompt for continuous work support
     if (isLoading) {
       const newPrompt = {
         id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -417,6 +453,7 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
         model
       };
       setQueuedPrompts(prev => [...prev, newPrompt]);
+      console.log('[ClaudeCodeSession] Queued prompt for continuous work:', newPrompt);
       return;
     }
 
@@ -424,6 +461,25 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
       setIsLoading(true);
       setError(null);
       hasActiveSessionRef.current = true;
+      
+      // Start execution time tracking
+      const startTime = Date.now();
+      setExecutionStartTime(startTime);
+      setElapsedTime(0);
+      
+      // Start tracking in monitoring store for real-time progress
+      const operationId = startOperation({
+        type: isGeminiModel(model) ? 'gemini_request' : 'claude_request',
+        name: `AI Request - ${model}`,
+        description: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+        metadata: {
+          model,
+          projectPath,
+          sessionId: claudeSessionId || effectiveSession?.id,
+          promptLength: prompt.length
+        }
+      });
+      setCurrentOperationId(operationId);
       
       // For resuming sessions, ensure we have the session ID
       if (effectiveSession && !claudeSessionId) {
@@ -525,9 +581,39 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
 
         // Helper to handle completion events (both generic and scoped)
         const processComplete = async (success: boolean) => {
+          console.log('[ClaudeCodeSession] Processing completion, success:', success);
           setIsLoading(false);
           hasActiveSessionRef.current = false;
           isListeningRef.current = false; // Reset listening state
+          
+          // Update monitoring store
+          if (currentOperationId) {
+            if (success) {
+              completeOperation(currentOperationId);
+            } else {
+              completeOperation(currentOperationId, {
+                message: 'Request failed',
+                severity: 'medium'
+              });
+            }
+            setCurrentOperationId(null);
+          }
+          
+          // Update execution control metrics if available
+          if (claudeSessionId && executionControl.updateMetrics) {
+            await executionControl.updateMetrics(elapsedTime, totalTokens);
+          }
+          
+          // Process queued prompts for continuous work
+          if (queuedPrompts.length > 0 && success) {
+            const nextPrompt = queuedPrompts[0];
+            setQueuedPrompts(prev => prev.slice(1));
+            console.log('[ClaudeCodeSession] Processing queued prompt:', nextPrompt);
+            // Small delay to ensure UI updates
+            setTimeout(() => {
+              handleSendPrompt(nextPrompt.prompt, nextPrompt.model);
+            }, 100);
+          }
 
           if (effectiveSession && success) {
             try {
@@ -728,6 +814,12 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
     try {
       await api.cancelClaudeExecution(claudeSessionId);
       
+      // Update monitoring store
+      if (currentOperationId) {
+        cancelOperation(currentOperationId);
+        setCurrentOperationId(null);
+      }
+      
       // Clean up listeners
       unlistenRefs.current.forEach(unlisten => unlisten());
       unlistenRefs.current = [];
@@ -772,6 +864,36 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
       isListeningRef.current = false;
       setError(null);
     }
+  };
+
+  // Enhanced execution control handlers
+  const handleStopExecution = async () => {
+    if (executionControl.stopExecution) {
+      await executionControl.stopExecution();
+    } else {
+      // Fallback to cancel method
+      await handleCancelExecution();
+    }
+  };
+
+  const handleContinueExecution = async () => {
+    if (executionControl.continueExecution) {
+      await executionControl.continueExecution();
+    }
+  };
+
+  const handleResetExecution = async () => {
+    if (executionControl.resetExecution) {
+      await executionControl.resetExecution();
+    }
+    
+    // Clear UI state
+    setMessages([]);
+    setRawJsonlOutput([]);
+    setTotalTokens(0);
+    setElapsedTime(0);
+    setExecutionStartTime(0);
+    setError(null);
   };
 
   const handleFork = (checkpointId: string) => {
@@ -984,8 +1106,14 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
   }
 
   return (
-    <div className={cn("flex flex-col h-full bg-background", className)}>
-      <div className="w-full h-full flex flex-col">
+    <ThreePanelLayout
+      leftPanelVisible={leftPanelVisible}
+      rightPanelVisible={rightPanelVisible}
+      onToggleLeftPanel={() => setLeftPanelVisible(!leftPanelVisible)}
+      onToggleRightPanel={() => setRightPanelVisible(!rightPanelVisible)}
+      className={cn("h-full", className)}
+    >
+      <div className="w-full h-full flex flex-col bg-background">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -1014,6 +1142,44 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Progress Tracker Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setLeftPanelVisible(!leftPanelVisible)}
+                    className="h-8 w-8"
+                  >
+                    <Activity className={cn("h-4 w-4", leftPanelVisible && "text-primary")} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Toggle Progress Tracker</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            {/* Task Timeline Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setRightPanelVisible(!rightPanelVisible)}
+                    className="h-8 w-8"
+                  >
+                    <Clock className={cn("h-4 w-4", rightPanelVisible && "text-primary")} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Toggle Task Timeline</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
             {projectPath && onProjectSettings && (
               <Button
                 variant="outline"
@@ -1308,6 +1474,18 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
             />
           </div>
 
+          {/* Enhanced Execution Control Bar */}
+          <ExecutionControlBar
+            isExecuting={isLoading}
+            onStop={handleStopExecution}
+            onContinue={handleContinueExecution}
+            onReset={handleResetExecution}
+            totalTokens={totalTokens}
+            elapsedTime={elapsedTime}
+            status={isLoading ? 'executing' : executionControl.isStopped ? 'stopped' : error ? 'error' : 'completed'}
+            canContinue={executionControl.canContinue}
+          />
+
           {/* Token Counter - positioned under the Send button */}
           {totalTokens > 0 && (
             <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none">
@@ -1448,6 +1626,6 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </ThreePanelLayout>
   );
 };

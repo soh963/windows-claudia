@@ -1,7 +1,14 @@
 pub mod agents;
+// Temporarily disabled for compilation
+// pub mod model_knowledge_base;
+// pub mod execution_service;
+// pub mod claude_execution_service;
+// pub mod gemini_execution_service;
+// pub mod ollama_execution_service;
+pub mod ai_benchmark_system;
 pub mod ai_usage_tracker;
 pub mod ai_session_integrator;
-pub mod auto_model_selection;
+// pub mod auto_model_selection;
 pub mod claude;
 pub mod claude_sync;
 pub mod dashboard;
@@ -39,4 +46,11 @@ pub mod proxy;
 pub mod intelligent_routing;
 pub mod mcp_manager;
 pub mod image_handler;
+pub mod ollama;
 pub mod session_deduplication;
+pub mod universal_model_executor;
+pub mod simple_model_validator;
+pub mod error_tracker;
+pub mod debug_system;
+pub mod universal_mcp;
+pub mod execution_control;

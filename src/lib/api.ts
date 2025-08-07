@@ -2228,18 +2228,21 @@ export const api = {
    * @param command - The slash command to execute
    * @param args - Arguments to substitute in the command
    * @param projectPath - Working directory for the command
+   * @param model - Optional model to use for execution
    * @returns Promise resolving when execution starts (not when complete)
    */
   async executeClaudeSlashCommand(
     command: SlashCommand,
     args: string,
-    projectPath: string
+    projectPath: string,
+    model?: string
   ): Promise<void> {
     try {
       return await invoke<void>("execute_claude_slash_command", {
         command,
         arguments: args,
-        projectPath
+        projectPath,
+        model: model || null
       });
     } catch (error) {
       console.error("Failed to execute slash command:", error);

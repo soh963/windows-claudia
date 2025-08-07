@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use dirs;
 use log::{debug, error, info};
-use tauri::Emitter;
+use tauri::{Emitter, State};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use super::{claude::ClaudeProcessState, agents::AgentDb};
 
 #[cfg(target_os = "windows")]
 #[allow(unused_imports)]  // Used by creation_flags() method calls within Windows-specific conditional blocks
@@ -630,22 +631,22 @@ pub async fn slash_command_save(
         .map_err(|e| format!("Failed to load saved command: {}", e))
 }
 
-/// Execute a slash command by routing it to Claude Code CLI
+/// Execute a slash command with intelligent model routing
 #[tauri::command]
 pub async fn execute_claude_slash_command(
     app: tauri::AppHandle,
     command: SlashCommand,
     arguments: String,
     project_path: String,
+    model: Option<String>,
+    db: State<'_, AgentDb>,
+    claude_state: State<'_, ClaudeProcessState>,
 ) -> Result<(), String> {
     use std::process::Stdio;
     use tokio::process::Command;
     
-    info!("Executing slash command: {} with arguments: {}", command.full_command, arguments);
-    
-    // Find Claude binary
-    let claude_binary = crate::claude_binary::find_claude_binary(&app)
-        .map_err(|e| format!("Claude binary not found: {}", e))?;
+    info!("Executing slash command: {} with arguments: {} using model: {:?}", 
+        command.full_command, arguments, model);
     
     // Process command content with argument substitution
     let mut processed_content = command.content.clone();
@@ -655,12 +656,55 @@ pub async fn execute_claude_slash_command(
         processed_content = processed_content.replace("$ARGUMENTS", &arguments);
     }
     
+    // Determine model to use (default to auto if not specified)
+    let selected_model = model.unwrap_or_else(|| "auto".to_string());
+    
+    // Route to appropriate model execution based on model provider
+    if selected_model.starts_with("gemini-") || selected_model.contains("gemini") {
+        // Route to Gemini
+        info!("Routing slash command to Gemini: {}", selected_model);
+        return crate::commands::gemini::execute_gemini_code(
+            processed_content,
+            selected_model,
+            project_path,
+            app,
+            db,
+            claude_state,
+        ).await;
+    } else if selected_model.contains(":latest") || selected_model.starts_with("llama") || 
+              selected_model.starts_with("phi") || selected_model.starts_with("mistral") ||
+              selected_model.starts_with("qwen") || selected_model.starts_with("codellama") {
+        // Route to Ollama
+        info!("Routing slash command to Ollama: {}", selected_model);
+        return crate::commands::ollama::execute_ollama_request(
+            app,
+            selected_model,
+            processed_content,
+            project_path,
+            None, // system_instruction
+            None, // options
+        ).await;
+    } else {
+        // Route to Claude (default)
+        info!("Routing slash command to Claude: {}", selected_model);
+    }
+    
+    // Find Claude binary for Claude routing
+    let claude_binary = crate::claude_binary::find_claude_binary(&app)
+        .map_err(|e| format!("Claude binary not found: {}", e))?;
+    
     // Build Claude Code CLI command
     let mut claude_args = vec![];
     
     // Add the processed content as the prompt
     claude_args.push("-p".to_string());
     claude_args.push(processed_content);
+    
+    // Add model specification if not auto
+    if selected_model != "auto" {
+        claude_args.push("--model".to_string());
+        claude_args.push(selected_model);
+    }
     
     // Add allowed tools as flags if specified
     if !command.allowed_tools.is_empty() {

@@ -191,6 +191,9 @@ const FloatingPromptInputInner = (
   const [dragActive, setDragActive] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
 
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const expandedTextareaRef = useRef<HTMLTextAreaElement>(null);
   const unlistenDragDropRef = useRef<(() => void) | null>(null);
@@ -474,11 +477,19 @@ const FloatingPromptInputInner = (
       setPrompt("");
       setAttachedFiles([]);
       setEmbeddedImages([]);
+
+      // Add to history and reset index
+      setPromptHistory((prevHistory) => {
+        const newHistory = [...prevHistory, prompt.trim()];
+        return newHistory.slice(-50); // Keep last 50 entries
+      });
+      setHistoryIndex(-1);
+
     } catch (error) {
       console.error("메시지 전송 중 오류 발생:", error);
       // Show user-friendly error message
       if (error instanceof Error && error.message.includes('command line is too long')) {
-        alert('The message is too long to send. Try removing some images or shortening your message.');
+        alert('The message is too long to send. Try removing some files or shortening your message.');
       } else {
         alert('An error occurred while sending the message. Please try again.');
       }
@@ -594,7 +605,7 @@ const FloatingPromptInputInner = (
         ? entry.path.slice((projectPath || '').length + 1)
         : entry.path;
 
-      const newPrompt = `${beforeAt}@${relativePath} ${afterCursor}`;
+      const newPrompt = `${beforeAt}@${relativePath} `;
       setPrompt(newPrompt);
       setShowFilePicker(false);
       setFilePickerQuery("");
@@ -724,6 +735,26 @@ const FloatingPromptInputInner = (
     if (e.key === "Enter" && !e.shiftKey && !isExpanded && !showFilePicker && !showSlashCommandPicker) {
       e.preventDefault();
       handleSend();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (promptHistory.length === 0) return;
+
+      const newIndex = historyIndex === -1 ? promptHistory.length - 1 : Math.max(0, historyIndex - 1);
+      setHistoryIndex(newIndex);
+      setPrompt(promptHistory[newIndex]);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIndex === -1) return;
+
+      const newIndex = Math.min(promptHistory.length - 1, historyIndex + 1);
+      if (newIndex === promptHistory.length - 1 && historyIndex === promptHistory.length - 1) {
+        // If already at the last item, clear prompt
+        setPrompt("");
+        setHistoryIndex(-1);
+      } else {
+        setHistoryIndex(newIndex);
+        setPrompt(promptHistory[newIndex]);
+      }
     }
   };
 

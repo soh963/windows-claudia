@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./styles/animations.css";
 @import "./styles/overlap-prevention.css";
+@import "./styles/ui-consistency.css";
 
 /* Dark theme configuration */
 @theme {

@@ -1,6 +1,6 @@
 [package]
 name = "claudia"
-version = "0.2.3"
+version = "0.2.6"
 description = "GUI app and Toolkit for Claude Code"
 authors = ["mufeedvh", "123vviekr"]
 license = "AGPL-3.0"
@@ -42,6 +42,8 @@ base64 = "0.22"
 libc = "0.2"
 reqwest = { version = "0.12", features = ["json"] }
 futures = "0.3"
+futures-util = "0.3"
+bytes = "1.0"
 async-trait = "0.1"
 tempfile = "3"
 which = "7"

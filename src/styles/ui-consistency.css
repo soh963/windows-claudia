@@ -1,0 +1,354 @@
+/**
+ * UI Consistency Improvements
+ * Ensures all text is readable with proper contrast across all themes
+ */
+
+/* Enhanced Text Contrast for Dark Theme */
+.dark {
+  /* Primary text - High contrast white */
+  --text-primary: oklch(0.98 0.01 240);
+  --text-secondary: oklch(0.85 0.01 240);
+  --text-muted: oklch(0.70 0.01 240);
+  --text-disabled: oklch(0.50 0.01 240);
+  
+  /* Status colors with better contrast */
+  --text-success: oklch(0.85 0.20 142);
+  --text-warning: oklch(0.85 0.20 60);
+  --text-error: oklch(0.85 0.20 25);
+  --text-info: oklch(0.85 0.15 200);
+  
+  /* Background overlays for better readability */
+  --bg-overlay-subtle: oklch(0.16 0.01 240 / 0.8);
+  --bg-overlay-medium: oklch(0.18 0.01 240 / 0.9);
+  --bg-overlay-strong: oklch(0.20 0.01 240 / 0.95);
+}
+
+/* Light theme adjustments */
+.theme-light {
+  /* Primary text - High contrast dark */
+  --text-primary: oklch(0.12 0.01 240);
+  --text-secondary: oklch(0.25 0.01 240);
+  --text-muted: oklch(0.45 0.01 240);
+  --text-disabled: oklch(0.65 0.01 240);
+  
+  /* Status colors with better contrast */
+  --text-success: oklch(0.45 0.25 142);
+  --text-warning: oklch(0.45 0.25 60);
+  --text-error: oklch(0.45 0.25 25);
+  --text-info: oklch(0.45 0.20 200);
+  
+  /* Background overlays for better readability */
+  --bg-overlay-subtle: oklch(0.94 0.01 240 / 0.8);
+  --bg-overlay-medium: oklch(0.92 0.01 240 / 0.9);
+  --bg-overlay-strong: oklch(0.90 0.01 240 / 0.95);
+}
+
+/* Gray theme adjustments */
+.theme-gray {
+  /* Primary text - High contrast white */
+  --text-primary: oklch(0.98 0.01 240);
+  --text-secondary: oklch(0.88 0.01 240);
+  --text-muted: oklch(0.72 0.01 240);
+  --text-disabled: oklch(0.52 0.01 240);
+  
+  /* Status colors with better contrast */
+  --text-success: oklch(0.88 0.20 142);
+  --text-warning: oklch(0.88 0.20 60);
+  --text-error: oklch(0.88 0.20 25);
+  --text-info: oklch(0.88 0.15 200);
+  
+  /* Background overlays for better readability */
+  --bg-overlay-subtle: oklch(0.28 0.01 240 / 0.8);
+  --bg-overlay-medium: oklch(0.30 0.01 240 / 0.9);
+  --bg-overlay-strong: oklch(0.32 0.01 240 / 0.95);
+}
+
+/* Universal text improvements */
+.text-primary {
+  color: var(--text-primary) !important;
+  font-weight: 500;
+}
+
+.text-secondary {
+  color: var(--text-secondary) !important;
+}
+
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+.text-disabled {
+  color: var(--text-disabled) !important;
+  cursor: not-allowed;
+}
+
+/* Ensure all headings have proper contrast */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Improve paragraph readability */
+p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Enhanced button contrast */
+.btn, button {
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn:hover, button:hover {
+  filter: brightness(1.1);
+}
+
+.btn:disabled, button:disabled {
+  color: var(--text-disabled) !important;
+  opacity: 0.6;
+}
+
+/* Input field improvements */
+input, textarea, select {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay-subtle);
+  border-color: var(--color-border);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--color-primary);
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* Code block readability */
+code, pre {
+  color: var(--text-primary);
+  background-color: var(--bg-overlay-medium);
+  font-family: var(--font-mono);
+}
+
+/* Link improvements */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+a:hover {
+  text-decoration: underline;
+  filter: brightness(1.2);
+}
+
+/* Table readability */
+table {
+  color: var(--text-primary);
+}
+
+th {
+  color: var(--text-primary);
+  font-weight: 600;
+  background-color: var(--bg-overlay-subtle);
+}
+
+td {
+  color: var(--text-secondary);
+  border-color: var(--color-border);
+}
+
+tr:hover td {
+  background-color: var(--bg-overlay-subtle);
+}
+
+/* Card improvements */
+.card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  color: var(--text-primary);
+}
+
+.card-header {
+  background-color: var(--bg-overlay-subtle);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+}
+
+.card-body {
+  color: var(--text-secondary);
+}
+
+/* Status message improvements */
+.status-success {
+  color: var(--text-success);
+  background-color: oklch(0.85 0.20 142 / 0.1);
+  border: 1px solid oklch(0.85 0.20 142 / 0.3);
+}
+
+.status-warning {
+  color: var(--text-warning);
+  background-color: oklch(0.85 0.20 60 / 0.1);
+  border: 1px solid oklch(0.85 0.20 60 / 0.3);
+}
+
+.status-error {
+  color: var(--text-error);
+  background-color: oklch(0.85 0.20 25 / 0.1);
+  border: 1px solid oklch(0.85 0.20 25 / 0.3);
+}
+
+.status-info {
+  color: var(--text-info);
+  background-color: oklch(0.85 0.15 200 / 0.1);
+  border: 1px solid oklch(0.85 0.15 200 / 0.3);
+}
+
+/* Badge improvements */
+.badge {
+  font-weight: 600;
+  padding: 0.25em 0.5em;
+  border-radius: var(--radius-sm);
+}
+
+/* Tooltip improvements */
+.tooltip {
+  background-color: var(--bg-overlay-strong);
+  color: var(--text-primary);
+  border: 1px solid var(--color-border);
+  font-weight: 500;
+}
+
+/* Modal/Dialog improvements */
+.modal, .dialog {
+  background-color: var(--color-background);
+  color: var(--text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.modal-header, .dialog-header {
+  color: var(--text-primary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-body, .dialog-body {
+  color: var(--text-secondary);
+}
+
+/* Dropdown improvements */
+.dropdown-menu {
+  background-color: var(--color-popover);
+  border: 1px solid var(--color-border);
+}
+
+.dropdown-item {
+  color: var(--text-secondary);
+}
+
+.dropdown-item:hover {
+  background-color: var(--bg-overlay-subtle);
+  color: var(--text-primary);
+}
+
+/* Progress bar improvements */
+.progress {
+  background-color: var(--bg-overlay-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.progress-bar {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-weight: 600;
+}
+
+/* Tab improvements */
+.tab {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tab:hover {
+  color: var(--text-secondary);
+}
+
+.tab.active {
+  color: var(--text-primary);
+  font-weight: 600;
+  border-bottom: 2px solid var(--color-primary);
+}
+
+/* Sidebar improvements */
+.sidebar {
+  background-color: var(--bg-overlay-subtle);
+  border-right: 1px solid var(--color-border);
+}
+
+.sidebar-item {
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+}
+
+.sidebar-item:hover {
+  background-color: var(--bg-overlay-medium);
+  color: var(--text-primary);
+}
+
+.sidebar-item.active {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-weight: 600;
+}
+
+/* Ensure icons have proper color */
+svg, .icon {
+  color: currentColor;
+}
+
+/* Loading spinner improvements */
+.spinner {
+  border-color: var(--text-muted);
+  border-top-color: var(--color-primary);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-overlay-subtle);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Focus improvements for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Ensure all text is at least 14px for readability */
+body {
+  font-size: max(14px, 0.875rem);
+  color: var(--text-primary);
+}
+
+/* Small text should still be readable */
+small, .text-sm {
+  font-size: max(12px, 0.75rem);
+  color: var(--text-muted);
+}

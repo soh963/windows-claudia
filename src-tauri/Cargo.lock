@@ -622,16 +622,18 @@ dependencies = [
 
 [[package]]
 name = "claudia"
-version = "0.2.3"
+version = "0.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "bytes",
  "chrono",
  "cocoa",
  "dirs 5.0.1",
  "env_logger",
  "futures",
+ "futures-util",
  "glob",
  "lazy_static",
  "libc",

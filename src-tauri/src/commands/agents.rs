@@ -1,5 +1,9 @@
-use anyhow::Result;
-use chrono;
+// Execution services temporarily disabled
+// use super::execution_service::{ExecutionService, ExecutionRequest};
+// use super::claude_execution_service::ClaudeExecutionService;
+// use super::gemini_execution_service::GeminiExecutionService;
+// use super::ollama_execution_service::OllamaExecutionService;
+use std::sync::Arc;
 use dirs;
 use log::{debug, error, info, warn};
 use reqwest;
@@ -772,7 +776,8 @@ pub async fn list_agent_runs_with_metrics(
     Ok(runs_with_metrics)
 }
 
-/// Execute a CC agent with streaming output
+// Temporarily disabled due to compilation issues with execution services
+/*
 #[tauri::command]
 pub async fn execute_agent(
     app: AppHandle,
@@ -785,99 +790,29 @@ pub async fn execute_agent(
 ) -> Result<i64, String> {
     info!("Executing agent {} with task: {}", agent_id, task);
 
-    // Get the agent from database
     let agent = get_agent(db.clone(), agent_id).await?;
     let execution_model = model.unwrap_or(agent.model.clone());
-    
-    // Create .claude/settings.json with agent hooks if it doesn't exist
-    if let Some(hooks_json) = &agent.hooks {
-        let claude_dir = std::path::Path::new(&project_path).join(".claude");
-        let settings_path = claude_dir.join("settings.json");
-        
-        // Create .claude directory if it doesn't exist
-        if !claude_dir.exists() {
-            std::fs::create_dir_all(&claude_dir)
-                .map_err(|e| format!("Failed to create .claude directory: {}", e))?;
-            info!("Created .claude directory at: {:?}", claude_dir);
-        }
-        
-        // Check if settings.json already exists
-        if !settings_path.exists() {
-            // Parse the hooks JSON
-            let hooks: serde_json::Value = serde_json::from_str(hooks_json)
-                .map_err(|e| format!("Failed to parse agent hooks: {}", e))?;
-            
-            // Create a settings object with just the hooks
-            let settings = serde_json::json!({
-                "hooks": hooks
-            });
-            
-            // Write the settings file
-            let settings_content = serde_json::to_string_pretty(&settings)
-                .map_err(|e| format!("Failed to serialize settings: {}", e))?;
-            
-            std::fs::write(&settings_path, settings_content)
-                .map_err(|e| format!("Failed to write settings.json: {}", e))?;
-            
-            info!("Created settings.json with agent hooks at: {:?}", settings_path);
-        } else {
-            info!("settings.json already exists at: {:?}", settings_path);
-        }
-    }
 
-    // Create a new run record
-    let run_id = {
-        let conn = db.0.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "INSERT INTO agent_runs (agent_id, agent_name, agent_icon, task, model, project_path, session_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![agent_id, agent.name, agent.icon, task, execution_model, project_path, ""],
-        )
-        .map_err(|e| e.to_string())?;
-        conn.last_insert_rowid()
+    let execution_service: Arc<dyn ExecutionService> = if execution_model.starts_with("claude") {
+        Arc::new(ClaudeExecutionService)
+    } else if execution_model.starts_with("gemini") {
+        Arc::new(GeminiExecutionService)
+    } else {
+        Arc::new(OllamaExecutionService)
     };
 
-    // Find Claude binary
-    info!("Running agent '{}'", agent.name);
-    let claude_path = match find_claude_binary(&app) {
-        Ok(path) => path,
-        Err(e) => {
-            error!("Failed to find claude binary: {}", e);
-            return Err(e);
-        }
+    let request = ExecutionRequest {
+        agent,
+        task,
+        project_path,
+        model: execution_model,
     };
 
-    // Build arguments
-    // For long tasks, we'll pass them via stdin instead of command line
-    let task_via_stdin = task.len() > 1000; // Use stdin for tasks longer than 1000 chars
-    
-    let mut args = vec![];
-    
-    if task_via_stdin {
-        // When using stdin, we use -i flag instead of -p
-        args.push("-i".to_string());
-    } else {
-        args.push("-p".to_string());
-        args.push(task.clone());
-    }
-    
-    args.extend(vec![
-        "--system-prompt".to_string(),
-        agent.system_prompt.clone(),
-        "--model".to_string(),
-        execution_model.clone(),
-        "--output-format".to_string(),
-        "stream-json".to_string(),
-        "--verbose".to_string(),
-        "--dangerously-skip-permissions".to_string(),
-    ]);
+    let result = execution_service.execute(app, db, request, registry).await?;
 
-    // Execute based on whether we should use sidecar or system binary
-    if should_use_sidecar(&claude_path) {
-        spawn_agent_sidecar(app, run_id, agent_id, agent.name.clone(), args, project_path, task, execution_model, db, registry, task_via_stdin).await
-    } else {
-        spawn_agent_system(app, run_id, agent_id, agent.name.clone(), claude_path, args, project_path, task, execution_model, db, registry, task_via_stdin).await
-    }
+    Ok(result.run_id)
 }
+*/
 
 /// Determines whether to use sidecar or system binary execution for agents
 fn should_use_sidecar(claude_path: &str) -> bool {
