@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Popover } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipRoot, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { 
   ALL_MODELS, 
@@ -148,16 +148,16 @@ const ModelCard: React.FC<{
             </div>
           </div>
           {needsApiKey && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-help">
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>API key required</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>API key required</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 
@@ -177,18 +177,16 @@ const ModelCard: React.FC<{
             {Object.entries(model.capabilities).map(([key, value]) => {
               if (typeof value === 'boolean' && value && CAPABILITY_ICONS[key as keyof ModelCapabilities]) {
                 return (
-                  <TooltipProvider key={key}>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <div className="p-1 rounded bg-muted">
-                          {CAPABILITY_ICONS[key as keyof ModelCapabilities]}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <Tooltip key={key}>
+                    <TooltipTrigger asChild>
+                      <div className="p-1 rounded bg-muted cursor-help">
+                        {CAPABILITY_ICONS[key as keyof ModelCapabilities]}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 );
               }
               return null;
@@ -258,7 +256,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   // Compact trigger button - show only essential info
   const CompactTrigger = () => (
-    <Tooltip>
+    <TooltipRoot>
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
@@ -276,7 +274,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       <TooltipContent side="top">
         <p className="font-medium">{selectedModel?.name || 'No model selected'}</p>
       </TooltipContent>
-    </Tooltip>
+    </TooltipRoot>
   );
 
   // Utility function to get compact model name
@@ -300,7 +298,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   // Full trigger button - optimized for narrow width
   const FullTrigger = () => (
-    <Tooltip>
+    <TooltipRoot>
       <TooltipTrigger asChild>
         <Button
           variant="outline"
@@ -329,7 +327,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           )}
         </div>
       </TooltipContent>
-    </Tooltip>
+    </TooltipRoot>
   );
 
   // Group models by provider

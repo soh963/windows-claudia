@@ -1,15 +1,5 @@
-import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
+import * as React from 'react';
 import { api } from '../lib/api';
-
-// Ensure React is properly loaded
-if (!React || typeof React !== 'object') {
-  throw new Error('React is not properly imported in ThemeContext');
-}
-
-// Ensure React hooks are available
-if (!useState || !useContext || !useCallback || !useEffect) {
-  throw new Error('React hooks are not available in ThemeContext');
-}
 
 export type ThemeMode = 'dark' | 'gray' | 'light' | 'custom';
 
@@ -41,7 +31,7 @@ interface ThemeContextType {
   isLoading: boolean;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
 const THEME_STORAGE_KEY = 'theme_preference';
 const CUSTOM_COLORS_STORAGE_KEY = 'theme_custom_colors';
@@ -67,18 +57,7 @@ const DEFAULT_CUSTOM_COLORS: CustomThemeColors = {
   ring: 'oklch(0.98 0.01 240)',
 };
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Extra defensive checks for React hooks availability
-  if (!React) {
-    console.error('ThemeProvider: React is null or undefined');
-    return <div data-error="react-null">{children}</div>;
-  }
-  
-  if (typeof React.useState !== 'function') {
-    console.error('ThemeProvider: React.useState is not available');
-    return <div data-error="react-hooks-unavailable">{children}</div>;
-  }
-
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<ThemeMode>('dark');
   const [customColors, setCustomColorsState] = React.useState<CustomThemeColors>(DEFAULT_CUSTOM_COLORS);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -205,53 +184,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     isLoading,
   };
 
-  // Wrap with error boundary protection
-  try {
-    return (
-      <ThemeContext.Provider value={value}>
-        {children}
-      </ThemeContext.Provider>
-    );
-  } catch (error) {
-    console.error('Error in ThemeProvider render:', error);
-    // Return children without theme context if there's an error
-    return <div data-error="theme-provider-error">{children}</div>;
-  }
-};
+  return (
+    <ThemeContext.Provider value={value}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
 
 export const useThemeContext = () => {
-  // Ensure React hooks are available
-  if (!React || typeof React.useContext !== 'function') {
-    console.error('useThemeContext: React.useContext is not available. React may not be properly initialized.');
-    // Return emergency fallback
-    return {
-      theme: 'dark' as ThemeMode,
-      customColors: DEFAULT_CUSTOM_COLORS,
-      setTheme: async (theme: ThemeMode) => {
-        console.warn(`[Theme Emergency Fallback] setTheme called with: ${theme}`);
-      },
-      setCustomColors: async (_colors: Partial<CustomThemeColors>) => {
-        console.warn('[Theme Emergency Fallback] setCustomColors called');
-      },
-      isLoading: false,
-    } as ThemeContextType;
-  }
-
   const context = React.useContext(ThemeContext);
   if (!context) {
-    // Provide fallback to prevent React Error #130 in production
-    console.warn('useThemeContext called outside ThemeProvider, providing fallback');
-    return {
-      theme: 'dark' as ThemeMode,
-      customColors: DEFAULT_CUSTOM_COLORS,
-      setTheme: async (theme: ThemeMode) => {
-        console.warn(`[Theme Fallback] setTheme called with: ${theme}`);
-      },
-      setCustomColors: async (_colors: Partial<CustomThemeColors>) => {
-        console.warn('[Theme Fallback] setCustomColors called');
-      },
-      isLoading: false,
-    } as ThemeContextType;
+    throw new Error('useThemeContext must be used within a ThemeProvider');
   }
   return context;
 };

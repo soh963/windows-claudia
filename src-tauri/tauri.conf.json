@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Claudia",
-  "version": "0.2.3",
+  "version": "0.2.7",
   "identifier": "claudia.asterisk.so",
   "build": {
     "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:1428",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
