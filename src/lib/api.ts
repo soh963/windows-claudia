@@ -6,6 +6,8 @@ import {
   type GeminiRequest,
   type GeminiResponse,
   type GeminiStreamChunk,
+  type VersionInfo,
+  type DetectedOllamaModel,
   validateGeminiRequest,
   validateGeminiResponse,
   isGeminiError
@@ -98,6 +100,20 @@ export interface ClaudeVersionStatus {
   version?: string;
   /** The full output from the command */
   output: string;
+}
+
+/**
+ * Represents the Claudia application information
+ */
+export interface AppInfo {
+  /** Application version */
+  version: string;
+  /** Application name */
+  name: string;
+  /** Application description */
+  description: string;
+  /** Build date (if available) */
+  build_date?: string;
 }
 
 /**
@@ -2877,6 +2893,188 @@ export const api = {
       return await invoke('analyze_task_requirements', { prompt });
     } catch (error) {
       console.error('Failed to analyze task requirements:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get application information including version
+   * @returns Promise resolving to application info
+   */
+  async getAppInfo(): Promise<AppInfo> {
+    try {
+      return await invoke('get_app_info');
+    } catch (error) {
+      console.error('Failed to get app info:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get application version string
+   * @returns Promise resolving to version string
+   */
+  async getAppVersion(): Promise<string> {
+    try {
+      return await invoke('get_app_version');
+    } catch (error) {
+      console.error('Failed to get app version:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get detailed version information including build time and git commit
+   * @returns Promise resolving to version info
+   */
+  async getVersionInfo(): Promise<VersionInfo> {
+    try {
+      return await invoke('get_version_info');
+    } catch (error) {
+      console.error('Failed to get version info:', error);
+      throw error;
+    }
+  },
+
+  // ========================================
+  // Ollama API Functions
+  // ========================================
+
+  /**
+   * Check if Ollama is running and accessible
+   * @returns Promise resolving to boolean indicating if Ollama is available
+   */
+  async checkOllamaStatus(): Promise<boolean> {
+    try {
+      return await invoke('check_ollama_status');
+    } catch (error) {
+      console.error('Failed to check Ollama status:', error);
+      return false;
+    }
+  },
+
+  /**
+   * Get list of available Ollama models (original API)
+   * @returns Promise resolving to array of Ollama models
+   */
+  async getOllamaModels(): Promise<any[]> {
+    try {
+      return await invoke('get_ollama_models');
+    } catch (error) {
+      console.error('Failed to get Ollama models:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Dynamically detect and analyze all available Ollama models
+   * @returns Promise resolving to array of detected models with capabilities
+   */
+  async detectAvailableOllamaModels(): Promise<DetectedOllamaModel[]> {
+    try {
+      return await invoke('detect_available_ollama_models');
+    } catch (error) {
+      console.error('Failed to detect Ollama models:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Check if a specific Ollama model exists
+   * @param modelId - The model ID to check
+   * @returns Promise resolving to boolean indicating if model exists
+   */
+  async checkOllamaModelExists(modelId: string): Promise<boolean> {
+    try {
+      return await invoke('check_ollama_model_exists', { modelId });
+    } catch (error) {
+      console.error(`Failed to check if Ollama model ${modelId} exists:`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Get recommended Ollama models based on use case
+   * @param useCase - The use case (coding, analysis, creative, fast, vision, balanced)
+   * @returns Promise resolving to array of recommended models
+   */
+  async getRecommendedOllamaModels(useCase: string): Promise<DetectedOllamaModel[]> {
+    try {
+      return await invoke('get_recommended_ollama_models', { useCase });
+    } catch (error) {
+      console.error(`Failed to get recommended Ollama models for ${useCase}:`, error);
+      return [];
+    }
+  },
+
+  /**
+   * Execute an Ollama request with streaming support
+   * @param model - The model ID to use
+   * @param prompt - The prompt to send
+   * @param projectPath - The project path
+   * @param systemInstruction - Optional system instruction
+   * @param options - Optional model options
+   * @returns Promise resolving when execution starts
+   */
+  async executeOllamaRequest(
+    model: string,
+    prompt: string,
+    projectPath: string,
+    systemInstruction?: string,
+    options?: Record<string, any>
+  ): Promise<void> {
+    try {
+      return await invoke('execute_ollama_request', {
+        model,
+        prompt,
+        projectPath,
+        systemInstruction,
+        options
+      });
+    } catch (error) {
+      console.error('Failed to execute Ollama request:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Pull/Download a new Ollama model
+   * @param model - The model name to pull
+   * @returns Promise resolving to success message
+   */
+  async pullOllamaModel(model: string): Promise<string> {
+    try {
+      return await invoke('pull_ollama_model', { model });
+    } catch (error) {
+      console.error(`Failed to pull Ollama model ${model}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete an Ollama model
+   * @param model - The model name to delete
+   * @returns Promise resolving to success message
+   */
+  async deleteOllamaModel(model: string): Promise<string> {
+    try {
+      return await invoke('delete_ollama_model', { model });
+    } catch (error) {
+      console.error(`Failed to delete Ollama model ${model}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get information about a specific Ollama model
+   * @param model - The model name to get info for
+   * @returns Promise resolving to model information
+   */
+  async getOllamaModelInfo(model: string): Promise<any> {
+    try {
+      return await invoke('get_ollama_model_info', { model });
+    } catch (error) {
+      console.error(`Failed to get Ollama model info for ${model}:`, error);
       throw error;
     }
   }

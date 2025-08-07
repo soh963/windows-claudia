@@ -14,7 +14,7 @@ pub fn is_dev_mode() -> bool {
 /// Get the appropriate URL for the current mode
 pub fn get_frontend_url() -> String {
     if is_dev_mode() {
-        "http://localhost:1420".to_string()
+        "http://localhost:1428".to_string()
     } else {
         "tauri://localhost".to_string()
     }

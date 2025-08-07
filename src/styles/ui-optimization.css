@@ -1,0 +1,335 @@
+/**
+ * UI Optimization Styles
+ * Enhances readability and visual hierarchy
+ */
+
+/* Typography Enhancement */
+.optimized-typography {
+  /* Better line height for readability */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  
+  /* Improved font weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
+
+/* Improved text rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* Enhanced heading hierarchy */
+h1, .h1 {
+  font-size: clamp(1.875rem, 4vw, 2.25rem);
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.025em;
+  margin-bottom: 0.5em;
+}
+
+h2, .h2 {
+  font-size: clamp(1.5rem, 3.5vw, 1.875rem);
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5em;
+}
+
+h3, .h3 {
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
+  line-height: var(--line-height-normal);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.015em;
+  margin-bottom: 0.5em;
+}
+
+h4, .h4 {
+  font-size: clamp(1.125rem, 2.5vw, 1.25rem);
+  line-height: var(--line-height-normal);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: 0.5em;
+}
+
+/* Body text optimization */
+p, .body-text {
+  font-size: 1rem;
+  line-height: var(--line-height-relaxed);
+  max-width: 65ch; /* Optimal reading width */
+  margin-bottom: 1em;
+}
+
+/* Small text with better contrast */
+.text-sm {
+  font-size: 0.875rem;
+  line-height: var(--line-height-normal);
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: var(--line-height-normal);
+  letter-spacing: 0.025em;
+}
+
+/* Improved contrast for muted text */
+.text-muted-foreground {
+  opacity: 0.7; /* Better than color change for consistency */
+}
+
+/* Focus styles for better accessibility */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Button improvements */
+.button-optimized {
+  /* Consistent padding */
+  padding: 0.5rem 1rem;
+  
+  /* Better touch targets */
+  min-height: 44px;
+  min-width: 44px;
+  
+  /* Smooth transitions */
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Prevent text selection */
+  user-select: none;
+  
+  /* Better hover states */
+  position: relative;
+  overflow: hidden;
+}
+
+.button-optimized:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.button-optimized:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Card depth and hierarchy */
+.card-optimized {
+  /* Subtle shadow for depth */
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.24);
+  
+  /* Smooth transitions */
+  transition: box-shadow 200ms ease;
+}
+
+.card-optimized:hover {
+  box-shadow: 
+    0 3px 6px rgba(0, 0, 0, 0.15),
+    0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* Spacing consistency */
+.spacing-consistent {
+  /* Vertical rhythm */
+  --space-unit: 0.5rem;
+  --space-xs: calc(var(--space-unit) * 0.5);  /* 4px */
+  --space-sm: var(--space-unit);              /* 8px */
+  --space-md: calc(var(--space-unit) * 2);    /* 16px */
+  --space-lg: calc(var(--space-unit) * 3);    /* 24px */
+  --space-xl: calc(var(--space-unit) * 4);    /* 32px */
+  --space-2xl: calc(var(--space-unit) * 6);   /* 48px */
+  --space-3xl: calc(var(--space-unit) * 8);   /* 64px */
+}
+
+/* Layout optimization */
+.layout-optimized {
+  /* Prevent layout shift */
+  contain: layout style;
+  
+  /* GPU acceleration for animations */
+  will-change: transform;
+  
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar styling for better visibility */
+.scrollbar-optimized {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-muted) transparent;
+}
+
+.scrollbar-optimized::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-optimized::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-optimized::-webkit-scrollbar-thumb {
+  background-color: var(--color-muted);
+  border-radius: var(--radius-sm);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.scrollbar-optimized::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-muted-foreground);
+}
+
+/* Loading states */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton-optimized {
+  background: linear-gradient(
+    90deg,
+    var(--color-muted) 0%,
+    var(--color-accent) 50%,
+    var(--color-muted) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Input field enhancements */
+.input-optimized {
+  /* Better padding for touch */
+  padding: 0.75rem 1rem;
+  
+  /* Clear focus indicator */
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.input-optimized:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
+}
+
+/* Tooltip improvements */
+.tooltip-optimized {
+  /* Better contrast */
+  background-color: var(--color-popover);
+  color: var(--color-popover-foreground);
+  
+  /* Subtle shadow */
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.15),
+    0 2px 10px rgba(0, 0, 0, 0.1);
+  
+  /* Smooth entrance */
+  animation: tooltip-enter 150ms ease;
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Modal/Dialog backdrop */
+.backdrop-optimized {
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* List improvements */
+.list-optimized {
+  /* Clear separation */
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list-optimized li {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 150ms ease;
+}
+
+.list-optimized li:hover {
+  background-color: var(--color-accent);
+}
+
+.list-optimized li:last-child {
+  border-bottom: none;
+}
+
+/* Grid layout optimization */
+.grid-optimized {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+/* Responsive utilities */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+  
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+  }
+}
+
+/* Performance optimizations */
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.will-animate {
+  will-change: transform, opacity;
+}
+
+/* Prevent layout shifts */
+.aspect-ratio-16-9 {
+  aspect-ratio: 16 / 9;
+}
+
+.aspect-ratio-4-3 {
+  aspect-ratio: 4 / 3;
+}
+
+.aspect-ratio-1-1 {
+  aspect-ratio: 1 / 1;
+}

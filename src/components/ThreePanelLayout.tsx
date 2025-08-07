@@ -10,7 +10,9 @@ import { ProgressTracker } from '@/components/ProgressTracker';
 import TaskTimeline from '@/components/TaskTimeline';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, BarChart3, Calendar } from 'lucide-react';
-import { useMonitoringStore } from '@/stores/monitoringStore';
+import { useUIStore } from '@/lib/stores/uiStore';
+
+// The UIStore now handles duplicate prevention centrally
 
 interface ThreePanelLayoutProps {
   children: React.ReactNode;
@@ -24,32 +26,56 @@ interface ThreePanelLayoutProps {
 export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
   children,
   className,
-  leftPanelVisible = true,
-  rightPanelVisible = true,
+  leftPanelVisible = false,  // This prop is kept for backward compatibility but we'll use store state
+  rightPanelVisible = false, // Default to hidden for Task Timeline
   onToggleLeftPanel,
   onToggleRightPanel,
 }) => {
-  const { toggleProgressTracker } = useMonitoringStore();
-  const [leftVisible, setLeftVisible] = useState(leftPanelVisible);
-  const [rightVisible, setRightVisible] = useState(rightPanelVisible);
-
+  // Use the global UI store state for panel visibility
+  const { 
+    isProgressTrackerVisible, 
+    isTaskTimelineVisible,
+    toggleProgressTracker,
+    toggleTaskTimeline 
+  } = useUIStore();
+  
+  // Sync the props with store on mount/change (for backward compatibility)
   useEffect(() => {
-    setLeftVisible(leftPanelVisible);
+    // Only update store if prop explicitly says to show and store doesn't already show
+    if (leftPanelVisible && !isProgressTrackerVisible) {
+      toggleProgressTracker('ThreePanelLayout-prop');
+    }
   }, [leftPanelVisible]);
 
   useEffect(() => {
-    setRightVisible(rightPanelVisible);
+    // Sync task timeline visibility
+    if (rightPanelVisible !== isTaskTimelineVisible) {
+      if (rightPanelVisible && !isTaskTimelineVisible) {
+        toggleTaskTimeline('ThreePanelLayout-prop');
+      } else if (!rightPanelVisible && isTaskTimelineVisible) {
+        toggleTaskTimeline('ThreePanelLayout-prop');
+      }
+    }
   }, [rightPanelVisible]);
 
+  // Cleanup is now handled by UIStore
+
   const handleToggleLeft = () => {
-    const newState = !leftVisible;
-    setLeftVisible(newState);
+    // Use the global UI store toggle which handles duplicate prevention
+    const success = toggleProgressTracker('ThreePanelLayout');
+    
+    if (success) {
+      console.log(`[ThreePanelLayout] ProgressTracker toggled successfully`);
+    } else {
+      console.log(`[ThreePanelLayout] ProgressTracker toggle handled by UIStore`);
+    }
+    
     onToggleLeftPanel?.();
   };
 
   const handleToggleRight = () => {
-    const newState = !rightVisible;
-    setRightVisible(newState);
+    // Use the global UI store toggle for task timeline
+    toggleTaskTimeline('ThreePanelLayout');
     onToggleRightPanel?.();
   };
 
@@ -57,7 +83,7 @@ export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
     <div className={cn("h-full flex bg-background", className)}>
       {/* Left Panel - Progress Tracker */}
       <AnimatePresence>
-        {leftVisible && (
+        {isProgressTrackerVisible && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 320, opacity: 1 }}
@@ -66,6 +92,7 @@ export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
             className="flex-shrink-0 border-r border-border overflow-hidden"
           >
             <ProgressTracker 
+              key="three-panel-progress-tracker" // Unique key to prevent React conflicts
               className="h-full w-full" 
               onClose={handleToggleLeft}
             />
@@ -74,7 +101,7 @@ export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
       </AnimatePresence>
 
       {/* Left Panel Toggle Button */}
-      {!leftVisible && (
+      {!isProgressTrackerVisible && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -102,7 +129,7 @@ export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
       </div>
 
       {/* Right Panel Toggle Button */}
-      {!rightVisible && (
+      {!isTaskTimelineVisible && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -126,7 +153,7 @@ export const ThreePanelLayout: React.FC<ThreePanelLayoutProps> = ({
 
       {/* Right Panel - Task Timeline */}
       <AnimatePresence>
-        {rightVisible && (
+        {isTaskTimelineVisible && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 380, opacity: 1 }}

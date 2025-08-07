@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { StreamMessage } from '../StreamMessage';
+import { RollbackButton } from '../rollback/RollbackButton';
 import { Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClaudeStreamMessage } from '../AgentExecution';
@@ -9,16 +10,20 @@ import type { ClaudeStreamMessage } from '../AgentExecution';
 interface MessageListProps {
   messages: ClaudeStreamMessage[];
   projectPath: string;
+  sessionId?: string;
   isStreaming: boolean;
   onLinkDetected?: (url: string) => void;
+  onRollback?: (result: any) => void;
   className?: string;
 }
 
 export const MessageList: React.FC<MessageListProps> = React.memo(({
   messages,
   projectPath,
+  sessionId,
   isStreaming,
   onLinkDetected,
+  onRollback,
   className
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -123,12 +128,30 @@ export const MessageList: React.FC<MessageListProps> = React.memo(({
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
               >
-                <div className="px-4 py-2">
+                <div className="px-4 py-2 group relative">
                   <StreamMessage 
                     message={message}
                     streamMessages={messages}
                     onLinkDetected={onLinkDetected}
                   />
+                  
+                  {/* Rollback Button - Only show for assistant messages that might have modified files */}
+                  {sessionId && 
+                   onRollback && 
+                   message.type === 'assistant' && 
+                   virtualItem.index > 0 && 
+                   !isStreaming && (
+                    <div className="absolute top-2 right-2">
+                      <RollbackButton
+                        messageIndex={virtualItem.index}
+                        sessionId={sessionId}
+                        timestamp={message.timestamp || new Date().toISOString()}
+                        hasCheckpoint={message.hasCheckpoint || false}
+                        projectPath={projectPath}
+                        onRollback={onRollback}
+                      />
+                    </div>
+                  )}
                 </div>
               </motion.div>
             );

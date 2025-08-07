@@ -1220,7 +1220,7 @@ pub async fn resume_claude_code(
     
     // Search for the session file across all project directories
     let mut session_found = false;
-    let mut actual_project_id = None;
+    let mut _actual_project_id = None;
     
     if projects_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&projects_dir) {
@@ -1229,7 +1229,7 @@ pub async fn resume_claude_code(
                     let potential_path = entry.path().join(format!("{}.jsonl", session_id));
                     if potential_path.exists() {
                         session_found = true;
-                        actual_project_id = entry.file_name().to_str().map(|s| s.to_string());
+                        _actual_project_id = entry.file_name().to_str().map(|s| s.to_string());
                         log::info!("Found session {} in project directory: {:?}", session_id, entry.path());
                         break;
                     }

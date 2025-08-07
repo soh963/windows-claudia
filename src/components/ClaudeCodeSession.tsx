@@ -31,7 +31,7 @@ import { TimelineNavigator } from "./TimelineNavigator";
 import { CheckpointSettings } from "./CheckpointSettings";
 import { SlashCommandsManager } from "./SlashCommandsManager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip } from "@/components/ui/tooltip";
 import { SplitPane } from "@/components/ui/split-pane";
 import { WebviewPreview } from "./WebviewPreview";
 import type { ClaudeStreamMessage } from "./AgentExecution";
@@ -1143,42 +1143,28 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
           
           <div className="flex items-center gap-2">
             {/* Progress Tracker Toggle */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setLeftPanelVisible(!leftPanelVisible)}
-                    className="h-8 w-8"
-                  >
-                    <Activity className={cn("h-4 w-4", leftPanelVisible && "text-primary")} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Toggle Progress Tracker</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip content="Toggle Progress Tracker">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setLeftPanelVisible(!leftPanelVisible)}
+                className="h-8 w-8"
+              >
+                <Activity className={cn("h-4 w-4", leftPanelVisible && "text-primary")} />
+              </Button>
+            </Tooltip>
             
             {/* Task Timeline Toggle */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setRightPanelVisible(!rightPanelVisible)}
-                    className="h-8 w-8"
-                  >
-                    <Clock className={cn("h-4 w-4", rightPanelVisible && "text-primary")} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Toggle Task Timeline</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Tooltip content="Toggle Task Timeline">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setRightPanelVisible(!rightPanelVisible)}
+                className="h-8 w-8"
+              >
+                <Clock className={cn("h-4 w-4", rightPanelVisible && "text-primary")} />
+              </Button>
+            </Tooltip>
             
             {projectPath && onProjectSettings && (
               <Button
@@ -1203,41 +1189,27 @@ export const ClaudeCodeSession: React.FC<ClaudeCodeSessionProps> = ({
               </Button>
             )}
             <div className="flex items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowSettings(!showSettings)}
-                      className="h-8 w-8"
-                    >
-                      <Settings className={cn("h-4 w-4", showSettings && "text-primary")} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Checkpoint Settings</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip content="Checkpoint Settings">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowSettings(!showSettings)}
+                  className="h-8 w-8"
+                >
+                  <Settings className={cn("h-4 w-4", showSettings && "text-primary")} />
+                </Button>
+              </Tooltip>
               {effectiveSession && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setShowTimeline(!showTimeline)}
-                        className="h-8 w-8"
-                      >
-                        <GitBranch className={cn("h-4 w-4", showTimeline && "text-primary")} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Timeline Navigator</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Tooltip content="Timeline Navigator">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowTimeline(!showTimeline)}
+                    className="h-8 w-8"
+                  >
+                    <GitBranch className={cn("h-4 w-4", showTimeline && "text-primary")} />
+                  </Button>
+                </Tooltip>
               )}
               {messages.length > 0 && (
                 <Popover

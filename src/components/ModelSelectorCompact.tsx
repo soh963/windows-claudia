@@ -171,7 +171,7 @@ export const ModelSelectorCompact: React.FC<ModelSelectorCompactProps> = ({
           {/* Claude Models */}
           <div className="mb-2">
             <div className="text-xs text-muted-foreground px-3 py-1">Claude</div>
-            {ALL_MODELS.filter(m => m.provider === 'claude').map(model => (
+            {ALL_MODELS().filter(m => m.provider === 'claude').map(model => (
               <ModelItem
                 key={model.id}
                 model={model}
@@ -185,7 +185,7 @@ export const ModelSelectorCompact: React.FC<ModelSelectorCompactProps> = ({
           {/* Gemini Models */}
           <div>
             <div className="text-xs text-muted-foreground px-3 py-1">Gemini</div>
-            {ALL_MODELS.filter(m => m.provider === 'gemini').map(model => (
+            {ALL_MODELS().filter(m => m.provider === 'gemini').map(model => (
               <ModelItem
                 key={model.id}
                 model={model}

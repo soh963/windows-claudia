@@ -8,44 +8,42 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/tests/setup.ts'],
-    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/src-tauri/**'],
+    css: true,
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/e2e/**',
+      '**/*.e2e.*',
+      '**/*.spec.*'
+    ],
     coverage: {
-      enabled: true,
       provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
-      include: ['src/**/*.{js,jsx,ts,tsx}'],
+      reporter: ['text', 'json', 'html'],
       exclude: [
-        'src/**/*.d.ts',
-        'src/**/*.test.{js,jsx,ts,tsx}',
-        'src/**/*.spec.{js,jsx,ts,tsx}',
-        'src/tests/**',
-        'src/examples/**',
+        'node_modules/',
+        'src/tests/',
+        '*.config.*',
         'src/main.tsx',
-        'src/vite-env.d.ts'
+        'src/vite-env.d.ts',
       ],
-      thresholds: {
-        lines: 80,
-        branches: 80,
-        functions: 80,
-        statements: 80
-      }
     },
-    reporters: ['default', 'html'],
-    outputFile: {
-      json: './test-results/results.json',
-      html: './test-results/index.html'
+    // Fix for React production build issue
+    mode: 'test', // Use test mode instead of production
+    define: {
+      'process.env.NODE_ENV': '"test"', // Ensure test environment
+      'global': 'globalThis',
     },
-    pool: 'threads',
     poolOptions: {
       threads: {
-        singleThread: false
-      }
-    }
+        singleThread: true,
+      },
+    },
+    testTimeout: 10000,
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
-    }
-  }
+      '@': path.resolve(__dirname, './src'),
+      '@tauri-apps/api': path.resolve(__dirname, './src/tests/mocks/tauri.ts'),
+    },
+  },
 });

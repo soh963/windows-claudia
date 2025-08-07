@@ -194,6 +194,8 @@ interface OperationItemProps {
 }
 
 const OperationItem: React.FC<OperationItemProps> = ({ operation }) => {
+  const { cancelOperation } = useMonitoringStore();
+  
   const getOperationIcon = () => {
     switch (operation.status) {
       case 'running':
@@ -211,6 +213,11 @@ const OperationItem: React.FC<OperationItemProps> = ({ operation }) => {
     const endTime = operation.endTime || Date.now();
     const duration = endTime - operation.startTime;
     return `${(duration / 1000).toFixed(1)}s`;
+  };
+
+  const handleStopOperation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    cancelOperation(operation.id);
   };
 
   return (
@@ -231,6 +238,22 @@ const OperationItem: React.FC<OperationItemProps> = ({ operation }) => {
             indicatorClassName={operation.status === 'error' ? 'bg-destructive' : ''}
           />
         </div>
+        {/* Stop button for running operations */}
+        {operation.status === 'running' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                onClick={handleStopOperation}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Stop Operation</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </div>
   );

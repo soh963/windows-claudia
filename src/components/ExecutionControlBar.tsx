@@ -1,9 +1,42 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { StopCircle, Clock, Hash, RefreshCw, PlayCircle, AlertCircle } from "lucide-react";
+import { 
+  StopCircle, 
+  Clock, 
+  Hash, 
+  RefreshCw, 
+  PlayCircle, 
+  AlertCircle,
+  Activity,
+  ChevronUp,
+  ChevronDown,
+  Pause,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  Trash2
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+
+export interface Operation {
+  id: string;
+  name: string;
+  type: 'model_execution' | 'file_operation' | 'network_request' | 'background_task';
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  startTime: Date;
+  endTime?: Date;
+  progress?: number;
+  model?: string;
+  description?: string;
+  canStop: boolean;
+  canPause: boolean;
+  error?: string;
+  tokens?: number;
+}
 
 interface ExecutionControlBarProps {
   isExecuting: boolean;
@@ -15,6 +48,15 @@ interface ExecutionControlBarProps {
   status?: 'executing' | 'stopped' | 'error' | 'completed';
   canContinue?: boolean;
   className?: string;
+  // New props for enhanced operations
+  operations?: Operation[];
+  activeOperations?: Operation[];
+  completedOperations?: Operation[];
+  onStopOperation?: (id: string) => void;
+  onPauseOperation?: (id: string) => void;
+  onResumeOperation?: (id: string) => void;
+  onClearCompleted?: () => void;
+  showOperationsList?: boolean;
 }
 
 /**
@@ -30,10 +72,25 @@ export const ExecutionControlBar: React.FC<ExecutionControlBarProps> = ({
   elapsedTime = 0,
   status = 'executing',
   canContinue = false,
-  className 
+  className,
+  operations = [],
+  activeOperations = [],
+  completedOperations = [],
+  onStopOperation,
+  onPauseOperation,
+  onResumeOperation,
+  onClearCompleted,
+  showOperationsList = false
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [animatingOut, setAnimatingOut] = useState(false);
+  const [showOperations, setShowOperations] = useState(showOperationsList);
+  
+  // Calculate active and completed from operations if not provided
+  const activeOps = activeOperations.length > 0 ? activeOperations : 
+    operations.filter(op => op.status === 'running' || op.status === 'paused' || op.status === 'pending');
+  const completedOps = completedOperations.length > 0 ? completedOperations :
+    operations.filter(op => op.status === 'completed' || op.status === 'failed' || op.status === 'cancelled');
 
   useEffect(() => {
     if (isExecuting || status === 'stopped' || status === 'error') {
@@ -108,6 +165,26 @@ export const ExecutionControlBar: React.FC<ExecutionControlBarProps> = ({
   };
 
   const statusConfig = getStatusConfig();
+  
+  // Get status icon for operations
+  const getOperationIcon = (opStatus: Operation['status']) => {
+    switch (opStatus) {
+      case 'running':
+        return <Loader2 className="h-3 w-3 animate-spin text-blue-500" />;
+      case 'paused':
+        return <Pause className="h-3 w-3 text-yellow-500" />;
+      case 'completed':
+        return <CheckCircle className="h-3 w-3 text-green-500" />;
+      case 'failed':
+        return <XCircle className="h-3 w-3 text-red-500" />;
+      case 'cancelled':
+        return <XCircle className="h-3 w-3 text-gray-500" />;
+      case 'pending':
+        return <Clock className="h-3 w-3 text-gray-400" />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -134,10 +211,17 @@ export const ExecutionControlBar: React.FC<ExecutionControlBarProps> = ({
             ) : null}
           </div>
 
-          {/* Status text */}
-          <span className={cn("text-sm font-medium", statusConfig.color)}>
-            {statusConfig.text}
-          </span>
+          {/* Status text with operations count */}
+          <div className="flex items-center gap-2">
+            <span className={cn("text-sm font-medium", statusConfig.color)}>
+              {statusConfig.text}
+            </span>
+            {activeOps.length > 0 && (
+              <Badge variant="default" className="text-xs">
+                {activeOps.length} active
+              </Badge>
+            )}
+          </div>
 
           {/* Divider */}
           <div className="h-4 w-px bg-border" />
@@ -219,8 +303,132 @@ export const ExecutionControlBar: React.FC<ExecutionControlBarProps> = ({
                   </TooltipContent>
                 </Tooltip>
               )}
+              
+              {/* Operations toggle button */}
+              {(activeOps.length > 0 || completedOps.length > 0) && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowOperations(!showOperations)}
+                      className="gap-1.5"
+                    >
+                      <Activity className="h-3.5 w-3.5" />
+                      {showOperations ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{showOperations ? 'Hide' : 'Show'} operations</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              
+              {/* Clear completed button */}
+              {completedOps.length > 0 && onClearCompleted && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={onClearCompleted}
+                      className="gap-1.5"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Clear completed operations</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </TooltipProvider>
           </div>
+        </motion.div>
+      )}
+      
+      {/* Operations List Panel */}
+      {showOperations && (activeOps.length > 0 || completedOps.length > 0) && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-[500px]"
+        >
+          <Card className="bg-background/95 backdrop-blur-md border shadow-lg p-3 max-h-64 overflow-y-auto">
+            {/* Active Operations */}
+            {activeOps.length > 0 && (
+              <div className="mb-3">
+                <h4 className="text-xs font-semibold text-muted-foreground mb-2">Active Operations</h4>
+                <div className="space-y-1">
+                  {activeOps.slice(0, 5).map(op => (
+                    <div key={op.id} className="flex items-center justify-between p-2 rounded bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        {getOperationIcon(op.status)}
+                        <span className="text-xs">{op.name}</span>
+                        {op.model && <Badge variant="outline" className="text-xs h-4">{op.model}</Badge>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {op.canPause && op.status === 'running' && onPauseOperation && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onPauseOperation(op.id)}
+                          >
+                            <Pause className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {op.status === 'paused' && onResumeOperation && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0"
+                            onClick={() => onResumeOperation(op.id)}
+                          >
+                            <PlayCircle className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {op.canStop && onStopOperation && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 hover:bg-destructive/20"
+                            onClick={() => onStopOperation(op.id)}
+                          >
+                            <StopCircle className="h-3 w-3 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Completed Operations */}
+            {completedOps.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground mb-2">Completed Activities</h4>
+                <div className="space-y-1">
+                  {completedOps.slice(0, 3).map(op => (
+                    <div key={op.id} className="flex items-center justify-between p-2 rounded bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        {getOperationIcon(op.status)}
+                        <span className="text-xs text-muted-foreground">{op.name}</span>
+                        {op.tokens && (
+                          <span className="text-xs text-muted-foreground">
+                            ({op.tokens} tokens)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
         </motion.div>
       )}
     </AnimatePresence>

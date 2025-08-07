@@ -6,8 +6,9 @@
  * Maximum length for command line on different platforms
  * Windows: 8191 characters
  * Linux/Mac: Much higher, but we'll use a conservative limit
+ * Extended to support much longer chat inputs for AI conversations
  */
-const MAX_COMMAND_LINE_LENGTH = 6000; // Conservative limit for safety
+const MAX_COMMAND_LINE_LENGTH = 500000; // Increased limit for extended AI conversations with files and context
 
 /**
  * Escapes special characters in text to make it safe for command line

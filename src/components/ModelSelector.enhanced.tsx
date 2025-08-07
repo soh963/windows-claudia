@@ -541,7 +541,7 @@ export const EnhancedModelSelector: React.FC<ModelSelectorProps> = ({
 
   // Group models by provider
   const modelsByProvider = useMemo(() => {
-    return ALL_MODELS.reduce((acc, model) => {
+    return ALL_MODELS().reduce((acc, model) => {
       if (!acc[model.provider]) {
         acc[model.provider] = [];
       }

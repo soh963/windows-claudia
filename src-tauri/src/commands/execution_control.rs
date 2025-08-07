@@ -164,11 +164,23 @@ pub async fn get_execution_status(
     session_id: String,
     state: State<'_, ExecutionControlState>,
 ) -> Result<ExecutionState, String> {
-    let sessions = state.sessions.lock().await;
+    let mut sessions = state.sessions.lock().await;
     
-    sessions.get(&session_id)
-        .cloned()
-        .ok_or_else(|| format!("Session {} not found", session_id))
+    // Auto-create session if it doesn't exist (prevents "Session not found" errors)
+    let session_state = sessions.entry(session_id.clone())
+        .or_insert_with(|| {
+            info!("Auto-creating session state for: {}", session_id);
+            ExecutionState {
+                session_id: session_id.clone(),
+                status: ExecutionStatus::Idle,
+                can_continue: false,
+                checkpoint_data: None,
+                elapsed_time: 0,
+                total_tokens: 0,
+            }
+        });
+    
+    Ok(session_state.clone())
 }
 
 /// Update execution metrics
@@ -181,17 +193,28 @@ pub async fn update_execution_metrics(
 ) -> Result<(), String> {
     let mut sessions = state.sessions.lock().await;
     
-    if let Some(session_state) = sessions.get_mut(&session_id) {
-        if let Some(time) = elapsed_time {
-            session_state.elapsed_time = time;
-        }
-        if let Some(tokens) = total_tokens {
-            session_state.total_tokens = tokens;
-        }
-        Ok(())
-    } else {
-        Err(format!("Session {} not found", session_id))
+    // Auto-create session if it doesn't exist, then update metrics
+    let session_state = sessions.entry(session_id.clone())
+        .or_insert_with(|| {
+            info!("Auto-creating session state for metrics update: {}", session_id);
+            ExecutionState {
+                session_id: session_id.clone(),
+                status: ExecutionStatus::Idle,
+                can_continue: false,
+                checkpoint_data: None,
+                elapsed_time: 0,
+                total_tokens: 0,
+            }
+        });
+    
+    if let Some(time) = elapsed_time {
+        session_state.elapsed_time = time;
     }
+    if let Some(tokens) = total_tokens {
+        session_state.total_tokens = tokens;
+    }
+    
+    Ok(())
 }
 
 /// Register a process for a session

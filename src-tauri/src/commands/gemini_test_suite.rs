@@ -241,7 +241,7 @@ impl GeminiTestSuite {
         log::info!("Starting comprehensive test suite for model: {}", model_id);
         
         let mut test_results = Vec::new();
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
         
         for test_case in &self.test_cases {
             let result = self.run_single_test(model_id, test_case).await;

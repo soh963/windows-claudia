@@ -784,4 +784,24 @@ impl CheckpointManager {
             .map(|state| state.last_modified)
             .max()
     }
+
+    /// Get checkpoint for a specific message index (for rollback system)
+    pub async fn get_checkpoint_for_message(&self, _session_id: &str, _message_index: usize) -> Result<Checkpoint> {
+        // For now, return the most recent checkpoint
+        // In a full implementation, this would map message indices to specific checkpoints
+        let timeline = self.timeline.read().await;
+        if let Some(root) = &timeline.root_node {
+            return Ok(root.checkpoint.clone());
+        }
+        Err(anyhow::anyhow!("No checkpoint available"))
+    }
+
+    /// Create a simple checkpoint manager for rollback system (temporary)
+    pub async fn new_for_rollback(project_path: PathBuf) -> Result<Self> {
+        let project_id = "temp_project".to_string();
+        let session_id = "temp_session".to_string();
+        let claude_dir = project_path.join(".claudia");
+        
+        Self::new(project_id, session_id, project_path, claude_dir).await
+    }
 }

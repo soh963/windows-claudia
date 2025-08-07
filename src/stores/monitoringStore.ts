@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { StateCreator } from 'zustand';
+import { useUIStore } from '@/lib/stores/uiStore';
 
 export type OperationType = 
   | 'api_call'
@@ -58,7 +59,7 @@ interface MonitoringState {
   
   // UI state
   isStatusBarExpanded: boolean;
-  isProgressTrackerVisible: boolean;
+  isProgressTrackerVisible: boolean; // Deprecated - use UIStore instead
   selectedOperationId: string | null;
   
   // Actions
@@ -74,7 +75,7 @@ interface MonitoringState {
   
   // UI actions
   toggleStatusBar: () => void;
-  toggleProgressTracker: () => void;
+  toggleProgressTracker: () => void; // Delegates to UIStore
   selectOperation: (operationId: string | null) => void;
   
   // Utility actions
@@ -180,11 +181,24 @@ const monitoringStore: StateCreator<
   },
   
   // Cancel an operation
-  cancelOperation: (id) => {
-    get().completeOperation(id, {
-      message: 'Operation cancelled by user',
-      severity: 'low',
-    });
+  cancelOperation: async (id) => {
+    try {
+      // Call Rust backend to stop execution
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('stop_execution', { sessionId: id });
+      
+      get().completeOperation(id, {
+        message: 'Operation cancelled by user',
+        severity: 'low',
+      });
+    } catch (error) {
+      console.error('Failed to cancel operation:', error);
+      // Still mark as cancelled on frontend even if backend fails
+      get().completeOperation(id, {
+        message: 'Operation cancelled (backend stop failed)',
+        severity: 'medium',
+      });
+    }
   },
   
   // Log an error
@@ -244,7 +258,13 @@ const monitoringStore: StateCreator<
   
   // UI actions
   toggleStatusBar: () => set((state) => ({ isStatusBarExpanded: !state.isStatusBarExpanded })),
-  toggleProgressTracker: () => set((state) => ({ isProgressTrackerVisible: !state.isProgressTrackerVisible })),
+  toggleProgressTracker: () => {
+    // Delegate to UIStore for centralized panel management
+    const uiStore = useUIStore.getState();
+    uiStore.toggleProgressTracker('monitoringStore');
+    // Also update local state for backward compatibility
+    set((state) => ({ isProgressTrackerVisible: !state.isProgressTrackerVisible }));
+  },
   selectOperation: (operationId) => set({ selectedOperationId: operationId }),
   
   // Clear completed operations

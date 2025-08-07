@@ -91,12 +91,12 @@ const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({
     persistHistory: true
   });
 
-  // Auto-resize textarea
+  // Auto-resize textarea with extended height limit
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+      textarea.style.height = Math.min(textarea.scrollHeight, 400) + 'px'; // Extended to 400px for longer messages
     }
   }, [input]);
 
@@ -416,7 +416,7 @@ const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({
               onCompositionEnd={() => setIsComposing(false)}
               placeholder={placeholder}
               disabled={disabled}
-              className="min-h-[40px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0 p-0"
+              className="min-h-[40px] max-h-[400px] resize-none border-0 shadow-none focus-visible:ring-0 p-0"
               rows={1}
             />
             

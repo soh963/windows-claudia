@@ -3,9 +3,11 @@
 // use super::claude_execution_service::ClaudeExecutionService;
 // use super::gemini_execution_service::GeminiExecutionService;
 // use super::ollama_execution_service::OllamaExecutionService;
-use std::sync::Arc;
+// use std::sync::Arc; // Unused import
+use chrono;
 use dirs;
 use log::{debug, error, info, warn};
+use uuid;
 use reqwest;
 use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
@@ -105,6 +107,59 @@ pub struct AgentData {
 
 /// Database connection state
 pub struct AgentDb(pub Mutex<Connection>);
+
+impl AgentDb {
+    /// List all agents from the database
+    pub fn list_agents(&self) -> Result<Vec<Agent>, String> {
+        let conn = self.0.lock().map_err(|e| e.to_string())?;
+
+        let mut stmt = conn
+            .prepare("SELECT id, name, icon, system_prompt, default_task, model, enable_file_read, enable_file_write, enable_network, hooks, created_at, updated_at FROM agents ORDER BY created_at DESC")
+            .map_err(|e| e.to_string())?;
+
+        let agents = stmt
+            .query_map([], |row| {
+                Ok(Agent {
+                    id: Some(row.get(0)?),
+                    name: row.get(1)?,
+                    icon: row.get(2)?,
+                    system_prompt: row.get(3)?,
+                    default_task: row.get(4)?,
+                    model: row.get(5)?,
+                    enable_file_read: row.get(6)?,
+                    enable_file_write: row.get(7)?,
+                    enable_network: row.get(8)?,
+                    hooks: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        let mut result = Vec::new();
+        for agent in agents {
+            result.push(agent.map_err(|e| e.to_string())?);
+        }
+
+        Ok(result)
+    }
+
+    /// Create a new agent run
+    pub fn create_agent_run(&self, agent_id: i64, task: String, project_path: String, session_id: String) -> Result<String, String> {
+        let conn = self.0.lock().map_err(|e| e.to_string())?;
+        
+        let run_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+        
+        conn.execute(
+            "INSERT INTO agent_runs (id, agent_id, task, project_path, session_id, status, created_at, updated_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, 'running', ?6, ?6)",
+            (run_id.clone(), agent_id, task, project_path, session_id, now)
+        ).map_err(|e| e.to_string())?;
+        
+        Ok(run_id)
+    }
+}
 
 /// Real-time JSONL reading and processing functions
 impl AgentRunMetrics {

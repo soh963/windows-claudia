@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{command, State, AppHandle};
+use tauri::{command, State};
 use log::{info, warn, error, debug, trace};
 use rusqlite::params;
 use uuid::Uuid;

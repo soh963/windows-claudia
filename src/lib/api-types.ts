@@ -416,3 +416,76 @@ export function validateGeminiResponse(response: unknown): GeminiResponse {
   
   return resp as GeminiResponse;
 }
+
+// ============================================================================
+// Version Information Types
+// ============================================================================
+
+/**
+ * Version information structure
+ */
+export interface VersionInfo {
+  version: string;
+  build_time: string;
+  git_commit?: string;
+  tauri_version: string;
+}
+
+// ============================================================================
+// Ollama Types
+// ============================================================================
+
+/**
+ * Detected Ollama model with enhanced capability analysis
+ */
+export interface DetectedOllamaModel {
+  /** Model ID (e.g., "llama3.1:8b") */
+  id: string;
+  /** Formatted display name with emojis and size info */
+  name: string;
+  /** Model file size in bytes */
+  size: number;
+  /** Last modification timestamp */
+  modified_at: string;
+  /** Parameter size (e.g., "8.0B") */
+  parameter_size: string;
+  /** Quantization level (e.g., "Q4_K_M") */
+  quantization_level: string;
+  /** Model family (e.g., "llama", "gemma") */
+  family: string;
+  /** Analyzed model capabilities */
+  capabilities: OllamaModelCapabilities;
+}
+
+/**
+ * Ollama model capabilities with detailed scoring
+ */
+export interface OllamaModelCapabilities {
+  /** Intelligence score (0-100) */
+  intelligence: number;
+  /** Response speed score (0-100) */
+  speed: number;
+  /** Coding ability score (0-100) */
+  coding_excellence: number;
+  /** Analysis depth score (0-100) */
+  analysis_depth: number;
+  /** Creative writing score (0-100) */
+  creative_writing: number;
+  /** Technical precision score (0-100) */
+  technical_precision: number;
+  /** Whether model supports vision/multimodal */
+  supports_vision: boolean;
+  /** Context window size in tokens */
+  context_window: number;
+}
+
+/**
+ * Ollama model use cases for recommendations
+ */
+export type OllamaUseCase = 
+  | 'coding'      // Best for programming tasks
+  | 'analysis'    // Best for analysis and reasoning
+  | 'creative'    // Best for creative writing
+  | 'fast'        // Fastest response times
+  | 'vision'      // Image/multimodal capabilities
+  | 'balanced';   // Good all-around performance

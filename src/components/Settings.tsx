@@ -22,7 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   api, 
   type ClaudeSettings,
-  type ClaudeInstallation
+  type ClaudeInstallation,
+  type VersionInfo
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Toast, ToastContainer } from "@/components/ui/toast";
@@ -36,7 +37,7 @@ import { ModelSelector } from "./ModelSelector";
 import { ModelConfiguration } from "./ModelConfiguration";
 import { GeminiApiKeyModal } from "./GeminiApiKeyModal";
 import { useTheme } from "@/hooks";
-import { ALL_MODELS, type ModelConfiguration as ModelConfig } from "@/lib/models";
+import { ALL_MODELS, refreshDynamicModels, getModelStatistics, type ModelConfiguration as ModelConfig } from "@/lib/models";
 
 interface SettingsProps {
   /**
@@ -83,6 +84,7 @@ export const Settings: React.FC<SettingsProps> = ({
   const [modelConfigs, setModelConfigs] = useState<Record<string, ModelConfig>>({});
   const [showModelConfig, setShowModelConfig] = useState(false);
   const [showGeminiApiKeyModal, setShowGeminiApiKeyModal] = useState(false);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   
   // Permission rules state
   const [allowRules, setAllowRules] = useState<PermissionRule[]>([]);
@@ -94,6 +96,10 @@ export const Settings: React.FC<SettingsProps> = ({
   // Hooks state
   const [userHooksChanged, setUserHooksChanged] = useState(false);
   const getUserHooks = React.useRef<(() => any) | null>(null);
+
+  // Models state  
+  const [refreshingModels, setRefreshingModels] = useState(false);
+  const [modelStats, setModelStats] = useState<ReturnType<typeof getModelStatistics> | null>(null);
   
   // Theme hook
   const { theme, setTheme, customColors, setCustomColors } = useTheme();
@@ -107,7 +113,23 @@ export const Settings: React.FC<SettingsProps> = ({
     loadSettings();
     loadClaudeBinaryPath();
     loadGeminiApiKey();
+    loadVersionInfo();
+    loadModelStats();
   }, []);
+
+  const loadModelStats = () => {
+    const stats = getModelStatistics();
+    setModelStats(stats);
+  };
+
+  const loadVersionInfo = async () => {
+    try {
+      const versionData = await api.getVersionInfo();
+      setVersionInfo(versionData);
+    } catch (err) {
+      console.error("Failed to load version info:", err);
+    }
+  };
 
   const loadGeminiApiKey = async () => {
     try {
@@ -129,6 +151,38 @@ export const Settings: React.FC<SettingsProps> = ({
       setCurrentBinaryPath(path);
     } catch (err) {
       console.error("Failed to load Claude binary path:", err);
+    }
+  };
+
+  /**
+   * Refresh dynamic Ollama models
+   */
+  const handleRefreshModels = async () => {
+    try {
+      setRefreshingModels(true);
+      console.log('🔄 Refreshing dynamic Ollama models...');
+      
+      await refreshDynamicModels();
+      loadModelStats();
+      
+      // Emit refresh event for other components
+      window.dispatchEvent(new CustomEvent('refresh-models'));
+      
+      setToast({
+        message: 'Models refreshed successfully!',
+        type: 'success'
+      });
+      
+      console.log('✅ Models refreshed successfully');
+      
+    } catch (error) {
+      console.error('❌ Failed to refresh models:', error);
+      setToast({
+        message: 'Failed to refresh models. Check if Ollama is running.',
+        type: 'error'
+      });
+    } finally {
+      setRefreshingModels(false);
     }
   };
 
@@ -680,6 +734,39 @@ export const Settings: React.FC<SettingsProps> = ({
                         </p>
                       )}
                     </div>
+
+                    {/* Version Information */}
+                    <div className="space-y-4 pt-4 border-t">
+                      <div>
+                        <Label className="text-sm font-medium mb-2 block">Application Information</Label>
+                        <div className="space-y-3">
+                          {versionInfo ? (
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Version:</span>
+                                <span className="text-sm font-mono">{versionInfo.version}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Build Time:</span>
+                                <span className="text-sm font-mono">{versionInfo.build_time}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Tauri Version:</span>
+                                <span className="text-sm font-mono">{versionInfo.tauri_version}</span>
+                              </div>
+                              {versionInfo.git_commit && (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Git Commit:</span>
+                                  <span className="text-sm font-mono">{versionInfo.git_commit}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">Loading version information...</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -814,6 +901,88 @@ export const Settings: React.FC<SettingsProps> = ({
                         <Brain className="h-4 w-4" />
                         Gemini Advanced
                       </Button>
+                    </div>
+                  </div>
+
+                  {/* Model Management Section */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Model Management</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Manage local Ollama models and refresh model list
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRefreshModels}
+                        disabled={refreshingModels}
+                        className="gap-2"
+                      >
+                        {refreshingModels ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <div className="h-4 w-4">🔄</div>
+                        )}
+                        {refreshingModels ? 'Refreshing...' : 'Refresh Models'}
+                      </Button>
+                    </div>
+
+                    {/* Model Statistics */}
+                    {modelStats && (
+                      <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {modelStats.claude}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Claude
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">
+                            {modelStats.gemini}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Gemini
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-orange-600">
+                            {modelStats.ollama}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Ollama {modelStats.dynamic ? '(Dynamic)' : '(Static)'}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-600">
+                            {modelStats.total}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Total
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Model Status Info */}
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span>Claude models are always available with API key</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>Gemini models require API key setup</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${modelStats?.dynamic ? 'bg-orange-500' : 'bg-gray-400'}`}></div>
+                        <span>
+                          Ollama models are {modelStats?.dynamic ? 'dynamically detected from local installation' : 'using static fallback list'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

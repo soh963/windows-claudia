@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
-use tauri::{command, AppHandle, Emitter};
+use tauri::{command, AppHandle, Emitter, Manager};
 use std::collections::HashMap;
 use log::{info, warn, error};
 use crate::commands::claude::execute_claude_code;
-use crate::commands::gemini_enhanced::execute_gemini_code_enhanced;
+use crate::commands::gemini::execute_gemini_code;
 use crate::commands::ollama::execute_ollama_request;
 use crate::commands::intelligent_routing::{get_intelligent_model_recommendation, ModelRecommendationV2};
 
@@ -16,6 +16,7 @@ pub struct UniversalExecutionRequest {
     pub system_instruction: Option<String>,
     pub options: Option<HashMap<String, serde_json::Value>>,
     pub use_auto_selection: bool,
+    pub tools_requested: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +48,29 @@ pub async fn execute_with_universal_tools(
 ) -> Result<UniversalExecutionResult, String> {
     info!("Universal model execution request - model: {}, auto_selection: {}", 
           request.model_id, request.use_auto_selection);
+    
+    // Enhanced prompt to include universal tool context for non-Claude models
+    let enhanced_prompt = if !request.model_id.contains("claude") {
+        format!(
+            "=== Claudia Universal Tools Enabled ===\n\
+            You have access to all Claudia tools through the universal interface:\n\
+            • MCP Servers: For external tool integration and data access\n\
+            • Agents: Specialized AI agents for complex tasks\n\
+            • Slash Commands: Quick actions and shortcuts\n\
+            • File Operations: Read, write, and analyze files\n\
+            • Web Search: Access real-time information\n\
+            • Code Analysis: Analyze and optimize code\n\n\
+            When you need to use these tools, indicate clearly and the system will execute them for you.\n\
+            Examples:\n\
+            - 'Use MCP server to fetch data from...'\n\
+            - 'Run agent to analyze the code structure'\n\
+            - 'Execute /build command to compile the project'\n\n\
+            Original request:\n{}", 
+            request.prompt
+        )
+    } else {
+        request.prompt.clone()
+    };
 
     let mut final_model = request.model_id.clone();
     let mut auto_selected = false;
@@ -185,11 +209,56 @@ async fn execute_gemini_with_tools(
     session_id: &str,
     app_handle: AppHandle
 ) -> Result<(), String> {
-    // Use enhanced Gemini execution with tool simulation
-    let enhanced_prompt = build_enhanced_prompt(prompt, context, system_instruction);
+    use crate::commands::gemini::execute_gemini_code;
     
-    // Note: This function call would require all parameters - temporarily return Ok for compilation
-    Ok(())
+    // Build enhanced prompt with tool simulation instructions
+    let mut enhanced_prompt = String::new();
+    
+    // Add tool capability instructions for Gemini
+    enhanced_prompt.push_str("=== Claudia Enhanced Mode ===\n");
+    enhanced_prompt.push_str("You are running in Claudia with enhanced capabilities:\n\n");
+    enhanced_prompt.push_str("🛠️ Available Tools:\n");
+    enhanced_prompt.push_str("• MCP (Model Context Protocol) - Enhanced context and documentation access\n");
+    enhanced_prompt.push_str("• Specialized Agents - Delegate complex tasks to expert agents\n");
+    enhanced_prompt.push_str("• Slash Commands - Quick actions: /help, /analyze, /generate, /explain\n");
+    enhanced_prompt.push_str("• File Operations - Read, write, search, and analyze code files\n");
+    enhanced_prompt.push_str("• Code Analysis - Comprehensive codebase understanding\n");
+    enhanced_prompt.push_str("• Session Memory - Context preserved across conversations\n\n");
+    
+    if let Some(ctx) = context {
+        enhanced_prompt.push_str("📋 Context:\n");
+        enhanced_prompt.push_str(ctx);
+        enhanced_prompt.push_str("\n\n");
+    }
+    
+    if let Some(sys) = system_instruction {
+        enhanced_prompt.push_str("🎯 System Instructions:\n");
+        enhanced_prompt.push_str(sys);
+        enhanced_prompt.push_str("\n\n");
+    }
+    
+    enhanced_prompt.push_str("💬 User Request:\n");
+    enhanced_prompt.push_str(prompt);
+    enhanced_prompt.push_str("\n\nPlease provide a comprehensive response utilizing available Claudia capabilities as needed. If the request involves tools or specialized tasks, explain how you would use them to provide the best assistance.");
+    
+    // Use the existing gemini.rs execute function with enhanced prompt and session isolation
+    info!("Executing Gemini with enhanced tool awareness for model: {}", model_id);
+    
+    use tauri::Manager;
+    use crate::commands::gemini::{GeminiSessionRegistry, execute_gemini_code};
+    use crate::commands::session_deduplication::{MessageDeduplicationManager, SessionIsolationManager};
+    
+    execute_gemini_code(
+        enhanced_prompt,
+        model_id.to_string(),
+        project_path.to_string(),
+        app_handle.clone(),
+        app_handle.state::<crate::commands::agents::AgentDb>(),
+        app_handle.state::<crate::commands::claude::ClaudeProcessState>(),
+        app_handle.state::<GeminiSessionRegistry>(),
+        app_handle.state::<MessageDeduplicationManager>(),
+        app_handle.state::<SessionIsolationManager>(),
+    ).await
 }
 
 /// Execute Ollama with unified session management and tool emulation
@@ -247,31 +316,29 @@ fn build_tool_enhanced_prompt(
     prompt: &str,
     system_instruction: Option<&str>
 ) -> String {
-    let mut enhanced_prompt = String::new();
+    let mut enhanced = String::new();
     
-    // Add tool awareness to the system instruction
-    let tool_system = match system_instruction {
-        Some(system) => format!(
-            "{}\n\nYou have access to development tools and can help with:\n\
-             - Code analysis and generation\n\
-             - File operations and project management\n\
-             - Debugging and troubleshooting\n\
-             - Documentation and explanation\n\
-             - Architecture and design decisions\n\
-             When appropriate, provide step-by-step instructions for using these capabilities.",
-            system
-        ),
-        None => "You are an AI assistant with access to development tools. You can help with code analysis, \
-                 file operations, debugging, and project management. Provide clear, actionable responses \
-                 with step-by-step instructions when appropriate.".to_string(),
-    };
+    // Add tool capability context for Ollama models
+    enhanced.push_str("=== Claudia Enhanced Mode ===\n");
+    enhanced.push_str("You are running with Claudia's tool integration enabled.\n");
+    enhanced.push_str("Available capabilities:\n");
+    enhanced.push_str("• MCP protocols for enhanced context management\n");
+    enhanced.push_str("• Agent delegation for specialized tasks\n");
+    enhanced.push_str("• Slash commands: /help, /analyze, /generate, /explain\n");
+    enhanced.push_str("• File operations and code analysis\n");
+    enhanced.push_str("• Session persistence and memory sharing\n\n");
     
-    enhanced_prompt.push_str("System: ");
-    enhanced_prompt.push_str(&tool_system);
-    enhanced_prompt.push_str("\n\nUser: ");
-    enhanced_prompt.push_str(prompt);
+    if let Some(system) = system_instruction {
+        enhanced.push_str("System Instructions: ");
+        enhanced.push_str(system);
+        enhanced.push_str("\n\n");
+    }
     
-    enhanced_prompt
+    enhanced.push_str("Request: ");
+    enhanced.push_str(prompt);
+    enhanced.push_str("\n\nPlease provide a comprehensive response utilizing available tools as needed.");
+    
+    enhanced
 }
 
 /// Determine the provider based on model ID
@@ -391,6 +458,7 @@ pub async fn test_universal_model_execution(
         system_instruction: Some("You are a helpful AI assistant. Respond concisely.".to_string()),
         options: None,
         use_auto_selection: false,
+        tools_requested: None,
     };
     
     execute_with_universal_tools(test_request, app_handle).await

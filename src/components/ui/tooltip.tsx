@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 const TooltipProvider = TooltipPrimitive.Provider
 
-const Tooltip = TooltipPrimitive.Root
+const TooltipRoot = TooltipPrimitive.Root
 
 const TooltipTrigger = TooltipPrimitive.Trigger
 
@@ -24,6 +24,41 @@ const TooltipContent = React.forwardRef<
 ))
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+// Simple wrapper component for easier usage
+interface TooltipProps {
+  content: React.ReactNode;
+  children: React.ReactNode;
+  side?: "top" | "right" | "bottom" | "left";
+  align?: "start" | "center" | "end";
+  delayDuration?: number;
+  className?: string;
+}
+
+const Tooltip: React.FC<TooltipProps> = ({
+  content,
+  children,
+  side = "top",
+  align = "center",
+  delayDuration = 300,
+  className,
+}) => {
+  // Ensure children is a single React element when using asChild
+  const childElement = React.isValidElement(children) ? children : <span>{children}</span>;
+  
+  return (
+    <TooltipProvider>
+      <TooltipRoot delayDuration={delayDuration}>
+        <TooltipTrigger asChild>
+          {childElement}
+        </TooltipTrigger>
+        <TooltipContent side={side} align={align} className={className}>
+          {content}
+        </TooltipContent>
+      </TooltipRoot>
+    </TooltipProvider>
+  );
+};
+
+export { Tooltip, TooltipRoot, TooltipTrigger, TooltipContent, TooltipProvider }
 
  

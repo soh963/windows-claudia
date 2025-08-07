@@ -628,7 +628,7 @@ const PresetDialog: React.FC<{
               onChange={(e) => setModelId(e.target.value)}
               className="w-full px-3 py-2 rounded-md border border-input bg-background"
             >
-              {ALL_MODELS.map((model) => (
+              {ALL_MODELS().map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name}
                 </option>

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
@@ -170,7 +171,9 @@ impl SessionIsolationManager {
             .as_millis() as u64;
         
         // Create unique memory space using UUID v4 + timestamp + salt
-        let salt = format!("{:x}", rand::random::<u32>());
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        timestamp.hash(&mut hasher);
+        let salt = format!("{:x}", hasher.finish());
         let memory_space = format!("{}-{}-{}", session_id, timestamp, salt);
         
         let state = SessionIsolationState {

@@ -1,4 +1,4 @@
-use crate::commands::universal_model_executor::{execute_with_universal_tools, UniversalExecutionRequest};
+use crate::commands::universal_tool_executor::{execute_with_universal_tools, UniversalExecutionRequest};
 use crate::commands::agents::AgentDb;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -57,6 +57,7 @@ pub async fn validate_all_models(
             system_instruction: Some("You are a helpful AI assistant. Provide concise, helpful responses.".to_string()),
             options: Some(HashMap::new()),
             use_auto_selection: false,
+            tools_requested: None,
         };
 
         match execute_with_universal_tools(request, app_handle.clone()).await {
@@ -140,6 +141,7 @@ pub async fn test_specific_model(
         system_instruction: Some("You are a helpful AI assistant.".to_string()),
         options: Some(HashMap::new()),
         use_auto_selection: false,
+        tools_requested: None,
     };
 
     match execute_with_universal_tools(request, app_handle).await {

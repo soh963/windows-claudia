@@ -48,6 +48,8 @@ export const ImagePreview: React.FC<ImagePreviewProps> = ({
   const displayImages = images.slice(0, 10);
 
   const handleImageError = (index: number) => {
+    const imagePath = images[index];
+    console.warn(`[ImagePreview] Failed to load image at index ${index}: ${imagePath}`);
     setImageErrors(prev => new Set(prev).add(index));
   };
 
@@ -62,8 +64,31 @@ export const ImagePreview: React.FC<ImagePreviewProps> = ({
     if (imagePath.startsWith('data:')) {
       return imagePath;
     }
-    // Otherwise, convert the file path
-    return convertFileSrc(imagePath);
+    
+    // Handle different path formats that might come from drag-and-drop
+    let cleanPath = imagePath;
+    
+    // Remove any URL prefixes that might be present
+    if (cleanPath.startsWith('file://')) {
+      cleanPath = cleanPath.substring(7);
+    }
+    
+    // Normalize path separators for Windows
+    if (cleanPath.includes('\\')) {
+      cleanPath = cleanPath.replace(/\\/g, '/');
+    }
+    
+    // Ensure the path is properly formatted
+    try {
+      // Convert the file path using Tauri's convertFileSrc
+      const convertedSrc = convertFileSrc(cleanPath);
+      console.log(`[ImagePreview] Converting path: ${imagePath} -> ${cleanPath} -> ${convertedSrc}`);
+      return convertedSrc;
+    } catch (error) {
+      console.error(`[ImagePreview] Failed to convert file src for path: ${imagePath}`, error);
+      // Return the original path as fallback
+      return imagePath;
+    }
   };
 
   if (displayImages.length === 0) return null;
@@ -88,8 +113,11 @@ export const ImagePreview: React.FC<ImagePreviewProps> = ({
                 onClick={() => setSelectedImageIndex(index)}
               >
                 {imageErrors.has(index) ? (
-                  <div className="w-full h-full bg-muted flex items-center justify-center">
-                    <span className="text-xs text-muted-foreground">Error</span>
+                  <div className="w-full h-full bg-muted flex flex-col items-center justify-center p-1">
+                    <span className="text-xs text-muted-foreground text-center">⚠️</span>
+                    <span className="text-xs text-muted-foreground text-center leading-tight">
+                      Load Failed
+                    </span>
                   </div>
                 ) : (
                   <img

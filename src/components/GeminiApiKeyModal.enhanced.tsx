@@ -71,7 +71,7 @@ export const EnhancedGeminiApiKeyModal: React.FC<GeminiApiKeyModalProps> = ({
   const [copied, setCopied] = useState(false);
 
   // Get all Gemini models
-  const geminiModels = ALL_MODELS.filter(model => isGeminiModel(model.id));
+  const geminiModels = ALL_MODELS().filter(model => isGeminiModel(model.id));
 
   // Load existing API key on mount
   useEffect(() => {

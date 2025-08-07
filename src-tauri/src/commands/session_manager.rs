@@ -32,7 +32,7 @@ fn generate_secure_session_id(project_id: &str) -> String {
 /// Generate secure message ID for deduplication
 fn generate_message_id(session_id: &str, sequence_number: i64, content_hash: u64) -> String {
     let uuid = Uuid::new_v4();
-    let timestamp = SystemTime::now()
+    let _timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis();

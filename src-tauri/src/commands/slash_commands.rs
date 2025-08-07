@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use dirs;
 use log::{debug, error, info};
-use tauri::{Emitter, State};
+use tauri::{Emitter, State, Manager};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -663,13 +663,24 @@ pub async fn execute_claude_slash_command(
     if selected_model.starts_with("gemini-") || selected_model.contains("gemini") {
         // Route to Gemini
         info!("Routing slash command to Gemini: {}", selected_model);
+        
+        // Get the required state managers from app handle
+        let session_registry = app.state::<crate::commands::gemini::GeminiSessionRegistry>();
+        let dedup_manager = app.state::<crate::commands::session_deduplication::MessageDeduplicationManager>();
+        let isolation_manager = app.state::<crate::commands::session_deduplication::SessionIsolationManager>();
+        let execution_state = app.state::<crate::commands::execution_control::ExecutionControlState>();
+        
         return crate::commands::gemini::execute_gemini_code(
             processed_content,
             selected_model,
             project_path,
-            app,
+            app.clone(),
             db,
             claude_state,
+            session_registry,
+            dedup_manager,
+            isolation_manager,
+            execution_state,
         ).await;
     } else if selected_model.contains(":latest") || selected_model.starts_with("llama") || 
               selected_model.starts_with("phi") || selected_model.starts_with("mistral") ||

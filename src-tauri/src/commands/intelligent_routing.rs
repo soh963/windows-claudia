@@ -1,9 +1,9 @@
 use anyhow::Result;
-use log::{debug, info, warn, error};
+use log::{debug, info, warn}; // Removed unused 'error'
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use regex::Regex;
-use tauri::{command, AppHandle, Manager, State};
+use tauri::{command, AppHandle, Manager}; // Removed unused 'State'
 use rusqlite::{Connection, Result as SqliteResult};
 use chrono::{DateTime, Utc};
 use super::agents::AgentDb;
@@ -1041,10 +1041,10 @@ pub async fn get_model_analytics(app: AppHandle) -> Result<HashMap<String, serde
     let mut analytics = HashMap::new();
     
     // Top performers by category
-    let mut top_intelligence = benchmarks.iter().max_by(|a, b| a.intelligence_score.partial_cmp(&b.intelligence_score).unwrap());
-    let mut top_speed = benchmarks.iter().max_by(|a, b| a.speed_score.partial_cmp(&b.speed_score).unwrap());
-    let mut top_coding = benchmarks.iter().max_by(|a, b| a.coding_excellence.partial_cmp(&b.coding_excellence).unwrap());
-    let mut top_cost_effective = benchmarks.iter().min_by(|a, b| {
+    let top_intelligence = benchmarks.iter().max_by(|a, b| a.intelligence_score.partial_cmp(&b.intelligence_score).unwrap());
+    let top_speed = benchmarks.iter().max_by(|a, b| a.speed_score.partial_cmp(&b.speed_score).unwrap());
+    let top_coding = benchmarks.iter().max_by(|a, b| a.coding_excellence.partial_cmp(&b.coding_excellence).unwrap());
+    let top_cost_effective = benchmarks.iter().min_by(|a, b| {
         let a_ratio = a.cost_per_1k_tokens / (a.intelligence_score / 100.0);
         let b_ratio = b.cost_per_1k_tokens / (b.intelligence_score / 100.0);
         a_ratio.partial_cmp(&b_ratio).unwrap()

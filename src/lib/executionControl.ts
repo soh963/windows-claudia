@@ -137,9 +137,10 @@ export function useExecutionControl(sessionId: string | null) {
 
     const setupListeners = async () => {
       try {
-        // Get initial status
+        // Get initial status - backend now auto-creates session if missing
         const state = await ExecutionControlAPI.getExecutionStatus(sessionId);
         setExecutionState(state);
+        setError(null); // Clear any previous errors
 
         // Setup event listeners
         const listeners = await Promise.all([
@@ -154,7 +155,17 @@ export function useExecutionControl(sessionId: string | null) {
         unlistenersRef.current = listeners;
       } catch (err) {
         console.error('Failed to setup execution listeners:', err);
-        // Session might not exist yet, which is okay
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setError(`Session setup failed: ${errorMsg}`);
+        
+        // Create a minimal execution state to prevent UI crashes
+        setExecutionState({
+          session_id: sessionId,
+          status: 'idle',
+          can_continue: false,
+          elapsed_time: 0,
+          total_tokens: 0
+        });
       }
     };
 

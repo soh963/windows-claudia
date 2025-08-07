@@ -27,7 +27,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipRoot, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { 
-  ALL_MODELS, 
+  ALL_MODELS,
+  refreshDynamicModels, 
   getModelById, 
   isGeminiModel,
   type Model,
@@ -331,7 +332,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   );
 
   // Group models by provider
-  const modelsByProvider = ALL_MODELS.reduce((acc, model) => {
+  const modelsByProvider = ALL_MODELS().reduce((acc, model) => {
     if (!acc[model.provider]) {
       acc[model.provider] = [];
     }

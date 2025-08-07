@@ -4,6 +4,7 @@ import { Plus, Loader2, Bot, FolderCode } from "lucide-react";
 import { api, type Project, type Session, type ClaudeMdFile } from "@/lib/api";
 import { OutputCacheProvider } from "@/lib/outputCache";
 import { TabProvider } from "@/contexts/TabContext";
+import { loadDynamicOllamaModels, refreshDynamicModels, getModelStatistics } from "@/lib/models";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,6 +30,7 @@ import { useTabState } from "@/hooks/useTabState";
 import { ProgressMonitor } from "@/components/ProgressMonitor";
 import TaskProgress from "@/components/TaskProgress"; // Import TaskProgress
 import SessionSummary from "@/components/SessionSummary"; // Import SessionSummary
+import { usePanelSync } from "@/hooks/usePanelSync";
 
 type View = 
   | "welcome" 
@@ -54,6 +56,9 @@ function AppContent() {
   const [view, setView] = useState<View>("tabs");
   const { createClaudeMdTab, createSettingsTab, createUsageTab, createMCPTab, createDashboardTab } = useTabState();
   const { showToast } = useToast();
+  
+  // Initialize panel synchronization to prevent duplicates
+  usePanelSync();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -127,6 +132,43 @@ function AppContent() {
     window.addEventListener('claude-not-found', handleClaudeNotFound as EventListener);
     return () => {
       window.removeEventListener('claude-not-found', handleClaudeNotFound as EventListener);
+    };
+  }, []);
+
+  // Load dynamic models on app startup
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        console.log('🚀 Initializing dynamic model detection...');
+        await loadDynamicOllamaModels();
+        
+        const stats = getModelStatistics();
+        console.log('📊 Model statistics:', stats);
+        
+        if (stats.dynamic) {
+          console.log(`✅ Successfully loaded ${stats.ollama} dynamic Ollama models`);
+        } else {
+          console.log(`📦 Using ${stats.ollama} static fallback Ollama models`);
+        }
+        
+      } catch (error) {
+        console.error('❌ Failed to initialize dynamic models:', error);
+        console.log('📦 Falling back to static models');
+      }
+    };
+
+    // Load models immediately on app startup
+    loadModels();
+
+    // Also listen for model refresh events from other components
+    const handleModelRefresh = () => {
+      console.log('🔄 Refreshing dynamic models...');
+      loadModels();
+    };
+
+    window.addEventListener('refresh-models', handleModelRefresh);
+    return () => {
+      window.removeEventListener('refresh-models', handleModelRefresh);
     };
   }, []);
 

@@ -174,17 +174,27 @@ pub async fn execute_gemini_code_enhanced(
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     
-    // Determine the correct model endpoint - Updated for latest API
+    // Determine the correct model endpoint - Updated for August 2025 API
     let model_endpoint = match trimmed_model {
+        // Latest 2025 models
+        "gemini-2.5-pro" | "gemini-2.5-pro-exp" => "gemini-2.5-pro",
+        "gemini-2.5-flash" => "gemini-2.5-flash", 
+        "gemini-2.5-flash-lite" => "gemini-2.5-flash-lite",
+        "gemini-1.5-pro" => "gemini-1.5-pro",
+        "gemini-2.0-pro-exp" => "gemini-2.0-pro-exp",
+        "gemini-2.0-flash" => "gemini-2.0-flash",
+        "gemini-2.0-flash-lite" => "gemini-2.0-flash-lite",
+        // Legacy 2024 models for backward compatibility
         "gemini-2.0-flash-exp" => "gemini-2.0-flash-exp",
         "gemini-exp-1206" => "gemini-exp-1206",
-        // Legacy mappings for backward compatibility
-        "gemini-pro" => "gemini-2.0-flash-exp",
-        "gemini-pro-vision" => "gemini-exp-1206",
-        "gemini-1.5-pro" => "gemini-exp-1206",
-        "gemini-1.5-flash" => "gemini-2.0-flash-exp",
+        "gemini-1.5-pro-002" => "gemini-1.5-pro-002",
+        "gemini-1.5-flash-002" => "gemini-1.5-flash-002",
+        "gemini-1.5-flash" => "gemini-1.5-flash-002",
+        // Deprecated mappings
+        "gemini-pro" => "gemini-2.5-flash",
+        "gemini-pro-vision" => "gemini-1.5-pro",
         _ => {
-            return Err(format!("Unsupported Gemini model: {}. Supported models: gemini-2.0-flash-exp, gemini-exp-1206", trimmed_model));
+            return Err(format!("Unsupported Gemini model: {}. Supported latest models: gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite, gemini-1.5-pro, gemini-2.0-pro-exp, gemini-2.0-flash, gemini-2.0-flash-lite", trimmed_model));
         }
     };
     

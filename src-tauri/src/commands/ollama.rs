@@ -139,9 +139,7 @@ pub async fn execute_ollama_request(
             .as_secs()
     });
     
-    // Emit both generic and session-specific events for compatibility
-    app_handle.emit("claude-output", serde_json::to_string(&init_message).unwrap())
-        .map_err(|e| format!("Failed to emit init event: {}", e))?;
+    // Emit session-specific events ONLY to prevent cross-contamination
     app_handle.emit(&format!("claude-output:{}", session_id), serde_json::to_string(&init_message).unwrap())
         .map_err(|e| format!("Failed to emit session-specific init event: {}", e))?;
 
@@ -203,11 +201,10 @@ pub async fn execute_ollama_request(
                             message_id += 1;
                             total_tokens += ollama_response.eval_count.unwrap_or(0);
 
-                            // Convert to compatible message format
+                            // Convert to compatible ClaudeStreamMessage format
                             let message = json!({
-                                "id": format!("ollama-msg-{}", message_id),
-                                "type": "completion",
-                                "subtype": if ollama_response.done { "end" } else { "text" },
+                                "type": "assistant",
+                                "subtype": if ollama_response.done { "complete" } else { "text" },
                                 "session_id": session_id,
                                 "model": ollama_response.model,
                                 "timestamp": std::time::SystemTime::now()
@@ -215,8 +212,19 @@ pub async fn execute_ollama_request(
                                     .unwrap()
                                     .as_secs(),
                                 "message": {
+                                    "id": format!("ollama-msg-{}", message_id),
+                                    "type": "message",
                                     "role": "assistant",
-                                    "content": ollama_response.response
+                                    "model": ollama_response.model,
+                                    "content": [{
+                                        "type": "text",
+                                        "text": ollama_response.response
+                                    }],
+                                    "stop_reason": if ollama_response.done { Value::String("end_turn".to_string()) } else { Value::Null },
+                                    "usage": {
+                                        "input_tokens": ollama_response.prompt_eval_count.unwrap_or(0),
+                                        "output_tokens": ollama_response.eval_count.unwrap_or(0)
+                                    }
                                 },
                                 "usage": {
                                     "input_tokens": ollama_response.prompt_eval_count.unwrap_or(0),
@@ -230,18 +238,16 @@ pub async fn execute_ollama_request(
                                 }
                             });
 
-                            // Emit both generic and session-specific events
-                            app_handle.emit("claude-output", serde_json::to_string(&message).unwrap())
-                                .map_err(|e| format!("Failed to emit message: {}", e))?;
+                            // Emit session-specific events ONLY to prevent cross-contamination
                             app_handle.emit(&format!("claude-output:{}", session_id), serde_json::to_string(&message).unwrap())
                                 .map_err(|e| format!("Failed to emit session-specific message: {}", e))?;
 
                             if ollama_response.done {
                                 log::info!("Ollama execution completed successfully for session: {}", session_id);
                                 
-                                // Emit completion event
-                                app_handle.emit("claude-complete", true)
-                                    .map_err(|e| format!("Failed to emit completion event: {}", e))?;
+                                // Emit session-specific completion event
+                                app_handle.emit(&format!("claude-complete:{}", session_id), true)
+                                    .map_err(|e| format!("Failed to emit session-specific completion event: {}", e))?;
                                 
                                 return Ok(());
                             }
@@ -268,9 +274,7 @@ pub async fn execute_ollama_request(
                         .as_secs()
                 });
                 
-                app_handle.emit("claude-output", serde_json::to_string(&error_message).unwrap())
-                    .map_err(|e| format!("Failed to emit error: {}", e))?;
-                app_handle.emit(&format!("claude-output:{}", session_id), serde_json::to_string(&error_message).unwrap())
+                app_handle.emit(&format!("claude-error:{}", session_id), serde_json::to_string(&error_message).unwrap())
                     .map_err(|e| format!("Failed to emit session-specific error: {}", e))?;
                 
                 return Err(error_msg);
@@ -281,8 +285,8 @@ pub async fn execute_ollama_request(
     // If we reach here, the stream ended without a "done" response
     log::warn!("Ollama stream ended unexpectedly for session: {}", session_id);
     
-    app_handle.emit("claude-complete", true)
-        .map_err(|e| format!("Failed to emit completion event: {}", e))?;
+    app_handle.emit(&format!("claude-complete:{}", session_id), true)
+        .map_err(|e| format!("Failed to emit session-specific completion event: {}", e))?;
     
     Ok(())
 }

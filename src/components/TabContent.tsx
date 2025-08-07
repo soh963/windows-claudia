@@ -308,19 +308,19 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
         );
       
       case 'chat':
+        // ClaudeCodeSession already has its own ThreePanelLayout, 
+        // so we return it directly without wrapping
         return (
-          <div className="h-full">
-            <ClaudeCodeSession
-              session={tab.sessionData}
-              initialProjectPath={tab.initialProjectPath || tab.sessionId}
-              onBack={() => {
-                updateTab(tab.id, {
-                  type: 'projects',
-                  title: 'CC Projects',
-                });
-              }}
-            />
-          </div>
+          <ClaudeCodeSession
+            session={tab.sessionData}
+            initialProjectPath={tab.initialProjectPath || tab.sessionId}
+            onBack={() => {
+              updateTab(tab.id, {
+                type: 'projects',
+                title: 'CC Projects',
+              });
+            }}
+          />
         );
       
       case 'agent':
@@ -443,7 +443,13 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
   };
 
   // Determine if panels should be visible based on tab type
-  const shouldShowPanels = ['chat', 'projects', 'dashboard'].includes(tab.type);
+  // Note: 'chat' is excluded because ClaudeCodeSession manages its own ThreePanelLayout
+  const shouldShowPanels = ['projects', 'dashboard'].includes(tab.type);
+  
+  // Manage panel visibility state independently for each tab
+  // Default to false (hidden) for both panels - users must click icons to show them
+  const [leftPanelVisible, setLeftPanelVisible] = React.useState(false);
+  const [rightPanelVisible, setRightPanelVisible] = React.useState(false);
 
   const content = (
     <Suspense
@@ -467,8 +473,10 @@ const TabPanel: React.FC<TabPanelProps> = ({ tab, isActive }) => {
     >
       {shouldShowPanels ? (
         <ThreePanelLayout
-          leftPanelVisible={tab.type === 'chat' || tab.type === 'dashboard'}
-          rightPanelVisible={tab.type === 'chat' || tab.type === 'projects'}
+          leftPanelVisible={leftPanelVisible}
+          rightPanelVisible={rightPanelVisible}
+          onToggleLeftPanel={() => setLeftPanelVisible(prev => !prev)}
+          onToggleRightPanel={() => setRightPanelVisible(prev => !prev)}
         >
           {content}
         </ThreePanelLayout>

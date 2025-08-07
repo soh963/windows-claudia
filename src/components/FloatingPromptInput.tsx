@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip } from "@/components/ui/tooltip";
 import { FilePicker } from "./FilePicker";
 import { SlashCommandPicker } from "./SlashCommandPicker";
 import { ImagePreview } from "./ImagePreview";
@@ -234,9 +234,25 @@ const FloatingPromptInputInner = (
     if (path.startsWith('data:image/')) {
       return true;
     }
-    // Otherwise check file extension
-    const ext = path.split('.').pop()?.toLowerCase();
-    return ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'].includes(ext || '');
+    
+    // Extract file extension, handling various path formats
+    const cleanPath = path.replace(/\\/g, '/'); // Normalize path separators
+    const fileName = cleanPath.split('/').pop() || cleanPath;
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    
+    // Supported image formats for Claude
+    const supportedImageExtensions = [
+      'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 
+      'bmp', 'ico', 'tiff', 'tif', 'avif'
+    ];
+    
+    const isSupported = supportedImageExtensions.includes(ext || '');
+    
+    if (isSupported) {
+      console.log(`[FloatingPromptInput] Detected image file: ${path} (${ext})`);
+    }
+    
+    return isSupported;
   };
 
   // Extract image paths from prompt text
@@ -307,12 +323,19 @@ const FloatingPromptInputInner = (
             lastDropTime = currentTime;
 
             const droppedPaths = event.payload.paths as string[];
+            console.log(`[FloatingPromptInput] Files dropped:`, droppedPaths);
             
             // Process all dropped files
             setAttachedFiles(prev => {
               const newFiles: {path: string, type: 'image' | 'file'}[] = [];
               
               droppedPaths.forEach(path => {
+                // Validate file exists and has proper extension
+                if (!path || typeof path !== 'string') {
+                  console.warn(`[FloatingPromptInput] Invalid path dropped:`, path);
+                  return;
+                }
+                
                 const isImage = isImageFile(path);
                 const fileType = isImage ? 'image' : 'file';
                 
@@ -320,11 +343,18 @@ const FloatingPromptInputInner = (
                 const existingPaths = prev.map(f => f.path);
                 if (!existingPaths.includes(path)) {
                   newFiles.push({ path, type: fileType });
+                  console.log(`[FloatingPromptInput] Adding ${fileType}: ${path}`);
+                } else {
+                  console.log(`[FloatingPromptInput] File already attached: ${path}`);
                 }
               });
               
               // Only update if there are new files to add
-              return newFiles.length > 0 ? [...prev, ...newFiles] : prev;
+              if (newFiles.length > 0) {
+                console.log(`[FloatingPromptInput] Added ${newFiles.length} new files`);
+                return [...prev, ...newFiles];
+              }
+              return prev;
             });
             
             // Focus the textarea
@@ -891,7 +921,7 @@ const FloatingPromptInputInner = (
                 onChange={handleTextChange}
                 onPaste={handlePaste}
                 placeholder="Type your prompt here..."
-                className="min-h-[200px] resize-none"
+                className="min-h-[200px] max-h-[600px] resize-none"
                 disabled={disabled}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -918,27 +948,28 @@ const FloatingPromptInputInner = (
                     <span className="text-xs text-muted-foreground">Thinking:</span>
                     <Popover
                       trigger={
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setThinkingModePickerOpen(!thinkingModePickerOpen)}
-                                className="gap-2"
-                              >
-                                <Brain className="h-4 w-4" />
-                                <ThinkingModeIndicator 
-                                  level={THINKING_MODES.find(m => m.id === selectedThinkingMode)?.level || 0} 
-                                />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="font-medium">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.name || "Auto"}</p>
-                              <p className="text-xs text-muted-foreground">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.description}</p>
-                            </TooltipContent>
+                        <div>
+                          <Tooltip
+                            content={
+                              <div>
+                                <p className="font-medium">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.name || "Auto"}</p>
+                                <p className="text-xs text-muted-foreground">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.description}</p>
+                              </div>
+                            }
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setThinkingModePickerOpen(!thinkingModePickerOpen)}
+                              className="gap-2"
+                            >
+                              <Brain className="h-4 w-4" />
+                              <ThinkingModeIndicator 
+                                level={THINKING_MODES.find(m => m.id === selectedThinkingMode)?.level || 0} 
+                              />
+                            </Button>
                           </Tooltip>
-                        </TooltipProvider>
+                        </div>
                       }
                       content={
                         <div className="w-[280px] p-1">
@@ -1105,27 +1136,28 @@ const FloatingPromptInputInner = (
               {/* Thinking Mode Picker */}
               <Popover
                 trigger={
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="default"
-                          disabled={disabled}
-                          className="gap-2"
-                        >
-                          <Brain className="h-4 w-4" />
-                          <ThinkingModeIndicator 
-                            level={THINKING_MODES.find(m => m.id === selectedThinkingMode)?.level || 0} 
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="font-medium">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.name || "Auto"}</p>
-                        <p className="text-xs text-muted-foreground">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.description}</p>
-                      </TooltipContent>
+                  <div>
+                    <Tooltip
+                      content={
+                        <div>
+                          <p className="font-medium">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.name || "Auto"}</p>
+                          <p className="text-xs text-muted-foreground">{THINKING_MODES.find(m => m.id === selectedThinkingMode)?.description}</p>
+                        </div>
+                      }
+                    >
+                      <Button
+                        variant="outline"
+                        size="default"
+                        disabled={disabled}
+                        className="gap-2"
+                      >
+                        <Brain className="h-4 w-4" />
+                        <ThinkingModeIndicator 
+                          level={THINKING_MODES.find(m => m.id === selectedThinkingMode)?.level || 0} 
+                        />
+                      </Button>
                     </Tooltip>
-                  </TooltipProvider>
+                  </div>
                 }
                 content={
                   <div className="w-[280px] p-1">
@@ -1173,7 +1205,7 @@ const FloatingPromptInputInner = (
                   placeholder={dragActive ? "Drop images here..." : "Ask Claude anything..."}
                   disabled={disabled}
                   className={cn(
-                    "min-h-[44px] max-h-[120px] resize-none pr-10",
+                    "min-h-[44px] max-h-[400px] resize-none pr-10",
                     dragActive && "border-primary"
                   )}
                   rows={1}

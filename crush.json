@@ -1,31 +1,312 @@
 {
+  "$schema": "https://charm.land/crush.json",
   "providers": {
-    "gemini": {
-      "id": "gemini",
-      "name": "Google Gemini",
+    "ollama": {
+      "id": "ollama",
+      "name": "Ollama Local",
       "type": "openai",
-      "api_key": "${GEMINI_API_KEY}",
-      "base_url": "https://generativelanguage.googleapis.com/v1beta",
-      "enabled": true,
+      "api_key": "ollama",
+      "base_url": "http://localhost:11434/v1",
       "models": [
         {
-          "id": "gemini-2.0-flash-exp",
-          "name": "Gemini 2.0 Flash Experimental",
+          "id": "gpt-oss:120b",
+          "name": "GPT OSS 120B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "gpt-oss:20b",
+          "name": "GPT OSS 20B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "mistral-nemo:latest",
+          "name": "Mistral Nemo",
+          "max_tokens": 16384
+        },
+        {
+          "id": "llama3.1:8b",
+          "name": "Llama 3.1 8B",
           "max_tokens": 8192
+        },
+        {
+          "id": "llama3.2:3b",
+          "name": "Llama 3.2 3B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "Qwen:latest",
+          "name": "Qwen",
+          "max_tokens": 8192
+        },
+        {
+          "id": "gemma3:27b",
+          "name": "Gemma 3 27B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "gemma3:4b",
+          "name": "Gemma 3 4B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "qwen3:30b",
+          "name": "Qwen 3 30B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "qwen3:latest",
+          "name": "Qwen 3",
+          "max_tokens": 8192
+        },
+        {
+          "id": "deepseek-coder:6.7b",
+          "name": "DeepSeek Coder 6.7B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "deepseek-coder-v2:latest",
+          "name": "DeepSeek Coder V2",
+          "max_tokens": 16384
+        },
+        {
+          "id": "deepseek-r1:70b",
+          "name": "DeepSeek R1 70B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "deepseek-r1:32b",
+          "name": "DeepSeek R1 32B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "deepseek-r1:14b",
+          "name": "DeepSeek R1 14B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "deepseek-r1:latest",
+          "name": "DeepSeek R1",
+          "max_tokens": 8192
+        },
+        {
+          "id": "codellama:70b",
+          "name": "Code Llama 70B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "codellama:latest",
+          "name": "Code Llama",
+          "max_tokens": 8192
+        },
+        {
+          "id": "codegemma:7b",
+          "name": "Code Gemma 7B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "codestral:latest",
+          "name": "Codestral",
+          "max_tokens": 16384
+        },
+        {
+          "id": "command-r:35b",
+          "name": "Command R 35B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "ggml-model-f16:latest",
+          "name": "GGML Model F16",
+          "max_tokens": 8192
+        },
+        {
+          "id": "gemma-7b-it:latest",
+          "name": "Gemma 7B IT",
+          "max_tokens": 8192
+        },
+        {
+          "id": "ggml-model-Q5_K_M:latest",
+          "name": "GGML Model Q5_K_M",
+          "max_tokens": 8192
+        },
+        {
+          "id": "llama3:latest",
+          "name": "Llama 3",
+          "max_tokens": 8192
+        },
+        {
+          "id": "llama3:8b",
+          "name": "Llama 3 8B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "llama3.2:latest",
+          "name": "Llama 3.2",
+          "max_tokens": 8192
+        },
+        {
+          "id": "llama3.1:70b",
+          "name": "Llama 3.1 70B",
+          "max_tokens": 16384
+        },
+        {
+          "id": "llama3.1:latest",
+          "name": "Llama 3.1",
+          "max_tokens": 8192
+        },
+        {
+          "id": "llama3.2-vision:latest",
+          "name": "Llama 3.2 Vision",
+          "max_tokens": 8192
+        },
+        {
+          "id": "llava:latest",
+          "name": "LLaVA",
+          "max_tokens": 8192
+        },
+        {
+          "id": "mistral:7b",
+          "name": "Mistral 7B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "moondream:latest",
+          "name": "Moondream",
+          "max_tokens": 4096
+        },
+        {
+          "id": "phi3:latest",
+          "name": "Phi 3",
+          "max_tokens": 4096
+        },
+        {
+          "id": "phi:latest",
+          "name": "Phi",
+          "max_tokens": 4096
+        },
+        {
+          "id": "phi3:14b",
+          "name": "Phi 3 14B",
+          "max_tokens": 8192
+        },
+        {
+          "id": "hub/dotslashgabut/genaiprompt:latest",
+          "name": "GenAI Prompt",
+          "max_tokens": 4096
+        },
+        {
+          "id": "hub/midjourney-prompt-generator:latest",
+          "name": "Midjourney Prompt Generator",
+          "max_tokens": 4096
+        },
+        {
+          "id": "hub/thepr0m3th3an/ghostwriter-outline:latest",
+          "name": "Ghostwriter Outline",
+          "max_tokens": 4096
         }
       ]
+    },
+    "anthropic": {
+      "api_key": "${CLAUDE_API_KEY}",
+      "base_url": "https://api.anthropic.com/v1"
     }
   },
+  "default_model": "ultra",
   "models": {
+    "ultra": {
+      "provider": "ollama",
+      "model": "gpt-oss:120b",
+      "max_tokens": 16384
+    },
     "large": {
-      "provider": "gemini",
-      "model": "gemini-2.0-flash-exp",
+      "provider": "ollama",
+      "model": "llama3.1:70b",
+      "max_tokens": 16384
+    },
+    "medium": {
+      "provider": "ollama",
+      "model": "llama3.1:8b",
       "max_tokens": 8192
     },
     "small": {
-      "provider": "gemini",
-      "model": "gemini-2.0-flash-exp", 
+      "provider": "ollama",
+      "model": "llama3.2:3b",
       "max_tokens": 4096
+    },
+    "coder": {
+      "provider": "ollama",
+      "model": "deepseek-coder-v2:latest",
+      "max_tokens": 16384
+    },
+    "vision": {
+      "provider": "ollama",
+      "model": "llama3.2-vision:latest",
+      "max_tokens": 8192
+    }
+  },
+  "lsp": {
+    "Go": {
+      "command": "gopls"
+    }
+  },
+  "ui": {
+    "theme": "dark",
+    "show_progress": true,
+    "show_session_summary": true
+  },
+  "mcp": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "@modelcontextprotocol/server-filesystem",
+      "args": ["D:\\,C:\\"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    },
+    "github": {
+      "type": "stdio",
+      "command": "@modelcontextprotocol/server-github",
+      "env": {
+        "GITHUB_TOKEN": "$(echo $GITHUB_TOKEN)"
+      }
+    },
+    "memory": {
+      "type": "stdio",
+      "command": "@modelcontextprotocol/server-memory",
+      "args": ["--storage", "./.crush/memory"]
+    },
+    "puppeteer": {
+      "type": "stdio",
+      "command": "@modelcontextprotocol/server-puppeteer",
+      "args": ["--headless", "true"]
+    },
+    "sqlite": {
+      "type": "stdio",
+      "command": "@modelcontextprotocol/server-sqlite",
+      "args": ["./.crush/data.db"]
+    },
+    "fetch": {
+      "type": "stdio",
+      "command": "@modelcontextprotocol/server-fetch",
+      "args": ["--allow-all"]
+    },
+    "time": {
+      "type": "stdio",
+      "command": "@modelcontextprotocol/server-time",
+      "args": ["--timezone", "Asia/Seoul"]
+    },
+    "desktop-commander": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@wonderwhy-er/desktop-commander",
+        "--key",
+        "abae2589-21f9-446f-a76d-4605b4e697d3"
+      ]
     }
   }
 }

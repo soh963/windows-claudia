@@ -9,12 +9,17 @@ mod process;
 mod sidecar_wrapper;
 mod windows_command;
 mod runtime_utils;
+mod adapters;
+mod auto_resolution;
+mod rollback;
 
 use checkpoint::state::CheckpointState;
 use commands::execution_control::{
     ExecutionControlState, stop_execution, continue_execution, reset_execution,
     get_execution_status, update_execution_metrics,
 };
+use commands::app_info::{get_app_info, get_app_version};
+use commands::version::{get_version_info};
 use commands::agents::{
     cleanup_finished_processes, create_agent, delete_agent, export_agent,
     export_agent_to_file, fetch_github_agent_content, fetch_github_agents, get_agent,
@@ -45,7 +50,9 @@ use commands::mcp::{
 };
 use commands::gemini::{
     has_gemini_api_key, set_gemini_api_key, verify_gemini_api_key, execute_gemini_code,
-    get_gemini_api_key_command, test_gemini_events,
+    get_gemini_api_key_command, test_gemini_events, create_secure_gemini_session,
+    cleanup_gemini_session, validate_gemini_session, get_enhanced_gemini_models,
+    cleanup_old_gemini_sessions, GeminiSessionRegistry,
 };
 use commands::gemini_chat::{
     send_gemini_chat_message,
@@ -83,6 +90,9 @@ use commands::ollama::{
     check_ollama_status, get_ollama_models, execute_ollama_request,
     pull_ollama_model, delete_ollama_model, get_ollama_model_info,
 };
+use commands::ollama_model_detector::{
+    detect_available_ollama_models, check_ollama_model_exists, get_recommended_ollama_models,
+};
 
 use commands::usage::{
     get_session_stats, get_usage_by_date_range, get_usage_details, get_usage_stats,
@@ -108,7 +118,8 @@ use commands::storage::{
 };
 use commands::proxy::{get_proxy_settings, save_proxy_settings, apply_proxy_settings};
 use commands::session_manager::{load_session_history_enhanced, delete_session, create_secure_session, add_secure_message};
-use commands::error_tracker::{record_error, get_error, list_errors, resolve_error, get_error_stats};
+use commands::error_tracker::{track_error, record_error, get_error, list_errors, resolve_error, get_error_stats, get_error_metrics, search_errors};
+use commands::error_detection_system::{initialize_error_detection_system, detect_error_in_message, get_error_detection_status};
 use commands::debug_system::{
     log_debug_entry, start_operation_trace, add_trace_step, complete_operation_trace,
     record_performance_metrics, get_debug_logs, get_operation_traces, get_performance_metrics,
@@ -128,12 +139,36 @@ use commands::session_deduplication::{
     validate_session_boundary, get_session_isolation_state, cleanup_old_sessions,
     MessageDeduplicationManager, SessionIsolationManager,
 };
-use commands::universal_model_executor::{
-    execute_with_universal_tools, get_universal_model_capabilities, 
-    test_universal_model_execution, get_realtime_model_performance,
+use commands::universal_tool_executor::{
+    execute_with_universal_tools, execute_universal_tool, 
+    list_tools_for_model, check_model_tool_capabilities,
+    initialize_universal_tools,
 };
+// Temporarily disabled due to conflicts with universal_tool_executor
+// use commands::universal_model_executor::{
+//     execute_with_universal_tools as execute_universal_model, 
+//     get_universal_model_capabilities, test_universal_model_execution,
+//     get_realtime_model_performance,
+// };
 use commands::simple_model_validator::{
     validate_all_models, test_specific_model, test_auto_selection, system_health_check,
+};
+use commands::model_health_manager::{
+    ModelHealthManager, get_model_health_status, get_all_model_health, 
+    is_model_available, get_fallback_model,
+};
+use commands::comprehensive_model_validator::{
+    validate_all_models_comprehensive, validate_model_on_demand, 
+    quick_model_health_check, get_healthy_models,
+};
+use commands::intelligence_bridge::{
+    IntelligenceBridge, init_intelligence_tables, store_universal_context,
+    load_universal_context, transfer_context_between_sessions,
+    store_shared_knowledge, get_shared_knowledge, record_model_collaboration,
+    get_collaboration_history,
+};
+use commands::context_injector::{
+    create_contextual_prompt, update_injection_config, get_injection_config,
 };
 use process::ProcessRegistryState;
 use std::sync::Mutex;
@@ -150,12 +185,19 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            // Log window creation to debug
+            log::info!("Setting up Tauri application");
+
             // Initialize agents database
             let conn = init_database(&app.handle()).expect("Failed to initialize agents database");
             
             // Store the connection in the AgentDb state
             let db_state = commands::agents::AgentDb(Mutex::new(conn));
             app.manage(db_state);
+            
+            // Initialize Intelligence Bridge
+            let intelligence_bridge = IntelligenceBridge::new();
+            app.manage(intelligence_bridge);
             
             // Load and apply proxy settings from the database
             {
@@ -229,6 +271,21 @@ fn main() {
                 log::info!("Universal MCP system initialized");
             }
 
+            // Initialize cross-model memory tables
+            if let Err(e) = tauri::async_runtime::block_on(commands::cross_model_memory::init_memory_tables(&db_for_errors)) {
+                log::warn!("Failed to initialize cross-model memory tables: {}", e);
+            } else {
+                log::info!("Cross-model memory system initialized");
+            }
+
+            // Initialize intelligence bridge tables
+            // Temporarily disabled due to compilation issues
+            // if let Err(e) = tauri::async_runtime::block_on(init_intelligence_tables(&db_for_errors)) {
+            //     log::warn!("Failed to initialize intelligence bridge tables: {}", e);
+            // } else {
+            //     log::info!("Intelligence bridge system initialized");
+            // }
+
             // Update latest models on startup (spawn async task)
             let db_handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -289,6 +346,30 @@ fn main() {
             // Initialize session deduplication and isolation managers
             app.manage(MessageDeduplicationManager::new());
             app.manage(SessionIsolationManager::new());
+            
+            // Initialize Gemini session registry for proper isolation
+            app.manage(GeminiSessionRegistry::new());
+            
+            // Initialize Model Health Manager for tracking model availability
+            app.manage(ModelHealthManager::new());
+            
+            // Initialize Universal Tool Bridge for cross-model tool access
+            let tool_bridge = adapters::tool_bridge::UniversalToolBridge::new(app.handle().clone());
+            let tool_registry = tool_bridge.registry.clone();
+            app.manage(tool_registry);
+            
+            // Initialize the Universal Tool System in the background
+            let app_handle_tools = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Wait a bit for other systems to initialize
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                
+                if let Err(e) = tool_bridge.initialize().await {
+                    log::error!("Failed to initialize Universal Tool Bridge: {}", e);
+                } else {
+                    log::info!("Universal Tool Bridge initialized successfully");
+                }
+            });
 
             // Start automatic Claude sync background task after setup is complete
             let app_handle = app.handle().clone();
@@ -339,11 +420,20 @@ fn main() {
             add_secure_message,
             
             // Error Knowledge Base
+            // Error Tracking System
+            track_error,
             record_error,
             get_error,
             list_errors,
             resolve_error,
             get_error_stats,
+            get_error_metrics,
+            search_errors,
+            
+            // Error Detection System
+            initialize_error_detection_system,
+            detect_error_in_message,
+            get_error_detection_status,
             
             // Debug System & Tracing
             log_debug_entry,
@@ -384,6 +474,13 @@ fn main() {
             execute_gemini_code,
             get_gemini_api_key_command,
             test_gemini_events,
+            
+            // Enhanced Gemini Session Management
+            create_secure_gemini_session,
+            cleanup_gemini_session,
+            validate_gemini_session,
+            get_enhanced_gemini_models,
+            cleanup_old_gemini_sessions,
             
             // Enhanced Gemini Features
             execute_gemini_code_enhanced,
@@ -430,6 +527,11 @@ fn main() {
             pull_ollama_model,
             delete_ollama_model,
             get_ollama_model_info,
+            
+            // Ollama Dynamic Model Detection
+            detect_available_ollama_models,
+            check_ollama_model_exists,
+            get_recommended_ollama_models,
             
             // Checkpoint Management
             create_checkpoint,
@@ -572,17 +674,73 @@ fn main() {
             commands::intelligent_routing::update_model_benchmarks_from_web,
             commands::intelligent_routing::get_model_analytics,
             
-            // Universal Model Execution
+            // Universal Tool System
             execute_with_universal_tools,
-            get_universal_model_capabilities,
-            test_universal_model_execution,
-            get_realtime_model_performance,
+            execute_universal_tool,
+            list_tools_for_model,
+            check_model_tool_capabilities,
+            initialize_universal_tools,
+            
+            // Universal Model System - temporarily disabled
+            // execute_universal_model,
+            // get_universal_model_capabilities,
+            // test_universal_model_execution,
+            // get_realtime_model_performance,
             
             // Model Validation & Testing
             validate_all_models,
             test_specific_model,
             test_auto_selection,
             system_health_check,
+            
+            // Model Health Management
+            get_model_health_status,
+            get_all_model_health,
+            is_model_available,
+            get_fallback_model,
+            validate_all_models_comprehensive,
+            validate_model_on_demand,
+            quick_model_health_check,
+            get_healthy_models,
+            
+            // Cross-Model Memory System
+            commands::cross_model_memory::store_memory_entry,
+            commands::cross_model_memory::retrieve_memory_for_model,
+            commands::cross_model_memory::create_context_summary,
+            commands::cross_model_memory::get_memory_stats,
+            commands::cross_model_memory::update_memory_relevance,
+            commands::cross_model_memory::garbage_collect_memory,
+            commands::cross_model_memory::get_memory_config,
+            commands::cross_model_memory::update_memory_config,
+            commands::cross_model_memory::clear_session_memory,
+            commands::cross_model_memory::search_memories,
+            commands::cross_model_memory::merge_session_memories,
+            
+            // Context Transfer System
+            commands::context_transfer::transfer_context_to_model,
+            commands::context_transfer::calculate_context_similarity,
+            commands::context_transfer::recommend_model_for_context,
+            commands::context_transfer::preview_context_transfer,
+            
+            // Intelligence Bridge System
+            // init_intelligence_tables, // Temporarily disabled
+            store_universal_context,
+            load_universal_context,
+            transfer_context_between_sessions,
+            store_shared_knowledge,
+            get_shared_knowledge,
+            record_model_collaboration,
+            get_collaboration_history,
+            
+            // Context Injection System
+            create_contextual_prompt,
+            update_injection_config,
+            get_injection_config,
+            
+            // App Information
+            get_app_info,
+            get_app_version,
+            get_version_info,
             
             // Image Handler
             commands::image_handler::save_base64_image,
@@ -613,6 +771,16 @@ fn main() {
             reset_execution,
             get_execution_status,
             update_execution_metrics,
+            
+            // Rollback System
+            commands::rollback::get_git_status,
+            commands::rollback::analyze_rollback_strategy,
+            commands::rollback::validate_rollback_safety,
+            commands::rollback::create_safety_backup,
+            commands::rollback::create_rollback_checkpoint,
+            commands::rollback::perform_rollback,
+            commands::rollback::get_file_history,
+            commands::rollback::check_git_available,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
