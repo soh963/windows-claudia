@@ -28,9 +28,6 @@ import { AgentsModal } from "@/components/AgentsModal";
 import DashboardMain from "@/components/dashboard/DashboardMain";
 import { useTabState } from "@/hooks/useTabState";
 import { ProgressMonitor } from "@/components/ProgressMonitor";
-import TaskProgress from "@/components/TaskProgress"; // Import TaskProgress
-import SessionSummary from "@/components/SessionSummary"; // Import SessionSummary
-import { usePanelSync } from "@/hooks/usePanelSync";
 
 type View = 
   | "welcome" 
@@ -57,8 +54,6 @@ function AppContent() {
   const { createClaudeMdTab, createSettingsTab, createUsageTab, createMCPTab, createDashboardTab } = useTabState();
   const { showToast } = useToast();
   
-  // Initialize panel synchronization to prevent duplicates
-  usePanelSync();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -464,10 +459,8 @@ function AppContent() {
         return (
           <div className="h-full flex flex-col">
             <TabManager className="flex-shrink-0" />
-            <div className="flex-1 overflow-hidden flex">
-              <TaskProgress />
+            <div className="flex-1 overflow-hidden">
               <TabContent />
-              <SessionSummary />
             </div>
           </div>
         );
