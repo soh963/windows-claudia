@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "claudia.asterisk.so",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "C:\\Users\\lovecat\\.bun\\bin\\bun.exe run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "C:\\Users\\lovecat\\.bun\\bin\\bun.exe run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -14,7 +14,17 @@
       {
         "title": "Claudia",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "center": true,
+        "resizable": true,
+        "minimizable": true,
+        "maximizable": true,
+        "closable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "visible": true
       }
     ],
     "security": {
